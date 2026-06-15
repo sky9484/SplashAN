@@ -136,9 +136,12 @@ export default function FloatingCopilot() {
   // server-rendered HTML (UTC/stable) matches first paint and avoids a hydration
   // mismatch. getGreeting()/formatChatTime() depend on the local clock/timezone.
   useEffect(() => {
-    const g = getGreeting();
-    setGreeting(g.short);
-    setMessages((prev) => (prev.length ? prev : [{ id: 1, role: 'assistant', text: g.opening, time: formatChatTime() }]));
+    const timer = setTimeout(() => {
+      const g = getGreeting();
+      setGreeting(g.short);
+      setMessages((prev) => (prev.length ? prev : [{ id: 1, role: 'assistant', text: g.opening, time: formatChatTime() }]));
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
   // Auto-scroll on new messages

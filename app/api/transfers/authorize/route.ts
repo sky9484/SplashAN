@@ -8,6 +8,8 @@ import { calculateQuote } from '@/lib/server/quote';
 import { selectStablecoin } from '@/lib/server/stable-router';
 import { recordSingleTransferOnSui } from '@/lib/server/sui-settlement';
 
+export const maxDuration = 60;
+
 export async function POST(request: Request) {
   const body = await request.json();
   const totp = String(body.totp ?? '');
