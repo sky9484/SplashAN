@@ -31,7 +31,7 @@ export default async function AdminConsoleLayout({ children }: { children: React
     <div className="fintech-admin-shell min-h-screen bg-[linear-gradient(rgba(31,67,80,0.055),rgba(31,67,80,0.055)),#EEF4F5] text-[#1f4350]">
       <aside className="fintech-admin-sidebar fixed left-0 top-0 hidden h-screen w-64 flex-col bg-[#1f4350] p-6 text-white lg:flex">
         <Link href={adminConsolePath('/', hostname)} className="flex items-center gap-3">
-          <Image src="/splash-logo.png" alt="Splash" width={38} height={38} className="h-9 w-9 brightness-0 invert" unoptimized />
+          <Image src="/splash-main-icon.png" alt="Splash" width={38} height={38} className="h-9 w-9" />
           <div>
             <div className="text-xl font-black tracking-[-0.03em]">Splash Admin</div>
             <div className="text-[10px] uppercase tracking-[0.2em] text-white/45">Staff console</div>
@@ -67,7 +67,7 @@ export default async function AdminConsoleLayout({ children }: { children: React
 
       <header className="sticky top-0 z-20 flex items-center justify-between border-b border-[#326273]/10 bg-[#E7EEF0]/90 px-4 py-3 backdrop-blur lg:hidden">
         <Link href={adminConsolePath('/', hostname)} className="flex items-center gap-2 font-black text-[#326273]">
-          <Image src="/splash-logo.png" alt="Splash" width={28} height={28} className="h-7 w-7" unoptimized />
+          <Image src="/splash-main-icon.png" alt="Splash" width={28} height={28} className="h-7 w-7" />
           Admin
         </Link>
         <div className="flex items-center gap-2">

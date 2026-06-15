@@ -704,6 +704,7 @@ export async function recordBatchSettlementOnSui(input: {
       target: `${SPLASH_PACKAGE_ID}::settlement::settle_batch`,
       typeArguments: [USDC_TYPE],
       arguments: [
+        tx.object(SPLASH_ADMIN_CAP_ID),
         tx.object(SPLASH_TREASURY_ID),
         tx.object(SPLASH_BUSINESS_ACCOUNT_ID),
         tx.object(SPLASH_PEG_STATE_ID),

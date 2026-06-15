@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Building2, CheckCircle2, CreditCard, Info, Loader2, ShieldCheck, TrendingUp } from 'lucide-react';
+import { Building2, CheckCircle2, Clock3, CreditCard, Info, Loader2, ShieldCheck, TrendingUp } from 'lucide-react';
 import { toast } from 'sonner';
 
 import HoverPopup from '@/components/HoverPopup';
@@ -28,6 +28,7 @@ export default function StepQuote({ state, set, prev, next }: { state: TransferS
   const [progress, setProgress] = useState(18);
   const [liveRate, setLiveRate] = useState(BASE_RATES[state.amount.targetCurrency]);
   const [rateDirection, setRateDirection] = useState<'up' | 'down' | 'neutral'>('neutral');
+  const [holdBusy, setHoldBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -62,9 +63,14 @@ export default function StepQuote({ state, set, prev, next }: { state: TransferS
 
         if (cancelled) return;
 
-        const fx = Number.parseFloat(body.exchangeRate);
+        const quotedFx = Number.parseFloat(body.exchangeRate);
+        const heldFx = state.rateHold?.state === 'ACTIVE' && state.rateHold.corridorCurrency === state.amount.targetCurrency
+          ? Number.parseFloat(state.rateHold.rate)
+          : null;
+        const fx = heldFx ?? quotedFx;
+        const netReceived = heldFx && quotedFx > 0 ? (body.toAmount / quotedFx) * heldFx : body.toAmount;
         setLiveRate(fx);
-        set({ quote: { fxRate: fx, fee: (body.platformFee / 100).toFixed(2), netReceived: body.toAmount.toFixed(2) } });
+        set({ quote: { fxRate: fx, fee: (body.platformFee / 100).toFixed(2), netReceived: netReceived.toFixed(2) } });
       } catch {
         if (cancelled) return;
 
@@ -86,9 +92,10 @@ export default function StepQuote({ state, set, prev, next }: { state: TransferS
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [state.amount.targetCurrency, state.amount.value, state.recipient.bank?.account, set]);
+  }, [state.amount.targetCurrency, state.amount.value, state.rateHold?.corridorCurrency, state.rateHold?.rate, state.rateHold?.state, state.recipient.bank?.account, set]);
 
   useEffect(() => {
+    if (state.rateHold?.state === 'ACTIVE') return;
     const interval = window.setInterval(() => {
       const change = (Math.random() - 0.5) * 0.002;
       setRateDirection(change > 0 ? 'up' : change < 0 ? 'down' : 'neutral');
@@ -96,7 +103,7 @@ export default function StepQuote({ state, set, prev, next }: { state: TransferS
     }, 5000);
 
     return () => window.clearInterval(interval);
-  }, []);
+  }, [state.rateHold?.state]);
 
   const createTransferIntent = useCallback(async () => {
     try {
@@ -152,6 +159,25 @@ export default function StepQuote({ state, set, prev, next }: { state: TransferS
     setIsSending(true);
   }
 
+  async function holdRate() {
+    setHoldBusy(true);
+    try {
+      const response = await fetch('/api/rate-holds', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ corridorCurrency: state.amount.targetCurrency, rate: liveRate }),
+      });
+      if (!response.ok) throw new Error('Rate hold could not be created');
+      const hold = (await response.json()) as NonNullable<TransferState['rateHold']>;
+      set({ rateHold: hold });
+      toast.success('Rate hold active for 48 hours');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Rate hold could not be created');
+    } finally {
+      setHoldBusy(false);
+    }
+  }
+
   if (loading || !state.quote) {
     return <div className="py-10 text-center text-[#326273]/60">Fetching live FX & fee quote…</div>;
   }
@@ -180,7 +206,7 @@ export default function StepQuote({ state, set, prev, next }: { state: TransferS
           <Row label="You send" value={`$${state.amount.value}`} />
         </HoverPopup>
         <HoverPopup title="Splash fees" content="1.4% transaction fee + $4.50 fixed fee per transfer.">
-          <Row label="Splash fees" value={`$${state.quote.fee}`} />
+          <Row label="Splash fees" value={state.deliveryTier === 'STORED_BALANCE' ? '$0.00 transfer fee' : `$${state.quote.fee}`} />
         </HoverPopup>
         <HoverPopup title="Live FX rate" content="Real-time exchange rate updated every 5 seconds. Rate may fluctuate until authorization.">
           <div className="flex justify-between gap-4 items-center">
@@ -199,9 +225,24 @@ export default function StepQuote({ state, set, prev, next }: { state: TransferS
         </HoverPopup>
         <div className="mt-2 flex items-center gap-2 text-xs text-[#326273]/60">
           <Info className="h-3 w-3" />
-          Quote valid for 30 seconds. AI can suggest timing, but you always sign before value moves.
+          {state.rateHold?.state === 'ACTIVE'
+            ? `Rate hold active until ${new Date(state.rateHold.holdUntil).toLocaleString()}. You still authorize before value moves.`
+            : 'Quote valid for 30 seconds. AI can suggest timing, but you always sign before value moves.'}
         </div>
+        <Row label="Delivery" value={state.deliveryTier === 'PAYOUT_ONLY' ? 'Bank payout' : state.deliveryTier === 'SWEEP_ACCOUNT' ? 'Receive account + auto-sweep' : 'Splash balance'} bold />
       </div>
+      <button
+        type="button"
+        disabled={holdBusy || state.rateHold?.state === 'ACTIVE'}
+        onClick={() => void holdRate()}
+        className="flex w-full items-center justify-between rounded-xl border border-[#5C9EAD]/30 bg-white px-4 py-3 text-left font-bold text-[#326273] transition hover:border-[#5C9EAD] hover:bg-[#5C9EAD]/10 disabled:cursor-default disabled:opacity-70"
+      >
+        <span className="flex items-center gap-3">
+          <Clock3 className="h-5 w-5 text-[#5C9EAD]" />
+          {state.rateHold?.state === 'ACTIVE' ? 'Rate hold active' : 'Hold this rate 48h'}
+        </span>
+        <span className="font-mono text-xs text-[#326273]/55">{liveRate.toLocaleString()}</span>
+      </button>
       <div className="rounded-xl border border-[#5C9EAD]/20 bg-[#5C9EAD]/10 p-4 text-sm text-[#326273]/75">
         <div className="flex gap-3">
           <ShieldCheck className="mt-0.5 h-5 w-5 text-[#5C9EAD]" />

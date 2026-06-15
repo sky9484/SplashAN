@@ -21,6 +21,11 @@ export async function POST(request: Request) {
     bank: String(body.bank ?? ''),
     swift: String(body.swift ?? ''),
     account,
+    tier: body.tier,
+    kybStatus: body.kybStatus,
+    orgEmail: body.orgEmail,
+    createdVia: body.createdVia,
+    sweepConfig: body.sweepConfig,
   });
 
   return NextResponse.json(record, { status: 201 });

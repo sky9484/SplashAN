@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
 import {
   Camera,
@@ -65,7 +66,7 @@ export default function DashboardHeader({ collapsed }: DashboardHeaderProps) {
             {/* Avatar */}
             <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#1F4452]">
               {avatar
-                ? <img src={avatar} alt="Profile" className="h-full w-full object-cover" />
+                ? <Image src={avatar} alt="Profile" width={28} height={28} unoptimized className="h-full w-full object-cover" />
                 : <span className="text-[11px] font-bold text-white">D</span>
               }
             </div>
@@ -86,7 +87,7 @@ export default function DashboardHeader({ collapsed }: DashboardHeaderProps) {
               <div className="flex items-center gap-3 border-b border-[#326273]/8 px-4 py-3">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#1F4452]">
                   {avatar
-                    ? <img src={avatar} alt="Profile" className="h-full w-full object-cover" />
+                    ? <Image src={avatar} alt="Profile" width={36} height={36} unoptimized className="h-full w-full object-cover" />
                     : <span className="text-sm font-bold text-white">D</span>
                   }
                 </div>

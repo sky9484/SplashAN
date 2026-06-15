@@ -1,5 +1,4 @@
 @import "tailwindcss";
-@config "../tailwind.config.ts";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
@@ -1736,6 +1735,34 @@ body {
   line-height: 1.55;
 }
 
+.iso-scale-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 22px;
+}
+
+.iso-scale-metrics span {
+  display: grid;
+  gap: 2px;
+  border: 1px solid rgba(12, 62, 72, .14);
+  border-radius: 7px;
+  padding: 9px 10px;
+  background: rgba(255, 251, 245, .6);
+}
+
+.iso-scale-metrics strong {
+  color: var(--iso-ink);
+  font-size: 9px;
+  font-weight: 950;
+}
+
+.iso-scale-metrics small {
+  color: rgba(12, 62, 72, .52);
+  font-size: 7px;
+  line-height: 1.4;
+}
+
 .iso-walrus {
   overflow: hidden;
   color: #fffaf1;
@@ -2263,6 +2290,63 @@ body {
   color: #fffaf1;
   background: var(--iso-teal);
   box-shadow: 2px 3px 0 var(--iso-teal-dark);
+}
+
+.iso-recipient-ladder {
+  display: grid;
+  gap: 9px;
+  margin-top: 26px;
+}
+
+.iso-recipient-ladder article {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  gap: 12px;
+  border: 1px solid rgba(12, 62, 72, .17);
+  border-radius: 9px;
+  padding: 11px 12px;
+  background: rgba(255, 251, 245, .66);
+  box-shadow: 3px 4px 0 rgba(12, 62, 72, .1);
+}
+
+.iso-recipient-ladder article > span {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 6px;
+  color: #fffaf1;
+  background: var(--iso-teal);
+  font-family: var(--font-mono), monospace;
+  font-size: 9px;
+  font-weight: 950;
+  box-shadow: 3px 3px 0 var(--iso-teal-dark);
+}
+
+.iso-recipient-ladder div {
+  display: grid;
+  gap: 2px;
+}
+
+.iso-recipient-ladder small {
+  color: #a36b22;
+  font-family: var(--font-mono), monospace;
+  font-size: 7px;
+  font-weight: 950;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.iso-recipient-ladder strong {
+  color: var(--iso-ink);
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.iso-recipient-ladder p {
+  color: rgba(12, 62, 72, .58);
+  font-size: 8px;
+  line-height: 1.5;
 }
 
 .iso-inline-link {
@@ -4711,6 +4795,31 @@ body {
   box-shadow: 7px 7px 0 #276a51, 13px 15px 25px rgba(18, 83, 63, .24);
 }
 
+/* Place the three isometric callouts around the artwork at 1.45x their prior scale. */
+.iso-floating-note-a {
+  top: auto;
+  right: auto;
+  bottom: 20%;
+  left: 14%;
+  --note-scale: .725;
+}
+
+.iso-floating-note-b {
+  top: 16%;
+  right: auto;
+  bottom: auto;
+  left: 1%;
+  --note-scale: .725;
+}
+
+.iso-floating-note-c {
+  top: 30%;
+  right: -8%;
+  bottom: auto;
+  left: auto;
+  --note-scale: .725;
+}
+
 .iso-floating-note small {
   color: rgba(12, 62, 72, .66);
   font-family: var(--font-mono), monospace;
@@ -4860,11 +4969,44 @@ button.iso-product-row {
 
 .iso-tool-modal-art img {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   width: min(82%, 540px);
   height: auto;
   object-fit: contain;
   filter: drop-shadow(0 26px 25px rgba(5, 44, 50, .22));
+}
+
+.iso-tool-modal-wordmark {
+  position: absolute;
+  z-index: 3;
+  top: 25px;
+  left: 28px;
+  display: grid;
+  gap: 2px;
+  max-width: 70%;
+  color: #fffaf1;
+  text-transform: uppercase;
+  transform: skewY(-4deg);
+  transform-origin: left center;
+}
+
+.iso-tool-modal-wordmark span {
+  color: #efad55;
+  font-family: var(--font-mono), monospace;
+  font-size: 12px;
+  font-weight: 950;
+  letter-spacing: .2em;
+}
+
+.iso-tool-modal-wordmark strong {
+  font-size: clamp(30px, 4.8vw, 58px);
+  font-weight: 950;
+  letter-spacing: -.065em;
+  line-height: .84;
+  text-shadow:
+    2px 2px 0 #0d3b44,
+    4px 4px 0 #0d3b44,
+    7px 8px 0 rgba(13, 59, 68, .28);
 }
 
 .iso-tool-modal-metric {
@@ -5559,6 +5701,24 @@ button.iso-product-row {
     transform: translateX(10%) scale(1.15);
   }
 
+  .iso-floating-note-a {
+    bottom: 0;
+    left: 4%;
+    --note-scale: .52;
+  }
+
+  .iso-floating-note-b {
+    top: 1%;
+    left: -3%;
+    --note-scale: .52;
+  }
+
+  .iso-floating-note-c {
+    top: 34%;
+    right: -5%;
+    --note-scale: .52;
+  }
+
   .iso-tool-modal {
     padding: 12px;
   }
@@ -5582,5 +5742,203 @@ button.iso-product-row {
 
   .splash-loading-panel {
     min-height: 360px;
+  }
+}
+
+/* Brand-system consolidation */
+.iso-main-logo {
+  width: clamp(108px, 10vw, 142px);
+  height: auto;
+  object-fit: contain;
+}
+
+.iso-main-logo-footer {
+  width: clamp(112px, 11vw, 148px);
+}
+
+.iso-header-brand-icon {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+  filter: none !important;
+}
+
+.iso-header-wordmark {
+  gap: 0;
+}
+
+.iso-header-wordmark strong {
+  color: #16495c;
+  font-size: 22px;
+  font-weight: 750;
+  letter-spacing: -.055em;
+  line-height: .96;
+}
+
+.iso-header-wordmark small {
+  margin-top: 4px;
+  color: #285c6c;
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  font-size: 6px;
+  font-weight: 650;
+  letter-spacing: .015em;
+  line-height: 1;
+  text-transform: none;
+}
+
+.iso-hero {
+  background-color: var(--iso-paper);
+  background-image: none;
+}
+
+.iso-hero > .iso-grid-plane,
+.iso-hero > .iso-orb {
+  display: none;
+}
+
+@media (max-width: 700px) {
+  .iso-header-brand-icon {
+    width: 30px;
+    height: 30px;
+  }
+
+  .iso-header-wordmark strong {
+    font-size: 18px;
+  }
+}
+
+/* A proof-first story: promise, infrastructure, comparison, operation, then scale. */
+.iso-comparison { order: 3; }
+.iso-operating { order: 4; }
+.iso-flow { order: 5; }
+.iso-copilot { order: 6; }
+.iso-walrus { order: 7; }
+.iso-products { order: 8; }
+
+/* Keep the signature engine compact enough to scan without losing the flow. */
+.dash-flow {
+  padding: 15px 17px 18px;
+}
+
+.dash-flow-head {
+  margin-bottom: 6px;
+}
+
+.dash-flow-stage {
+  grid-template-columns: minmax(0, 1fr) minmax(36px, .58fr) auto minmax(36px, .58fr) minmax(0, 1fr);
+  min-height: 174px;
+}
+
+.dash-flow-col,
+.dash-flow-stack {
+  gap: 7px;
+}
+
+.dash-flow-node {
+  gap: 8px;
+  border-radius: 10px;
+  padding: 6px 8px;
+}
+
+.dash-flow-node-mark {
+  width: 31px;
+  height: 31px;
+  border-radius: 8px;
+}
+
+.dash-flow-node-logo {
+  max-width: 25px;
+  max-height: 18px;
+}
+
+.dash-flow-node-copy strong {
+  font-size: 11px;
+}
+
+.dash-flow-node-copy small {
+  font-size: 8.5px;
+}
+
+.dash-flow-wires {
+  min-height: 140px;
+}
+
+.dash-flow-core {
+  gap: 5px;
+  padding-inline: 3px;
+}
+
+.dash-flow-core-orb {
+  width: 78px;
+  height: 78px;
+  box-shadow: 4px 5px 0 rgba(12, 62, 72, .12), 0 12px 24px rgba(8, 54, 64, .1);
+}
+
+.dash-flow-core-orb img {
+  width: 49px;
+  height: 49px;
+  max-width: 49px;
+  max-height: 49px;
+}
+
+.dash-flow-core strong {
+  font-size: 12px;
+}
+
+.dash-flow-core small {
+  max-width: 110px;
+  font-size: 7.5px;
+}
+
+.splash-loading-shell,
+.admin-login-shell,
+.admin-login-form-wrap {
+  background-color: #edf4f2;
+}
+
+.splash-loading-shell {
+  background:
+    radial-gradient(circle at 18% 18%, rgba(92, 158, 173, .18), transparent 26%),
+    radial-gradient(circle at 84% 80%, rgba(159, 207, 199, .2), transparent 24%),
+    #edf4f2;
+}
+
+.splash-loading-panel {
+  background: radial-gradient(circle at 50% 42%, #246875 0%, #103f49 54%, #082b32 100%);
+  box-shadow: 12px 12px 0 #9fcfc7, 0 34px 70px rgba(8, 46, 54, .2);
+}
+
+.admin-login-form-wrap {
+  background:
+    linear-gradient(rgba(16, 63, 72, .038) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(16, 63, 72, .038) 1px, transparent 1px),
+    #edf4f2;
+  background-size: 28px 28px;
+}
+
+.admin-login-form {
+  background: #fbfefd;
+  box-shadow: 10px 10px 0 #9fcfc7, 0 30px 60px rgba(9, 49, 57, .15);
+}
+
+.admin-login-form-heading > svg {
+  box-shadow: 4px 4px 0 #9fcfc7;
+}
+
+.admin-login-form button {
+  box-shadow: 5px 5px 0 #9fcfc7;
+}
+
+.admin-login-note {
+  background: #e9f3f0;
+}
+
+.fintech-admin-shell {
+  background: #edf4f2 !important;
+}
+
+@media (max-width: 768px) {
+  .dash-flow-stage {
+    min-height: auto;
   }
 }

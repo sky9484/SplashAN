@@ -4,7 +4,7 @@
  * SettlementEngineFlow — the dashboard's signature "how the money moves" diagram.
  *
  * Inspired by Corefy's animated payment-orchestration chart (Goodface hack #4/#14):
- * sources on the left flow through a central routing core into live destinations on
+ * sources on the left flow through a central routing core into modeled destinations on
  * the right, with energy visibly flowing along the connectors. One component, three
  * variants, so Overview, Treasury, and Batch tell the same visual story.
  *
@@ -30,7 +30,7 @@ type CoreCopy = { kicker: string; title: string; sub: string };
 
 const CORE: Record<Variant, CoreCopy> = {
   settlement: { kicker: 'Settlement engine', title: 'Splash · Sui', sub: 'Atomic settle-or-revert' },
-  treasury:   { kicker: 'Smart treasury',    title: 'USDY vault', sub: 'T-bill yield on idle USD' },
+  treasury:   { kicker: 'Treasury projection', title: 'USDY model', sub: 'Approval-gated simulation' },
   batch:      { kicker: 'Batch engine',      title: 'Payout run',   sub: 'Screen · authorize · settle' },
 };
 
@@ -50,10 +50,10 @@ const DEFAULT_SOURCES: Record<Variant, FlowNode[]> = {
 
 const DEFAULT_DESTS: Record<Variant, FlowNode[]> = {
   settlement: [
-    { label: 'PHP', sublabel: '₱ Philippines', flag: '🇵🇭' },
-    { label: 'MYR', sublabel: 'Malaysia', flag: '🇲🇾' },
-    { label: 'IDR', sublabel: 'Indonesia', flag: '🇮🇩' },
-    { label: 'SGD', sublabel: 'Singapore', flag: '🇸🇬' },
+    { label: 'PHP', sublabel: 'Live-model payout', flag: '🇵🇭' },
+    { label: 'MYR', sublabel: 'Implemented in code', flag: '🇲🇾' },
+    { label: 'IDR', sublabel: 'Implemented in code', flag: '🇮🇩' },
+    { label: 'SGD', sublabel: 'Implemented in code', flag: '🇸🇬' },
   ],
   treasury: [
     { label: 'USDY yield', sublabel: 'variable · T-bill' },
@@ -62,13 +62,13 @@ const DEFAULT_DESTS: Record<Variant, FlowNode[]> = {
   batch: [
     { label: 'PHP', sublabel: 'Cleared', flag: '🇵🇭' },
     { label: 'IDR', sublabel: 'Cleared', flag: '🇮🇩' },
-    { label: '+6 more', sublabel: 'Corridors live' },
+    { label: '+6 more', sublabel: 'Implemented in code' },
   ],
 };
 
 const DEFAULT_CAPTIONS: Record<Variant, string[]> = {
-  settlement: ['400ms Sui finality', 'Pyth-verified FX', 'Walrus audit proof'],
-  treasury:   ['Ondo USDY · T-bill', 'Variable rate', 'T+1–T+3 withdrawal'],
+  settlement: ['400ms Sui finality', 'One live-model corridor', 'Walrus audit proof'],
+  treasury:   ['Projected USDY rate', 'Human approval required', 'Execution gated'],
   batch:      ['One authorization', 'Every row screened', 'Receipts anchored'],
 };
 
@@ -177,7 +177,7 @@ export default function SettlementEngineFlow({
         <div className="dash-flow-core">
           <div className="dash-flow-core-orb">
             <span className="dash-flow-core-ring" aria-hidden="true" />
-            <Image src="/sui-logo-blue.svg" alt="" width={44} height={56} style={{ width: 'auto', height: 'auto' }} />
+            <Image src="/splash-main-icon.png" alt="" width={56} height={56} />
           </div>
           <strong>{core.title}</strong>
           <small>{core.sub}</small>

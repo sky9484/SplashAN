@@ -32,6 +32,7 @@ function snapshot() {
     available: toUsd(ledger.availableMicro),
     treasuryPrincipal: toUsd(ledger.treasuryPrincipalMicro),
     treasuryYield: toUsd(ledger.treasuryYieldMicro),
+    executionEnabled: process.env.TREASURY_EXECUTION_ENABLED === 'true',
     rate: { apy: rate.netApyPct, label: rate.label, introductory: rate.introductory },
     notices: listNotices(ledger.userId).map((n) => ({
       id: n.id,
@@ -47,6 +48,12 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  if (process.env.TREASURY_EXECUTION_ENABLED !== 'true') {
+    return NextResponse.json(
+      { error: 'Projection only - execution disabled pending regulatory approval.' },
+      { status: 403 },
+    );
+  }
   let body: { action?: string; amountUsd?: number };
   try {
     body = (await request.json()) as { action?: string; amountUsd?: number };

@@ -6,7 +6,8 @@ import { Banknote, CheckCircle2, Globe2, Loader2, Network, XCircle } from 'lucid
 import type { TransferState } from '@/app/dashboard/transfer/page';
 
 export default function StepStatus({ state, set, next }: { state: TransferState; set: (patch: Partial<TransferState>) => void; next: () => void }) {
-  const [chainState, setChainState] = useState<'AUTHORIZED' | 'QUEUED' | 'SETTLING' | 'SETTLED' | 'FAILED'>('AUTHORIZED');
+  const [chainState, setChainState] = useState<'AUTHORIZED' | 'QUEUED' | 'SETTLING' | 'SETTLED' | 'SWEEPING' | 'DISBURSED' | 'CREDITED' | 'FAILED'>('AUTHORIZED');
+  const [heldDurationMs, setHeldDurationMs] = useState<number | null>(null);
   const [failureReason, setFailureReason] = useState<string | null>(null);
 
   useEffect(() => {
@@ -24,18 +25,20 @@ export default function StepStatus({ state, set, next }: { state: TransferState;
         }
 
         const result = (await response.json()) as {
-          state: 'AUTHORIZED' | 'QUEUED' | 'SETTLING' | 'SETTLED' | 'FAILED';
+          state: 'AUTHORIZED' | 'QUEUED' | 'SETTLING' | 'SETTLED' | 'SWEEPING' | 'DISBURSED' | 'CREDITED' | 'FAILED';
           verificationReference: string | null;
           receiptObjectId: string | null;
           failureReason: string | null;
           failedAtState: string | null;
+          sweepJob: { heldDurationMs?: number } | null;
         };
 
         if (cancelled) return;
 
         setChainState(result.state);
 
-        if (result.state === 'SETTLED') {
+        if (result.state === 'DISBURSED' || result.state === 'CREDITED') {
+          setHeldDurationMs(result.sweepJob?.heldDurationMs ?? null);
           set({ txStatus: 'success', txDigest: result.verificationReference ?? undefined, receiptObjectId: result.receiptObjectId ?? undefined });
           window.setTimeout(next, 1800);
           return;
@@ -67,8 +70,9 @@ export default function StepStatus({ state, set, next }: { state: TransferState;
   const status = state.txStatus ?? 'pending';
   const activeIndex = useMemo(() => {
     if (status === 'failed' || chainState === 'FAILED') return -1;
-    if (chainState === 'SETTLED') return 3;
-    if (chainState === 'SETTLING') return 2;
+    if (chainState === 'DISBURSED' || chainState === 'CREDITED') return 3;
+    if (chainState === 'SETTLED' || chainState === 'SWEEPING') return 2;
+    if (chainState === 'SETTLING') return 1;
     if (chainState === 'QUEUED') return 1;
     return 0;
   }, [chainState, status]);
@@ -84,8 +88,8 @@ export default function StepStatus({ state, set, next }: { state: TransferState;
       icon: Network,
     },
     {
-      label: `Connecting to ${state.recipient.country}`,
-      detail: `Preparing ${state.amount.targetCurrency} payout on the local partner rail`,
+      label: state.deliveryTier === 'SWEEP_ACCOUNT' ? 'Auto-sweeping to bank' : state.deliveryTier === 'STORED_BALANCE' ? 'Crediting Splash balance' : `Connecting to ${state.recipient.country}`,
+      detail: state.deliveryTier === 'SWEEP_ACCOUNT' ? `PDAX converts and pays ${state.amount.targetCurrency}` : state.deliveryTier === 'STORED_BALANCE' ? 'Crediting reusable USDC balance' : `Preparing ${state.amount.targetCurrency} payout on the local partner rail`,
       icon: Globe2,
     },
     {
@@ -143,6 +147,12 @@ export default function StepStatus({ state, set, next }: { state: TransferState;
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
           <div className="mb-1 font-bold">Error detail</div>
           <div className="font-mono text-xs leading-5 break-all">{failureReason}</div>
+        </div>
+      )}
+
+      {heldDurationMs !== null && (
+        <div className="rounded-2xl border border-primary/25 bg-primary/10 p-4 text-sm font-black text-foreground">
+          Pass-through held duration: {(heldDurationMs / 1000).toFixed(1)}s
         </div>
       )}
 

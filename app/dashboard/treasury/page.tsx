@@ -47,6 +47,7 @@ type TreasurySnapshot = {
   available: number;
   treasuryPrincipal: number;
   treasuryYield: number;
+  executionEnabled: boolean;
   rate: { apy: number; label: string; introductory: boolean };
   notices: Array<{ id: string; amount: number; availableAt: string }>;
 };
@@ -111,7 +112,8 @@ export default function TreasuryPage() {
   const [available, setAvailable]     = useState(11140.0); // USDC · 0% · instant
   const [balance, setBalance]         = useState(24500.0); // USDY · Smart Treasury
   const [yield30d, setYield30d]       = useState(98.72);
-  const [rate, setRate]               = useState<TreasuryRateView>({ apy: 3.5, label: '≈3.50% APY · variable', introductory: false });
+  const [rate, setRate]               = useState<TreasuryRateView>({ apy: 0, label: 'Variable rate loading...', introductory: false });
+  const [executionEnabled, setExecutionEnabled] = useState(false);
   const [history, setHistory]         = useState<HistoryEntry[]>(SEED_HISTORY);
   const [notices, setNotices]         = useState<WithdrawalNotice[]>([]);
   const [tab, setTab]                 = useState<'toTreasury' | 'toAvailable'>('toTreasury');
@@ -120,6 +122,7 @@ export default function TreasuryPage() {
   const [loading, setLoading]         = useState(false);
   const [chartRange, setChartRange]   = useState<'7d' | '30d'>('7d');
   const [hoveredBar, setHoveredBar]   = useState<number | null>(null);
+  const [nettingRatio, setNettingRatio] = useState(60);
   const counterRef                    = useRef(9);
 
   // Server-backed ledger: real two-bucket balances, floating rate, and notices.
@@ -127,6 +130,7 @@ export default function TreasuryPage() {
     setAvailable(d.available);
     setBalance(d.treasuryPrincipal);
     setYield30d(d.treasuryYield);
+    setExecutionEnabled(d.executionEnabled === true);
     if (d.rate?.apy) setRate({ apy: d.rate.apy, label: d.rate.label, introductory: d.rate.introductory });
     setNotices((d.notices ?? []).map((n) => ({ id: n.id, amount: n.amount, availableAt: n.availableAt })));
   }
@@ -138,7 +142,6 @@ export default function TreasuryPage() {
       .then((d) => { if (active && d) applySnapshot(d); })
       .catch(() => {});
     return () => { active = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Gentle live tick on accrued yield (cosmetic).
@@ -151,7 +154,6 @@ export default function TreasuryPage() {
   }, [balance, rate.apy]);
 
   const dailyYield  = balance * (rate.apy / 100) / 365;
-  const projMonthly = dailyYield * 30;
   const projAnnual  = balance * (rate.apy / 100);
 
   const bars        = chartRange === '7d' ? DAILY_BARS_7D : DAILY_BARS_30D;
@@ -172,6 +174,10 @@ export default function TreasuryPage() {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!executionEnabled) {
+      showToast('Projection only - execution disabled pending regulatory approval.');
+      return;
+    }
     if (!validAmount) return;
     if (parsedAmount > sourceBalance) {
       showToast(tab === 'toTreasury' ? 'Insufficient Available balance' : 'Insufficient Smart Treasury balance');
@@ -191,7 +197,7 @@ export default function TreasuryPage() {
         applySnapshot(d);
         if (action === 'move') {
           setHistory((prev) => [{ id, type: 'deposit', desc: 'Available → Smart Treasury', amount: `+$${fmtUsd(parsedAmount)}`, amountNum: parsedAmount, date: nowLabel(), status: 'confirmed' }, ...prev]);
-          showToast(`$${fmtUsd(parsedAmount)} moved to Smart Treasury · now earning`);
+          showToast(`$${fmtUsd(parsedAmount)} treasury allocation approved`);
         } else {
           setHistory((prev) => [{ id, type: 'withdraw', desc: 'Smart Treasury → Available (notice)', amount: `-$${fmtUsd(parsedAmount)}`, amountNum: -parsedAmount, date: nowLabel(), status: 'pending' }, ...prev]);
           showToast('Withdrawal requested · funds in Available in 1–3 business days');
@@ -203,6 +209,10 @@ export default function TreasuryPage() {
   }
 
   const previewSource = validAmount ? Math.max(0, sourceBalance - parsedAmount) : null;
+  const simulationPrincipal = 5_000;
+  const simulationFee = simulationPrincipal * 0.014 + 4.5;
+  const feesDeleted = simulationFee * (nettingRatio / 100);
+  const feesRelocated = simulationFee - feesDeleted;
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -220,7 +230,7 @@ export default function TreasuryPage() {
           <span className="dash-kicker">Smart treasury</span>
           <h1 className="dash-title mt-2">Smart Treasury</h1>
           <p className="mt-1 text-xs font-medium text-[#326273]/60">
-            Two buckets: Available USDC stays instant at 0%; Smart Treasury earns real T-bill yield via Ondo USDY.
+            Two-bucket simulation: Available USDC stays instant at 0%; Smart Treasury models a variable USDY return.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -230,6 +240,12 @@ export default function TreasuryPage() {
           )}
         </div>
       </header>
+      <div className="dash-block border-accent/30 bg-accent/10 p-4 text-sm font-bold text-foreground">
+        Projection only — execution disabled pending regulatory approval.
+        <span className="mt-1 block text-xs font-medium text-foreground/65">
+          Customer funds are held 1:1 in segregated custody, never commingled, never lent, reconciled daily.
+        </span>
+      </div>
 
       {/* Signature: treasury flow */}
       <SettlementEngineFlow variant="treasury" className="dash-reveal" />
@@ -249,10 +265,10 @@ export default function TreasuryPage() {
           </div>
         </div>
 
-        {/* Smart Treasury — gold accent, USDY, variable, T+1–3 */}
+        {/* Smart Treasury projection — gold accent, USDY, variable, T+1–3 */}
         <div className="dash-block dash-block-accent dash-block-interactive p-5">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#9a6f15]">Smart Treasury</span>
+            <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#9a6f15]">Smart Treasury projection</span>
             <div className="rounded-lg bg-[#D9A441]/18 p-1.5"><TrendingUp size={14} className="text-[#C99A2E]" /></div>
           </div>
           <div className="dash-num mt-2 text-3xl font-extrabold text-[#0c3e48]">${fmtUsd(balance)}</div>
@@ -261,7 +277,55 @@ export default function TreasuryPage() {
             <span className="text-[#326273]/55">{rate.label} · withdrawals 1–3 business days</span>
           </div>
           <div className="mt-2 flex items-center gap-1.5 text-[11px] font-semibold text-[#4F9C88]">
-            <Sparkles size={11} /> +${yield30d.toFixed(2)} yield earned (30d) · ~${dailyYield.toFixed(3)}/day
+            <Sparkles size={11} /> +${yield30d.toFixed(2)} modeled yield (30d) · ~${dailyYield.toFixed(3)}/day
+          </div>
+        </div>
+      </section>
+
+      <section className="dash-surface overflow-hidden">
+        <div className="grid gap-0 lg:grid-cols-[1.1fr_1fr]">
+          <div className="border-b border-[#326273]/10 p-5 lg:border-b-0 lg:border-r">
+            <span className="dash-kicker">Loop economics simulator</span>
+            <h2 className="mt-2 text-xl font-extrabold text-[#0c3e48]">Sweep vs hold</h2>
+            <p className="mt-2 max-w-xl text-xs leading-5 text-[#326273]/60">
+              On a $5,000 payment, internal netting removes repeated payout work. The remainder is relocated to the point where funds eventually leave the Splash loop.
+            </p>
+            <label className="mt-6 block">
+              <span className="flex items-center justify-between text-xs font-bold text-[#326273]">
+                <span>Netting ratio</span>
+                <span className="font-mono text-[#E39774]">{nettingRatio}%</span>
+              </span>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={nettingRatio}
+                onChange={(event) => setNettingRatio(Number(event.target.value))}
+                className="mt-3 h-2 w-full cursor-pointer accent-[#E39774]"
+              />
+              <span className="mt-2 flex justify-between text-[10px] font-bold uppercase tracking-wide text-[#326273]/35"><span>Full sweep</span><span>Full hold</span></span>
+            </label>
+          </div>
+          <div className="bg-[#F6F0ED]/55 p-5">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-2xl border border-[#5C9EAD]/20 bg-white p-4">
+                <div className="text-[10px] font-black uppercase tracking-[0.14em] text-[#5C9EAD]">Fees deleted</div>
+                <div className="dash-num mt-2 text-2xl font-extrabold text-[#0c3e48]">${feesDeleted.toFixed(2)}</div>
+                <p className="mt-1 text-[11px] leading-4 text-[#326273]/55">Avoided while value stays netted inside the operating loop.</p>
+              </div>
+              <div className="rounded-2xl border border-[#E39774]/20 bg-white p-4">
+                <div className="text-[10px] font-black uppercase tracking-[0.14em] text-[#E39774]">Fees relocated</div>
+                <div className="dash-num mt-2 text-2xl font-extrabold text-[#0c3e48]">${feesRelocated.toFixed(2)}</div>
+                <p className="mt-1 text-[11px] leading-4 text-[#326273]/55">Still paid when the remaining value reaches a local cash-out rail.</p>
+              </div>
+            </div>
+            <div className="mt-4 overflow-hidden rounded-full bg-[#E39774]/25">
+              <div className="h-3 rounded-full bg-[#5C9EAD] transition-all" style={{ width: `${nettingRatio}%` }} />
+            </div>
+            <div className="mt-3 flex items-start gap-2 rounded-xl bg-white p-3 text-[11px] leading-4 text-[#326273]/60">
+              <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#5C9EAD]" />
+              Simulation only. Netting reduces repeated payout costs; it does not remove the cost of the final external payout.
+            </div>
           </div>
         </div>
       </section>
@@ -363,8 +427,8 @@ export default function TreasuryPage() {
           {/* Activity */}
           <div className="dash-surface overflow-hidden">
             <div className="flex items-center justify-between border-b border-[#326273]/8 px-4 py-3">
-              <h2 className="text-sm font-bold text-[#1F4452]">Treasury Activity</h2>
-              <span className="text-[11px] font-semibold text-[#326273]/45">USDC ↔ USDY · yield accrual</span>
+              <h2 className="text-sm font-bold text-[#1F4452]">Modeled Treasury Activity</h2>
+              <span className="text-[11px] font-semibold text-[#326273]/45">USDC ↔ USDY · simulation ledger</span>
             </div>
             <div className="divide-y divide-[#326273]/5">
               {history.slice(0, 10).map((tx) => (
@@ -388,14 +452,14 @@ export default function TreasuryPage() {
             <div className="flex items-center justify-between border-b border-[#326273]/8 px-5 py-3">
               <div className="flex items-center gap-2">
                 <Sprout size={14} className="text-[#4F9C88]" />
-                <h2 className="text-sm font-bold text-[#1F4452]">How Smart Treasury works</h2>
+                <h2 className="text-sm font-bold text-[#1F4452]">How the treasury model works</h2>
               </div>
               <span className="rounded-full bg-[#D9A441]/12 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#9a6f15]">T-bill yield</span>
             </div>
             <div className="relative grid gap-0 sm:grid-cols-4">
               <div className="pointer-events-none absolute left-5 right-5 top-[3.25rem] hidden h-px bg-gradient-to-r from-[#5C9EAD]/0 via-[#D9A441] to-[#E39774]/40 sm:block" />
               {[
-                { step: '01', title: 'Move from Available', desc: 'Idle USDC swaps to USDY on a Sui DEX (slippage-guarded). Instant in.', icon: CreditCard, accent: '#5C9EAD', bg: 'bg-[#5C9EAD]/10', tag: 'USDC → USDY' },
+                { step: '01', title: 'Prepare recommendation', desc: '0xWal models an allocation from Available USDC. Your business must approve it.', icon: CreditCard, accent: '#5C9EAD', bg: 'bg-[#5C9EAD]/10', tag: 'Human approval' },
                 { step: '02', title: 'Ondo USDY (T-bills)', desc: 'USDY is backed by short-dated US Treasuries — real, off-chain yield.', icon: Landmark, accent: '#C99A2E', bg: 'bg-[#D9A441]/15', tag: 'T-bill backed' },
                 { step: '03', title: 'Yield accrues', desc: 'USDY redemption price rises daily. Floating net rate — never fixed.', icon: Sprout, accent: '#4F9C88', bg: 'bg-[#6FB4A0]/18', tag: rate.label.replace(' · variable', '') },
                 { step: '04', title: 'T+1–T+3 withdraw', desc: 'Request a withdrawal; USDY→USDC swaps and lands in Available in 1–3 business days.', icon: PiggyBank, accent: '#E39774', bg: 'bg-[#E39774]/10', tag: 'Notice required' },
@@ -433,6 +497,7 @@ export default function TreasuryPage() {
                 <button
                   key={t}
                   type="button"
+                  disabled={!executionEnabled}
                   onClick={() => { setTab(t); setAmount(''); }}
                   className={cn('flex-1 rounded-md py-1.5 text-xs font-bold transition-colors', tab === t ? 'bg-white text-[#1F4452] shadow-sm' : 'text-[#326273]/50 hover:text-[#326273]')}
                 >
@@ -450,11 +515,12 @@ export default function TreasuryPage() {
                     type="text"
                     inputMode="decimal"
                     value={amount}
+                    disabled={!executionEnabled}
                     onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d{0,2}$/.test(v)) setAmount(v); }}
                     placeholder="0.00"
                     className="min-w-0 flex-1 bg-transparent text-sm font-bold text-[#1F4452] placeholder-[#326273]/30 outline-none"
                   />
-                  <button type="button" onClick={() => setAmount(String(Math.floor(sourceBalance)))} className="shrink-0 rounded-md bg-[#326273]/10 px-2 py-0.5 text-[10px] font-bold text-[#326273]/60 transition-colors hover:bg-[#326273]/20 hover:text-[#326273]">MAX</button>
+                  <button type="button" disabled={!executionEnabled} onClick={() => setAmount(String(Math.floor(sourceBalance)))} className="shrink-0 rounded-md bg-[#326273]/10 px-2 py-0.5 text-[10px] font-bold text-[#326273]/60 transition-colors hover:bg-[#326273]/20 hover:text-[#326273] disabled:cursor-not-allowed disabled:opacity-40">MAX</button>
                 </div>
               </div>
 
@@ -471,13 +537,13 @@ export default function TreasuryPage() {
 
               <button
                 type="submit"
-                disabled={loading || !validAmount}
+                disabled={!executionEnabled || loading || !validAmount}
                 className={cn(
                   'w-full rounded-lg py-2.5 text-sm font-bold text-white transition-all disabled:opacity-50',
                   tab === 'toTreasury' ? 'bg-[#C99A2E] hover:bg-[#b3881f]' : 'bg-[#5C9EAD] hover:bg-[#4a8a99]',
                 )}
               >
-                {loading ? 'Processing…' : tab === 'toTreasury' ? '→ Move to Smart Treasury' : '← Request withdrawal'}
+                {!executionEnabled ? 'Execution disabled' : loading ? 'Processing…' : tab === 'toTreasury' ? '→ Move to Smart Treasury' : '← Request withdrawal'}
               </button>
             </form>
           </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Check, ShieldCheck, Sparkles, Timer } from 'lucide-react';
 import SettlementEngineFlow from '@/components/dashboard/SettlementEngineFlow';
 
@@ -8,6 +8,8 @@ import StepBeneficiary from '@/components/transfer/StepBeneficiary';
 import StepQuote from '@/components/transfer/StepQuote';
 import StepReceipt from '@/components/transfer/StepReceipt';
 import StepStatus from '@/components/transfer/StepStatus';
+import StepDelivery from '@/components/transfer/StepDelivery';
+import type { RecipientTier } from '@/lib/server/operations';
 
 // Target-currency display metadata for the settlement-flow corridor node.
 const CURRENCY_META: Record<string, { flag: string; country: string }> = {
@@ -22,7 +24,8 @@ const CURRENCY_META: Record<string, { flag: string; country: string }> = {
 };
 
 export type TransferState = {
-  step: 1 | 2 | 3 | 4;
+  step: 1 | 2 | 3 | 4 | 5;
+  invoiceId?: string;
   recipient: {
     name: string;
     country: 'MY' | 'PH' | 'ID' | 'SG' | 'VN' | 'TH' | 'EU' | 'GB';
@@ -35,15 +38,25 @@ export type TransferState = {
   txStatus?: 'pending' | 'success' | 'failed';
   transferIntentId?: string;
   receiptObjectId?: string;
+  deliveryTier: RecipientTier;
+  rateHold?: {
+    id: string;
+    corridorCurrency: string;
+    rate: string;
+    feeBps: number;
+    holdUntil: string;
+    state: 'ACTIVE' | 'EXECUTED' | 'EXPIRED' | 'CANCELLED';
+  };
 };
 
 const initial: TransferState = {
   step: 1,
   recipient: { name: '', country: 'PH', rail: 'bank' },
   amount: { value: '', sourceCurrency: 'USD', targetCurrency: 'PHP' },
+  deliveryTier: 'PAYOUT_ONLY',
 };
 
-const stepLabels = ['Beneficiary', 'Quote & Send', 'Status', 'Receipt'] as const;
+const stepLabels = ['Beneficiary', 'Delivery', 'Quote & Send', 'Status', 'Receipt'] as const;
 
 const sidePanels = [
   {
@@ -72,6 +85,35 @@ export default function TransferPage() {
     set({ step });
   }, [set]);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const invoiceId = params.get('invoiceId');
+    const holdId = params.get('holdId');
+    if (invoiceId) {
+      void fetch(`/api/invoices/${invoiceId}`).then((response) => response.json()).then((invoice: { payerOrgName?: string; amountUsd?: string; targetCurrency?: TransferState['amount']['targetCurrency']; id?: string }) => {
+        if (!invoice.id) return;
+        setState((current) => ({
+          ...current,
+          step: 2,
+          invoiceId: invoice.id,
+          recipient: { ...current.recipient, name: invoice.payerOrgName ?? current.recipient.name, country: 'PH' },
+          amount: { ...current.amount, value: invoice.amountUsd ?? current.amount.value, targetCurrency: invoice.targetCurrency ?? current.amount.targetCurrency },
+          deliveryTier: invoice.targetCurrency === 'PHP' ? 'SWEEP_ACCOUNT' : 'PAYOUT_ONLY',
+        }));
+      });
+    }
+    if (holdId) {
+      void fetch(`/api/rate-holds?id=${encodeURIComponent(holdId)}`).then((response) => response.json()).then((hold: TransferState['rateHold']) => {
+        if (!hold?.id || hold.state !== 'ACTIVE') return;
+        setState((current) => ({
+          ...current,
+          rateHold: hold,
+          amount: { ...current.amount, targetCurrency: hold.corridorCurrency as TransferState['amount']['targetCurrency'] },
+        }));
+      });
+    }
+  }, []);
+
   return (
     <div className="mx-auto w-full max-w-6xl space-y-5">
       <header className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
@@ -83,7 +125,7 @@ export default function TransferPage() {
           </p>
         </div>
         <div className="rounded-[11px] border border-[#326273]/15 bg-white/70 px-3 py-2 text-xs font-bold text-[#326273]">
-          Step {state.step} of 4 · {stepLabels[state.step - 1]}
+          Step {state.step} of 5 · {stepLabels[state.step - 1]}
         </div>
       </header>
 
@@ -104,9 +146,10 @@ export default function TransferPage() {
       <section className="grid gap-5 lg:grid-cols-[1.5fr_1fr]">
         <div className="dash-surface p-6 md:p-8">
           {state.step === 1 && <StepBeneficiary state={state} set={set} next={() => go(2)} />}
-          {state.step === 2 && <StepQuote state={state} set={set} prev={() => go(1)} next={() => go(3)} />}
-          {state.step === 3 && <StepStatus state={state} set={set} next={() => go(4)} />}
-          {state.step === 4 && <StepReceipt state={state} reset={() => setState(initial)} />}
+          {state.step === 2 && <StepDelivery state={state} set={set} prev={() => go(1)} next={() => go(3)} />}
+          {state.step === 3 && <StepQuote state={state} set={set} prev={() => go(2)} next={() => go(4)} />}
+          {state.step === 4 && <StepStatus state={state} set={set} next={() => go(5)} />}
+          {state.step === 5 && <StepReceipt state={state} reset={() => setState(initial)} />}
         </div>
 
         <aside className="space-y-4">
@@ -154,7 +197,7 @@ function Pill({ label, value }: { label: string; value: string }) {
 
 function Stepper({ current }: { current: number }) {
   return (
-    <ol className="dash-surface grid grid-cols-4 gap-0 overflow-hidden">
+    <ol className="dash-surface grid grid-cols-5 gap-0 overflow-hidden">
       {stepLabels.map((label, index) => {
         const step = index + 1;
         const active = step === current;

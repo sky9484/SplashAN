@@ -15,6 +15,7 @@ import {
   Phone,
   Send,
   Settings,
+  Timer,
   TrendingUp,
   UserCircle,
   X,
@@ -34,15 +35,16 @@ const navGroups: NavGroup[] = [
     items: [
       { label: 'Overview',     href: '/dashboard',          icon: LayoutDashboard },
       { label: 'Transfer',     href: '/dashboard/transfer', icon: Send },
+      { label: 'Rate holds',   href: '/dashboard/transfers', icon: Timer },
       { label: 'Batch Payout', href: '/dashboard/batch',    icon: Layers },
     ],
   },
   {
     title: 'Finance',
     items: [
-      { label: 'Treasury',   href: '/dashboard/treasury', icon: TrendingUp, badge: '4.8%' },
+      { label: 'Treasury',   href: '/dashboard/treasury', icon: TrendingUp },
       { label: 'Invoices',   href: '/dashboard/invoices', icon: FileText },
-      { label: '0xWal', href: '/dashboard/copilot',  icon: Bot,        badge: 'AI' },
+      { label: '0xWal', href: '/dashboard/0xwal',  icon: Bot,        badge: 'AI' },
     ],
   },
   {
@@ -88,11 +90,11 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           aria-label={collapsed ? 'Expand navigation' : 'Collapse navigation'}
         >
           <Image
-            src="/splash-logo.png"
+            src="/splash-main-icon.png"
             alt="Splash"
             width={32}
             height={32}
-            className="h-8 w-8 shrink-0 object-contain brightness-0 invert"
+            className="h-8 w-8 shrink-0 object-contain"
             unoptimized
           />
           {!collapsed && (
@@ -209,11 +211,11 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       <header className="fixed left-0 right-0 top-0 z-40 flex items-center justify-between bg-[#1F4452] px-4 py-3 md:hidden">
         <div className="flex items-center gap-3">
           <Image
-            src="/splash-logo.png"
+            src="/splash-main-icon.png"
             alt="Splash"
             width={28}
             height={28}
-            className="h-7 w-7 object-contain brightness-0 invert"
+            className="h-7 w-7 object-contain"
             unoptimized
           />
           <span className="text-lg font-bold text-white">

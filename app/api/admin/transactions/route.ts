@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { getAdminSession } from '@/lib/server/admin-auth';
-import { listTransfers } from '@/lib/server/operations';
+import { analyticsSummary, listTransfers } from '@/lib/server/operations';
 
 export async function GET(request: Request) {
   const session = await getAdminSession();
@@ -24,6 +24,9 @@ export async function GET(request: Request) {
       pageSize,
       total: transfers.length,
       totalPages: Math.ceil(transfers.length / pageSize),
+    },
+    summary: {
+      analytics: analyticsSummary(),
     },
   });
 }

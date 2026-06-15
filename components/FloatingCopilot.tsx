@@ -1,34 +1,9 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { Bot, ChevronDown, Send, Sparkles, X } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { streamCopilot } from '../lib/copilot-client';
-
-// ─── Time-aware greeting ──────────────────────────────────────────────────────
-
-function getGreeting(): { short: string; opening: string } {
-  const h = new Date().getHours();
-  if (h < 12) {
-    return {
-      short: 'Good morning',
-      opening:
-        "Good morning! Ready to start the day strong?\n\nI can help with today's PHP payroll batch, check corridor rates, monitor your treasury yield, or flag any compliance notes.",
-    };
-  }
-  if (h < 17) {
-    return {
-      short: 'Good afternoon',
-      opening:
-        "Good afternoon! Your Friday PHP batch is on track.\n\nCurrent PHP rate 56.42 is within 0.3% of the 30-day best — ideal lock window is tomorrow 08:45 MYT. Anything I can help with?",
-    };
-  }
-  return {
-    short: 'Good evening',
-    opening:
-      "Good evening! End-of-day summary: all 8 corridors are healthy, treasury at $24,500 earning $3.22/day.\n\nAnything you'd like me to prep for tomorrow?",
-  };
-}
 
 // ─── Compact AI responses ─────────────────────────────────────────────────────
 
@@ -51,7 +26,7 @@ const COMPACT_RESPONSES: { keywords: string[]; reply: string }[] = [
   {
     keywords: ['treasury', 'yield', 'apy', 'earn', 'deposit', 'compound'],
     reply:
-      'Smart Treasury earns Ondo USDY (T-bill) yield — ≈3.5% APY, variable.\n\nYour Available balance (USDC) stays 0% but instant. Withdrawals from Smart Treasury take 1–3 business days. Want me to prepare a move?',
+      'Smart Treasury earns a variable Ondo USDY (T-bill) yield.\n\nYour Available balance (USDC) stays 0% but instant. Withdrawals from Smart Treasury take 1–3 business days. Want me to prepare a projection?',
   },
   {
     keywords: ['cheapest', 'corridor', 'rate', 'compare', 'best'],
@@ -78,7 +53,7 @@ const COMPACT_RESPONSES: { keywords: string[]; reply: string }[] = [
 const FALLBACK_REPLIES = [
   "I'm monitoring all 8 corridors — everything looks healthy today. What would you like to focus on?",
   'Your blended fee this month is 0.89%, saving you 41% vs. traditional wires. Anything to optimise?',
-  'Smart Treasury earns variable Ondo USDY (T-bill) yield; Available stays instant at 0%. Want to move idle USDC in?',
+  'Smart Treasury models a variable Ondo USDY return; execution stays approval-gated. Want a projection?',
   'All systems clear — no AML flags, no compliance issues. What can I help with?',
 ];
 
@@ -106,6 +81,10 @@ const QUICK_CHIPS = [
   'Compliance status',
 ];
 
+const NUDGES = ['Hi!', 'Can I help?', 'Ready to splash it?'];
+const OPENING_MESSAGE =
+  'Hi! I can help with rates, batches, treasury, compliance, and settlement proof.';
+
 function formatChatTime(date: Date = new Date()): string {
   return new Intl.DateTimeFormat('en-US', {
     hour: '2-digit',
@@ -117,32 +96,51 @@ function formatChatTime(date: Date = new Date()): string {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function FloatingCopilot() {
-  const [greeting,  setGreeting]  = useState('Hello');
   const [open,      setOpen]      = useState(false);
   const [input,     setInput]     = useState('');
   const [thinking,  setThinking]  = useState(false);
   const [streaming, setStreaming] = useState(false);
   const [messages,  setMessages]  = useState<Message[]>([]);
+  const [nudge, setNudge] = useState<string | null>(null);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
 
   const msgIdRef          = useRef(1);
   const fallbackRef       = useRef(0);
   const streamIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const nudgeTimeoutRef    = useRef<number | null>(null);
+  const dragRef            = useRef<{ x: number; y: number; offsetX: number; offsetY: number } | null>(null);
   const scrollRef         = useRef<HTMLDivElement>(null);
   const inputRef          = useRef<HTMLInputElement>(null);
 
   const busy = thinking || streaming;
 
-  // Time-aware greeting + opening message — populated on the client only, so the
-  // server-rendered HTML (UTC/stable) matches first paint and avoids a hydration
-  // mismatch. getGreeting()/formatChatTime() depend on the local clock/timezone.
+  // Populate the first message on the client to keep the timestamp hydration-safe.
   useEffect(() => {
-    const timer = setTimeout(() => {
-      const g = getGreeting();
-      setGreeting(g.short);
-      setMessages((prev) => (prev.length ? prev : [{ id: 1, role: 'assistant', text: g.opening, time: formatChatTime() }]));
+    const timer = window.setTimeout(() => {
+      setMessages((prev) => (
+        prev.length ? prev : [{ id: 1, role: 'assistant', text: OPENING_MESSAGE, time: formatChatTime() }]
+      ));
     }, 0);
-    return () => clearTimeout(timer);
+    return () => window.clearTimeout(timer);
   }, []);
+
+  // A brief, low-pressure prompt appears every 45 seconds while the chat is closed.
+  useEffect(() => {
+    const showNudge = () => {
+      if (open) return;
+      setNudge((current) => {
+        const choices = NUDGES.filter((item) => item !== current);
+        return choices[Math.floor(Math.random() * choices.length)] ?? NUDGES[0];
+      });
+      if (nudgeTimeoutRef.current) window.clearTimeout(nudgeTimeoutRef.current);
+      nudgeTimeoutRef.current = window.setTimeout(() => setNudge(null), 3000);
+    };
+    const interval = window.setInterval(showNudge, 45_000);
+    return () => {
+      window.clearInterval(interval);
+      if (nudgeTimeoutRef.current) window.clearTimeout(nudgeTimeoutRef.current);
+    };
+  }, [open]);
 
   // Auto-scroll on new messages
   useEffect(() => {
@@ -162,6 +160,31 @@ export default function FloatingCopilot() {
       if (streamIntervalRef.current) clearInterval(streamIntervalRef.current);
     };
   }, []);
+
+  function startDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    if ((event.target as HTMLElement).closest('button')) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dragRef.current = { x: event.clientX, y: event.clientY, offsetX: offset.x, offsetY: offset.y };
+  }
+
+  function moveDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!dragRef.current) return;
+    const nextX = dragRef.current.offsetX + event.clientX - dragRef.current.x;
+    const nextY = dragRef.current.offsetY + event.clientY - dragRef.current.y;
+    const maxX = Math.max(0, window.innerWidth - 90);
+    const maxY = Math.max(0, window.innerHeight - 140);
+    setOffset({
+      x: Math.max(-maxX, Math.min(maxX, nextX)),
+      y: Math.max(-maxY, Math.min(maxY, nextY)),
+    });
+  }
+
+  function stopDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    dragRef.current = null;
+  }
 
   function sendMessage(text: string) {
     const trimmed = text.trim();
@@ -239,10 +262,17 @@ export default function FloatingCopilot() {
             ? 'opacity-100 scale-100 pointer-events-auto'
             : 'opacity-0 scale-95 pointer-events-none'
         )}
-        style={{ height: 480 }}
+        style={{ height: 480, translate: `${offset.x}px ${offset.y}px` }}
       >
         {/* Panel header */}
-        <div className="flex shrink-0 items-center justify-between bg-gradient-to-r from-[#0c3e48] to-[#0d6370] px-4 py-3">
+        <div
+          className="flex shrink-0 cursor-grab touch-none items-center justify-between bg-gradient-to-r from-[#0c3e48] to-[#0d6370] px-4 py-3 active:cursor-grabbing"
+          onPointerDown={startDrag}
+          onPointerMove={moveDrag}
+          onPointerUp={stopDrag}
+          onPointerCancel={stopDrag}
+          aria-label="Drag 0xWal chat"
+        >
           <div className="flex items-center gap-2.5">
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#efc46f]/25 ring-1 ring-[#efc46f]/40">
               <Bot size={14} className="text-[#efc46f]" />
@@ -387,8 +417,11 @@ export default function FloatingCopilot() {
       {/* ── Floating trigger button ── */}
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-label={open ? 'Close 0xWal' : `${greeting} — open 0xWal`}
+        onClick={() => {
+          setNudge(null);
+          setOpen((v) => !v);
+        }}
+        aria-label={open ? 'Close 0xWal' : 'Open 0xWal'}
         className={cn(
           'fixed bottom-4 right-4 z-50 flex items-center gap-2.5 rounded-full py-3 text-white shadow-[0_12px_30px_rgba(8,54,64,0.3)] transition-all duration-200 hover:shadow-[0_16px_38px_rgba(8,54,64,0.36)]',
           open ? 'bg-[#0c3e48] px-3.5' : 'bg-[#0c3e48] px-4 hover:brightness-110'
@@ -400,9 +433,9 @@ export default function FloatingCopilot() {
         </div>
 
         {/* Label (only when closed) */}
-        {!open && (
+        {!open && nudge && (
           <span className="text-sm font-semibold tracking-tight">
-            {greeting}! <span className="opacity-75">👋</span>
+            {nudge}
           </span>
         )}
 

@@ -117,7 +117,7 @@ export default function LoginAuroraBackground() {
 
         {/* Flowing light streams — faint base strand + travelling light segment */}
         <g className="login-streams">
-          {STREAMS.map((s, i) => {
+          {STREAMS.map((s) => {
             const d = streamPath(s.y, s.amp);
             return (
               <g key={s.y}>

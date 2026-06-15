@@ -20,7 +20,7 @@ export default function SplashLoading({ label = 'Loading your dashboard' }: { la
           <Image src="/isometric/payment-intent.svg" alt="" width={1448} height={1086} priority />
         </motion.div>
         <div className="splash-loading-copy">
-          <Image src="/splash-icon.svg" alt="" width={34} height={34} priority />
+          <Image src="/splash-main-icon.png" alt="" width={72} height={72} priority />
           <span>
             <motion.strong animate={{ opacity: [0.45, 1, 0.45] }} transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}>
               {label}

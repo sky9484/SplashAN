@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "npm run check:copy && eslint",
+    "check:copy": "node scripts/check-copy.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.99.0",

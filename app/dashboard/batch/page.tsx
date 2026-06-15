@@ -141,12 +141,33 @@ function evaluateRow(row: Omit<BatchRow, "status" | "checks">, duplicateCount: n
   return checks;
 }
 
+function screenRows(rows: Array<Omit<BatchRow, "status" | "checks">>): BatchRow[] {
+  const duplicateCounts = rows.reduce<Record<string, number>>((counts, row) => {
+    const key = row.address || row.name;
+    counts[key] = (counts[key] ?? 0) + 1;
+    return counts;
+  }, {});
+
+  return rows.map((row) => {
+    const checks = evaluateRow(row, duplicateCounts[row.address || row.name] ?? 1);
+    return { ...row, checks, status: rowStatus(strongestResult(checks)) };
+  });
+}
+
 export default function BatchPage() {
   const [rows, setRows] = useState<BatchRow[]>([]);
   const [busy, setBusy] = useState(false);
   const [totp, setTotp] = useState("");
   const [batchId, setBatchId] = useState<string | null>(null);
   const [batchStatus, setBatchStatus] = useState<BatchStatus | null>(null);
+
+  useEffect(() => {
+    const corridor = new URLSearchParams(window.location.search).get("corridor")?.toUpperCase();
+    if (!corridor) return;
+    const matchingRows = sampleCsvRows.filter((row) => row.country === corridor || (corridor === "PHP" && row.country === "PH"));
+    const timeout = setTimeout(() => setRows(screenRows(matchingRows)), 0);
+    return () => clearTimeout(timeout);
+  }, []);
 
   const pollBatch = useCallback(async (id: string) => {
     try {
@@ -198,21 +219,7 @@ export default function BatchPage() {
             purpose: String(row.purpose ?? "").trim(),
             amount: String(row.amount ?? "0").trim(),
           }));
-        const duplicateCounts = normalized.reduce<Record<string, number>>((acc, row) => {
-          const key = row.address || row.name;
-          acc[key] = (acc[key] ?? 0) + 1;
-          return acc;
-        }, {});
-        const screened = normalized.map((row) => {
-          const checks = evaluateRow(row, duplicateCounts[row.address || row.name] ?? 1);
-          const result = strongestResult(checks);
-
-          return {
-            ...row,
-            checks,
-            status: rowStatus(result),
-          };
-        });
+        const screened = screenRows(normalized);
 
         setRows(screened);
         setBatchId(null);
