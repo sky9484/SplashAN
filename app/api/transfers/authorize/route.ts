@@ -16,6 +16,8 @@ import { selectStablecoin } from '@/lib/server/stable-router';
 import { completeDeliveryForTransfer } from '@/lib/server/sweep';
 import { recordSingleTransferOnSui } from '@/lib/server/sui-settlement';
 
+export const maxDuration = 60;
+
 const authorizeSchema = z.object({
   recipient: z.object({
     name: z.string().trim().min(2),
