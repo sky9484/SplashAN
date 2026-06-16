@@ -13,6 +13,8 @@ import {
   Loader2,
   History,
   Download,
+  Database,
+  BadgeCheck,
 } from 'lucide-react';
 import Link from 'next/link';
 import Papa from 'papaparse';
@@ -28,6 +30,19 @@ type ApiResponse = {
   total: number;
   page: number;
   perPage: number;
+};
+
+type AuditBatch = {
+  id: string;
+  date: string;
+  merkleRoot: string;
+  settlementCount: number;
+  walrusBlobId: string;
+  walrusMode: 'demo' | 'live';
+  sealMode: 'demo' | 'live';
+  anchorObjectId: string | null;
+  anchorDigest: string;
+  leaves: Array<{ transferId: string }>;
 };
 
 const STATE_ORDER: TransferIntentState[] = [
@@ -218,6 +233,8 @@ export default function HistoryPage() {
   const [data, setData] = useState<ApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [auditBatches, setAuditBatches] = useState<AuditBatch[]>([]);
+  const [verification, setVerification] = useState<Record<string, string>>({});
 
   const fetchTransfers = useCallback(async (f: FilterType, showRefreshing = false) => {
     if (showRefreshing) setRefreshing(true);
@@ -238,6 +255,12 @@ export default function HistoryPage() {
     const timeout = setTimeout(() => void fetchTransfers(filter), 0);
     return () => clearTimeout(timeout);
   }, [filter, fetchTransfers]);
+
+  useEffect(() => {
+    void fetch('/api/audit-batches')
+      .then((response) => response.json())
+      .then((body: { items?: AuditBatch[] }) => setAuditBatches(body.items ?? []));
+  }, []);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -291,6 +314,21 @@ export default function HistoryPage() {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+  }
+
+  async function verifyInclusion(batch: AuditBatch, transferId: string) {
+    const key = `${batch.id}:${transferId}`;
+    setVerification((current) => ({ ...current, [key]: 'Verifying…' }));
+    const response = await fetch('/api/audit-batches/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ batchId: batch.id, transferId }),
+    });
+    const body = await response.json() as { verified?: boolean; error?: string };
+    setVerification((current) => ({
+      ...current,
+      [key]: body.verified ? 'Inclusion + Walrus + Sui anchor verified' : body.error ?? 'Verification failed',
+    }));
   }
 
   return (
@@ -386,6 +424,57 @@ export default function HistoryPage() {
           </button>
         ))}
       </div>
+
+      <section className="dash-surface p-5">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <div className="flex items-center gap-2 text-sm font-black text-[#326273]">
+              <Database size={17} className="text-[#5C9EAD]" />
+              Daily audit batches
+            </div>
+            <p className="mt-1 text-xs text-[#326273]/60">
+              Completed payments are Merkle-batched, Seal-encrypted, stored on Walrus, then anchored on Sui.
+            </p>
+          </div>
+          <span className="rounded-full bg-[#5C9EAD]/10 px-3 py-1 text-[11px] font-black text-[#326273]">
+            {auditBatches.length} anchored batch{auditBatches.length === 1 ? '' : 'es'}
+          </span>
+        </div>
+        <div className="mt-4 space-y-3">
+          {auditBatches.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-[#326273]/15 p-4 text-xs text-[#326273]/55">
+              No daily batch has been generated yet. The CRON-gated audit batch job creates one after real settlements complete.
+            </div>
+          ) : auditBatches.map((batch) => (
+            <div key={batch.id} className="rounded-xl border border-[#326273]/10 bg-[#F6F0ED] p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="font-black text-[#326273]">{batch.date} · {batch.settlementCount} settlement{batch.settlementCount === 1 ? '' : 's'}</div>
+                  <div className="mt-1 break-all font-mono text-[10px] text-[#326273]/50">Merkle root {batch.merkleRoot}</div>
+                </div>
+                <div className="flex gap-2">
+                  <StatusBadge status={batch.walrusMode} />
+                  <StatusBadge status={batch.sealMode} />
+                  <a href={`https://testnet.suivision.xyz/txblock/${batch.anchorDigest}`} target="_blank" rel="noreferrer" className="rounded-lg bg-white px-3 py-2 text-[11px] font-black text-[#326273]">
+                    Anchor tx
+                  </a>
+                </div>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {batch.leaves.map((leaf) => {
+                  const key = `${batch.id}:${leaf.transferId}`;
+                  return (
+                    <button key={leaf.transferId} type="button" onClick={() => void verifyInclusion(batch, leaf.transferId)} className="inline-flex items-center gap-1.5 rounded-lg bg-[#326273] px-3 py-2 text-[11px] font-black text-white">
+                      <BadgeCheck size={13} />
+                      {verification[key] ?? `Verify ${leaf.transferId.slice(0, 14)}…`}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
 
       {/* List */}
       {loading ? (

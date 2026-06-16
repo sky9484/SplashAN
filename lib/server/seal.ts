@@ -1,6 +1,11 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 
-export type SealPolicy = { policyId: string; allowlist: string[]; createdAt: string };
+export type SealPolicy = {
+  policyId: string;
+  allowlist: string[];
+  createdAt: string;
+  mode: 'demo' | 'live';
+};
 export interface SealAdapter {
   encrypt(data: string, allowlist: string[]): Promise<{ ciphertext: string; policy: SealPolicy }>;
   canDecrypt(policyId: string, identity: string): Promise<boolean>;
@@ -30,8 +35,8 @@ export const mockSealAdapter: SealAdapter = {
   async encrypt(data, allowlist) {
     const createdAt = new Date().toISOString();
     const normalized = normalizedAllowlist(allowlist);
-    const policyId = `seal_${createHash('sha256').update(`${normalized.join('|')}:${createdAt}`).digest('hex').slice(0, 16)}`;
-    const policy = { policyId, allowlist: normalized, createdAt };
+    const policyId = `DEMO_SEAL_${createHash('sha256').update(`${normalized.join('|')}:${createdAt}`).digest('hex').slice(0, 16)}`;
+    const policy: SealPolicy = { policyId, allowlist: normalized, createdAt, mode: 'demo' };
     policies.set(policyId, policy);
 
     const iv = randomBytes(12);

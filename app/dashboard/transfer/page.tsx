@@ -38,6 +38,16 @@ export type TransferState = {
   txStatus?: 'pending' | 'success' | 'failed';
   transferIntentId?: string;
   receiptObjectId?: string;
+  paymentIntentId?: string;
+  intentCreateDigest?: string;
+  walrusBlobId?: string;
+  auditAnchorId?: string;
+  composedActions?: Array<{
+    kind: 'paid' | 'allocated' | 'anchored';
+    label: string;
+    eventType: string;
+    data: Record<string, unknown>;
+  }>;
   deliveryTier: RecipientTier;
   rateHold?: {
     id: string;

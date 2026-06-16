@@ -11,7 +11,7 @@ import type { CopilotSuggestion } from '@/lib/server/copilot';
 import type { InvoiceRecord } from '@/lib/server/operations';
 
 type Extraction = { amount: number; currency: string; recipient: string; confidence: number };
-type WalrusProof = { blobId: string; sizeBytes: number; epochs: number; mode: 'mock' | 'live'; createdAt: string };
+type WalrusProof = { blobId: string; sizeBytes: number; epochs: number; mode: 'demo' | 'live'; createdAt: string };
 
 export default function OxWalPage() {
   const [invoices, setInvoices] = useState<InvoiceRecord[]>([]);
@@ -112,7 +112,7 @@ export default function OxWalPage() {
       </Panel>
 
       <Panel number="02" icon={Database} title="Walrus proof" subtitle="Ciphertext-only storage with a durable blob identifier.">
-        {selected?.walrusBlobId ? <div className="rounded-xl bg-muted/50 p-4"><div className="flex flex-wrap items-center gap-3"><Database className="h-5 w-5 text-primary" /><code className="min-w-0 flex-1 break-all text-xs font-bold">{selected.walrusBlobId}</code><button aria-label="Copy Walrus blob ID" onClick={() => { void navigator.clipboard.writeText(selected.walrusBlobId!); toast.success('Blob ID copied'); }}><Copy className="h-4 w-4" /></button>{proof?.mode === 'mock' ? <StatusBadge status="demo" /> : <span className="rounded-full bg-primary/10 px-2 py-1 text-[10px] font-black uppercase text-primary">Live</span>}</div>{proof && <div className="mt-3 flex flex-wrap gap-3 text-xs font-bold text-foreground/50"><span>{proof.sizeBytes.toLocaleString()} encrypted bytes</span><span>{proof.epochs} epochs</span><span>{proof.mode} storage</span></div>}</div> : <p className="text-sm text-foreground/50">Select an invoice with a document proof or upload one above.</p>}
+        {selected?.walrusBlobId ? <div className="rounded-xl bg-muted/50 p-4"><div className="flex flex-wrap items-center gap-3"><Database className="h-5 w-5 text-primary" /><code className="min-w-0 flex-1 break-all text-xs font-bold">{selected.walrusBlobId}</code><button aria-label="Copy Walrus blob ID" onClick={() => { void navigator.clipboard.writeText(selected.walrusBlobId!); toast.success('Blob ID copied'); }}><Copy className="h-4 w-4" /></button>{proof?.mode === 'demo' ? <StatusBadge status="demo" /> : <span className="rounded-full bg-primary/10 px-2 py-1 text-[10px] font-black uppercase text-primary">Live</span>}</div>{proof && <div className="mt-3 flex flex-wrap gap-3 text-xs font-bold text-foreground/50"><span>{proof.sizeBytes.toLocaleString()} encrypted bytes</span><span>{proof.epochs} epochs</span><span>{proof.mode} storage</span></div>}</div> : <p className="text-sm text-foreground/50">Select an invoice with a document proof or upload one above.</p>}
       </Panel>
 
       <Panel number="03" icon={Lock} title="Seal access policy" subtitle="Only named organisations and the auditor role can decrypt.">

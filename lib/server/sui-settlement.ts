@@ -306,6 +306,266 @@ async function executeSdkTransaction(tx: Transaction) {
   return result;
 }
 
+type SuiEventView = {
+  type: string;
+  data: Record<string, unknown>;
+};
+
+export type ComposedAction = {
+  kind: 'paid' | 'allocated' | 'anchored';
+  label: string;
+  eventType: string;
+  data: Record<string, unknown>;
+};
+
+export type ComposedSettlementResult = {
+  digest: string;
+  intentId: string;
+  intentCreateDigest: string;
+  auditAnchorObjectId: string | null;
+  smartTreasuryId: string | null;
+  events: SuiEventView[];
+  objectChanges: unknown[];
+  composedActions: ComposedAction[];
+  demo: boolean;
+};
+
+function resultEvents(result: Awaited<ReturnType<typeof executeSdkTransaction>>): SuiEventView[] {
+  return (result.events ?? []).map((event) => ({
+    type: event.type,
+    data: (event.parsedJson && typeof event.parsedJson === 'object'
+      ? event.parsedJson
+      : {}) as Record<string, unknown>,
+  }));
+}
+
+function eventBySuffix(events: SuiEventView[], suffix: string) {
+  return events.find((event) => event.type.endsWith(suffix)) ?? null;
+}
+
+function requireConfiguredRecipient(inputRecipient: string) {
+  const configured = getContractConfig().testRecipientAddress;
+  return requireSuiAddress(configured || inputRecipient, 'Composed payment recipient');
+}
+
+function configuredSmartTreasuryId() {
+  const value = getContractConfig().smartTreasurySuiId.trim();
+  return value ? requireSuiObjectId(value, 'SPLASH_SMART_TREASURY_SUI_ID') : '';
+}
+
+async function requireSdkExecution() {
+  const execution = await resolveSettlementExecution();
+  if (execution !== 'sdk') {
+    throw new Error(
+      'The composed payment proof requires OPERATOR_SUI_PRIVATE_KEY so one server-signed SDK transaction can confirm, allocate, and anchor atomically.',
+    );
+  }
+}
+
+export async function createPaymentIntentOnSui(input: {
+  recipient: string;
+  amountMist: number;
+  targetCurrency: string;
+  fxRateScaled: number;
+}) {
+  await requireSdkExecution();
+  const packageId = configIdOrThrow('packageId', 'SPLASH_PACKAGE_ID');
+  const recipient = requireConfiguredRecipient(input.recipient);
+  const amountMist = Math.max(1, Math.floor(input.amountMist));
+  const fxRateScaled = Math.max(1, Math.floor(input.fxRateScaled));
+  const tx = new Transaction();
+  tx.setGasBudget(process.env.SUI_COMPOSED_GAS_BUDGET ?? '30000000');
+  tx.moveCall({
+    target: `${packageId}::payment_intent::create_payment_intent`,
+    arguments: [
+      tx.pure.address(recipient),
+      tx.pure.u64(amountMist),
+      tx.pure.string(input.targetCurrency.toUpperCase()),
+      tx.pure.u64(fxRateScaled),
+      tx.object('0x6'),
+    ],
+  });
+
+  const result = await executeSdkTransaction(tx);
+  const events = resultEvents(result);
+  const created = eventBySuffix(events, '::payment_intent::IntentCreated');
+  const intentId = typeof created?.data.intent_id === 'string' ? created.data.intent_id : '';
+  if (!intentId) {
+    throw new Error(`PaymentIntent creation succeeded but IntentCreated was missing. Digest: ${result.digest}`);
+  }
+
+  return {
+    digest: result.digest,
+    intentId,
+    event: created,
+  };
+}
+
+export async function confirmComposedPaymentOnSui(input: {
+  intentId: string;
+  intentCreateDigest: string;
+  paymentMist: number;
+  treasuryAmountMist: number;
+  auditHash: string;
+  anchorId: string;
+  backingBlobId: string;
+}): Promise<ComposedSettlementResult> {
+  await requireSdkExecution();
+  const packageId = configIdOrThrow('packageId', 'SPLASH_PACKAGE_ID');
+  const adminCapId = configIdOrThrow('adminCapId', 'SPLASH_ADMIN_CAP_ID');
+  const businessAccountId = configIdOrThrow('businessAccountId', 'SPLASH_BUSINESS_ACCOUNT_ID');
+  const smartTreasuryId = configuredSmartTreasuryId();
+  const paymentMist = Math.max(1, Math.floor(input.paymentMist));
+  const treasuryAmountMist = Math.max(0, Math.floor(input.treasuryAmountMist));
+
+  if (treasuryAmountMist > 0 && !smartTreasuryId) {
+    throw new Error('SPLASH_SMART_TREASURY_SUI_ID is required when treasuryAmountMist is greater than zero.');
+  }
+
+  const tx = new Transaction();
+  tx.setGasBudget(process.env.SUI_COMPOSED_GAS_BUDGET ?? '30000000');
+  const [paymentCoin] = tx.splitCoins(tx.gas, [paymentMist]);
+  tx.moveCall({
+    target: `${packageId}::payment_intent::confirm_payment_intent`,
+    arguments: [
+      tx.object(input.intentId),
+      paymentCoin,
+      tx.object('0x6'),
+    ],
+  });
+
+  if (treasuryAmountMist > 0) {
+    const [treasuryCoin] = tx.splitCoins(tx.gas, [treasuryAmountMist]);
+    tx.moveCall({
+      target: `${packageId}::smart_treasury::deposit`,
+      typeArguments: ['0x2::sui::SUI'],
+      arguments: [
+        tx.object(smartTreasuryId),
+        treasuryCoin,
+        tx.object('0x6'),
+      ],
+    });
+  }
+
+  tx.moveCall({
+    target: `${packageId}::audit_anchor::anchor_audit_hash`,
+    arguments: [
+      tx.object(adminCapId),
+      tx.pure.string(input.auditHash),
+      tx.pure.string(input.anchorId),
+      tx.pure.string(input.backingBlobId),
+      tx.pure.address(businessAccountId),
+      tx.object('0x6'),
+    ],
+  });
+
+  const result = await executeSdkTransaction(tx);
+  const events = resultEvents(result);
+  const paid = eventBySuffix(events, '::payment_intent::IntentConfirmed');
+  const allocated = eventBySuffix(events, '::smart_treasury::TreasuryDeposited');
+  const anchored = eventBySuffix(events, '::audit_anchor::AuditAnchored');
+  const auditAnchorObjectId =
+    typeof anchored?.data.anchor_object === 'string' ? anchored.data.anchor_object : null;
+
+  if (!paid || !anchored || (treasuryAmountMist > 0 && !allocated)) {
+    throw new Error(`Composed transaction succeeded but required proof events were missing. Digest: ${result.digest}`);
+  }
+
+  return {
+    digest: result.digest,
+    intentId: input.intentId,
+    intentCreateDigest: input.intentCreateDigest,
+    auditAnchorObjectId,
+    smartTreasuryId: smartTreasuryId || null,
+    events,
+    objectChanges: result.objectChanges ?? [],
+    composedActions: [
+      {
+        kind: 'paid',
+        label: 'Payment intent confirmed',
+        eventType: paid.type,
+        data: paid.data,
+      },
+      ...(allocated
+        ? [{
+            kind: 'allocated' as const,
+            label: 'Reserve allocated to Smart Treasury',
+            eventType: allocated.type,
+            data: allocated.data,
+          }]
+        : []),
+      {
+        kind: 'anchored',
+        label: 'Audit proof anchored on Sui',
+        eventType: anchored.type,
+        data: anchored.data,
+      },
+    ],
+    demo: false,
+  };
+}
+
+export async function anchorAuditHashOnSui(input: {
+  auditHash: string;
+  anchorId: string;
+  backingBlobId: string;
+}) {
+  await requireSdkExecution();
+  const packageId = configIdOrThrow('packageId', 'SPLASH_PACKAGE_ID');
+  const adminCapId = configIdOrThrow('adminCapId', 'SPLASH_ADMIN_CAP_ID');
+  const businessAccountId = configIdOrThrow('businessAccountId', 'SPLASH_BUSINESS_ACCOUNT_ID');
+  const tx = new Transaction();
+  tx.setGasBudget(process.env.SUI_AUDIT_ANCHOR_GAS_BUDGET ?? '20000000');
+  tx.moveCall({
+    target: `${packageId}::audit_anchor::anchor_audit_hash`,
+    arguments: [
+      tx.object(adminCapId),
+      tx.pure.string(input.auditHash),
+      tx.pure.string(input.anchorId),
+      tx.pure.string(input.backingBlobId),
+      tx.pure.address(businessAccountId),
+      tx.object('0x6'),
+    ],
+  });
+  const result = await executeSdkTransaction(tx);
+  const anchored = eventBySuffix(resultEvents(result), '::audit_anchor::AuditAnchored');
+  if (!anchored) throw new Error(`Audit anchor event missing. Digest: ${result.digest}`);
+  return {
+    digest: result.digest,
+    anchorObjectId: typeof anchored.data.anchor_object === 'string' ? anchored.data.anchor_object : null,
+    event: anchored,
+  };
+}
+
+export async function refreshPegOnSui(input: { usdcPrice: number; usdtPrice: number }) {
+  await requireSdkExecution();
+  const packageId = configIdOrThrow('packageId', 'SPLASH_PACKAGE_ID');
+  const pegStateId = configIdOrThrow('pegStateId', 'SPLASH_PEG_STATE_ID');
+  const adminCapId = configIdOrThrow('adminCapId', 'SPLASH_ADMIN_CAP_ID');
+  const usdcDeviationPpm = Math.max(0, Math.round(Math.abs(input.usdcPrice - 1) * 1_000_000));
+  const usdtDeviationPpm = Math.max(0, Math.round(Math.abs(input.usdtPrice - 1) * 1_000_000));
+
+  const tx = new Transaction();
+  tx.setGasBudget(process.env.SUI_PEG_UPDATE_GAS_BUDGET ?? '10000000');
+  tx.moveCall({
+    target: `${packageId}::peg_monitor::update_peg`,
+    arguments: [
+      tx.object(pegStateId),
+      tx.object(adminCapId),
+      tx.pure.u64(usdcDeviationPpm),
+      tx.pure.u64(usdtDeviationPpm),
+      tx.object('0x6'),
+    ],
+  });
+
+  const result = await executeSdkTransaction(tx);
+  return {
+    digest: result.digest,
+    usdcDeviationPpm,
+    usdtDeviationPpm,
+  };
+}
+
 export async function getOperatorWalletInfo(): Promise<{
   address: string;
   totalMist: number;

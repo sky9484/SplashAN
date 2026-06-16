@@ -1,24 +1,24 @@
 /**
  * Daily Smart Treasury yield accrual.
  *
- * Mirrors cron/update-peg: scheduler-only (CRON_SECRET bearer, fail-closed).
- * Each run reads the floating USDY redemption value, allocates net yield on the
- * end-of-day treasury balance pro-rata, moves the disclosed spread to operating,
- * and emits a yield snapshot to anchor on Walrus (audit_anchor.move).
+ * The snapshot is encrypted first, stored on Walrus second, and anchored on
+ * Sui last. No audit anchor is emitted unless the backing blob exists.
  */
 
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { NextResponse } from 'next/server';
-import { timingSafeEqual, createHash } from 'crypto';
 
+import { sealAdapter } from '@/lib/server/seal';
+import { anchorAuditHashOnSui } from '@/lib/server/sui-settlement';
 import { accrueDailyYield } from '@/lib/server/treasury';
-import { anchorAuditHash } from '@/lib/server/walrus';
+import { storeEncryptedInvoice } from '@/lib/server/walrus';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 
 function isAuthorized(request: Request): boolean {
   const secret = process.env.CRON_SECRET?.trim();
-  if (!secret) return false; // fail closed
+  if (!secret) return false;
   const header = request.headers.get('authorization') ?? '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : '';
   const provided = Buffer.from(token);
@@ -31,16 +31,34 @@ async function handleAccrual(request: Request) {
   if (!isAuthorized(request)) {
     return NextResponse.json({ success: false, error: 'unauthorized' }, { status: 401 });
   }
+
   try {
     const snapshot = await accrueDailyYield();
-    // Anchor the day's yield snapshot: hash it and write an immutable audit
-    // anchor (Walrus blob → audit_anchor.move daily Merkle batch).
-    const hash = createHash('sha256').update(JSON.stringify(snapshot)).digest('hex');
-    const anchor = await anchorAuditHash(hash).catch(() => null);
+    const { ciphertext, policy } = await sealAdapter.encrypt(
+      JSON.stringify(snapshot),
+      ['splash-treasury', 'auditor'],
+    );
+    const blob = await storeEncryptedInvoice(ciphertext);
+    const hash = createHash('sha256').update(ciphertext).digest('hex');
+    const anchor = await anchorAuditHashOnSui({
+      auditHash: hash,
+      anchorId: `treasury-yield:${new Date().toISOString().slice(0, 10)}`,
+      backingBlobId: blob.blobId,
+    });
+
     return NextResponse.json({
       success: true,
       snapshot,
-      audit: { hash, anchorId: anchor?.anchorId ?? null, confirmed: Boolean(anchor?.confirmed) },
+      audit: {
+        hash,
+        anchorObjectId: anchor.anchorObjectId,
+        digest: anchor.digest,
+        walrusBlobId: blob.blobId,
+        walrusMode: blob.mode,
+        sealPolicyId: policy.policyId,
+        sealMode: policy.mode,
+        confirmed: true,
+      },
     });
   } catch (error) {
     console.error('[cron/accrue-yield] accrual failed:', error);

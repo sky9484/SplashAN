@@ -114,25 +114,12 @@ function TxPill({ status }: { status: TxStatus }) {
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export default function DashboardOverview() {
-  const [corridors, setCorridors] = useState(INITIAL_CORRIDORS);
+  const [corridors] = useState(INITIAL_CORRIDORS);
   const [yieldEarned, setYield]   = useState(98.72);
   const [copilotDismissed, setCopilotDismissed] = useState(false);
   const [treasuryPrincipal, setTreasuryPrincipal] = useState(24500);
   const [walSummary, setWalSummary] = useState({ detected: 0, batchable: 0, needsApproval: 0 });
   const [treasuryRateLabel, setTreasuryRateLabel] = useState('USDY · variable');
-
-  useEffect(() => {
-    const id = window.setInterval(() => {
-      setCorridors((prev) =>
-        prev.map((c) => ({
-          ...c,
-          rate: Math.max(c.rate * (1 + (Math.random() - 0.49) * 0.001), 0.001),
-        }))
-      );
-      setYield((v) => v + Math.random() * 0.015);
-    }, 5000);
-    return () => window.clearInterval(id);
-  }, []);
 
   // Real two-bucket balances from the treasury ledger.
   useEffect(() => {

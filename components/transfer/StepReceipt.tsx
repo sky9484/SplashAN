@@ -37,6 +37,24 @@ export default function StepReceipt({ state, reset }: { state: TransferState; re
         reference={reference}
         explorerUrl={explorerUrl}
       />
+      {state.composedActions?.length ? (
+        <section className="rounded-2xl border border-[#5C9EAD]/30 bg-[#5C9EAD]/10 p-5">
+          <div className="text-xs font-black uppercase tracking-[0.15em] text-[#326273]/55">Composed actions in this digest</div>
+          <div className="mt-3 grid gap-3 md:grid-cols-3">
+            {state.composedActions.map((action) => (
+              <div key={`${action.kind}-${action.eventType}`} className="rounded-xl bg-white p-3">
+                <div className="text-sm font-extrabold text-[#326273]">{action.label}</div>
+                <pre className="mt-2 max-h-28 overflow-auto whitespace-pre-wrap break-all text-[10px] text-[#326273]/55">{JSON.stringify(action.data, null, 2)}</pre>
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 grid gap-2 text-[11px] text-[#326273]/60 md:grid-cols-3">
+            <div className="break-all"><strong>Intent:</strong> {state.paymentIntentId}</div>
+            <div className="break-all"><strong>Walrus:</strong> {state.walrusBlobId}</div>
+            <div className="break-all"><strong>Anchor:</strong> {state.auditAnchorId}</div>
+          </div>
+        </section>
+      ) : null}
       <div className="flex flex-wrap gap-3">
         <button onClick={() => print()} className="flex-1 min-w-[140px] rounded-lg bg-[#326273] py-3 font-bold text-white shadow-sm transition-colors hover:bg-[#264e5b]">Download PDF</button>
         {explorerUrl && (

@@ -4,14 +4,12 @@
  */
 import { createHash } from 'node:crypto';
 
-import { findAuditReceiptByHash, updateAuditReceipt } from '@/lib/server/operations';
-
 export interface WalrusBlob {
   blobId: string;
   encryptedData: string;
   sizeBytes: number;
   epochs: number;
-  mode: 'mock' | 'live';
+  mode: 'demo' | 'live';
   createdAt: string;
 }
 
@@ -30,26 +28,26 @@ function assertCiphertextOnly(payload: string) {
   const normalized = payload.trim().toLowerCase();
   if (
     (normalized.startsWith('{') || normalized.startsWith('[')) &&
-    /"(account|swift|nric)"\s*:/.test(normalized)
+    /"(account|swift|nric|iban|card)"\s*:/.test(normalized)
   ) {
     throw new WalrusAdapterError('Walrus rejected a plaintext payload containing an obvious PII key.', 400);
   }
 }
 
-function mockMode() {
+function demoMode() {
   return process.env.USE_MOCK_APIS === 'true' || !process.env.WALRUS_PUBLISHER_URL;
 }
 
 export async function storeEncryptedInvoice(encryptedData: string): Promise<WalrusBlob> {
   assertCiphertextOnly(encryptedData);
-  if (mockMode()) {
-    const blobId = `wal_mock_${createHash('sha256').update(encryptedData).digest('hex').slice(0, 24)}`;
+  if (demoMode()) {
+    const blobId = `DEMO_WALRUS_${createHash('sha256').update(encryptedData).digest('hex').slice(0, 24)}`;
     const blob: WalrusBlob = {
       blobId,
       encryptedData,
       sizeBytes: Buffer.byteLength(encryptedData),
       epochs: 5,
-      mode: 'mock',
+      mode: 'demo',
       createdAt: new Date().toISOString(),
     };
     blobs.set(blobId, blob);
@@ -88,7 +86,9 @@ export async function storeEncryptedInvoice(encryptedData: string): Promise<Walr
 }
 
 export async function retrieveBlob(blobId: string): Promise<WalrusBlob | null> {
-  if (blobId.startsWith('wal_mock_') || mockMode()) return blobs.get(blobId) ?? null;
+  if (blobId.startsWith('DEMO_WALRUS_') || demoMode()) {
+    return blobs.get(blobId) ?? null;
+  }
   const base = process.env.WALRUS_AGGREGATOR_URL;
   if (!base) throw new WalrusAdapterError('WALRUS_AGGREGATOR_URL is not configured.');
   try {
@@ -107,11 +107,4 @@ export async function retrieveBlob(blobId: string): Promise<WalrusBlob | null> {
   } catch (error) {
     throw new WalrusAdapterError(`Walrus retrieval failed: ${error instanceof Error ? error.message : 'unknown error'}`);
   }
-}
-
-export async function anchorAuditHash(auditHash: string): Promise<{ anchorId: string; confirmed: boolean }> {
-  const anchorId = `audit_${Date.now().toString(36)}_${auditHash.slice(0, 8)}`;
-  const receipt = findAuditReceiptByHash(auditHash);
-  if (receipt) updateAuditReceipt(receipt.transferIntentId, { auditAnchorId: anchorId });
-  return { anchorId, confirmed: true };
 }

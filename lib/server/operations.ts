@@ -35,6 +35,19 @@ export type TransferIntentRecord = {
   verificationReference: string | null;
   receiptObjectId: string | null;
   suiTxDigest: string | null;
+  paymentIntentId?: string;
+  intentCreateDigest?: string;
+  walrusBlobId?: string;
+  sealPolicyId?: string;
+  auditHash?: string;
+  auditAnchorId?: string;
+  smartTreasuryId?: string;
+  composedActions?: Array<{
+    kind: 'paid' | 'allocated' | 'anchored';
+    label: string;
+    eventType: string;
+    data: Record<string, unknown>;
+  }>;
   failureReason: string | null;
   failedAtState: string | null;
   deliveryTier: RecipientTier;
@@ -160,6 +173,11 @@ export type AuditReceipt = {
   sweepJobId?: string;
   auditHash?: string;
   auditAnchorId?: string;
+  auditAnchorDigest?: string;
+  paymentIntentId?: string;
+  intentCreateDigest?: string;
+  smartTreasuryId?: string;
+  composedActions?: TransferIntentRecord['composedActions'];
   demo?: boolean;
   statusHistory: Array<{ state: string; at: string }>;
 };
@@ -595,8 +613,8 @@ function seedDemoData() {
     dueDate: due,
     memo: 'Component supply invoice',
     status: 'settled',
-    walrusBlobId: 'wal_mock_demo_acme_invoice',
-    sealPolicyId: 'seal_demo_acme_auditor',
+    walrusBlobId: 'DEMO_WALRUS_acme_invoice',
+    sealPolicyId: 'DEMO_SEAL_acme_auditor',
     documentSha256: 'demo'.padEnd(64, '0'),
     demo: true,
   });
@@ -616,7 +634,7 @@ function seedDemoData() {
     pegChecked: true,
     demo: true,
   });
-  updateTransferIntent(transfer.id, { state: 'SETTLED', suiTxDigest: '0xDEMO_SETTLEMENT_DIGEST' });
+  updateTransferIntent(transfer.id, { state: 'SETTLED' });
   const job = createSweepJob({
     transferIntentId: transfer.id,
     recipientId: acme.id,
@@ -626,7 +644,7 @@ function seedDemoData() {
     fxRate: '56.5',
     state: 'COMPLETED',
     heldDurationMs: 4200,
-    partnerPayoutRef: 'pdax_mock_demo_4200',
+    partnerPayoutRef: 'DEMO_PDAX_4200',
     completedAt: new Date().toISOString(),
     demo: true,
   });

@@ -27,7 +27,7 @@ export default function StepQuote({ state, set, prev, next }: { state: TransferS
   const [isSending, setIsSending] = useState(false);
   const [progress, setProgress] = useState(18);
   const [liveRate, setLiveRate] = useState(BASE_RATES[state.amount.targetCurrency]);
-  const [rateDirection, setRateDirection] = useState<'up' | 'down' | 'neutral'>('neutral');
+  const [rateDirection] = useState<'up' | 'down' | 'neutral'>('neutral');
   const [holdBusy, setHoldBusy] = useState(false);
 
   useEffect(() => {
@@ -93,17 +93,6 @@ export default function StepQuote({ state, set, prev, next }: { state: TransferS
       window.clearTimeout(timer);
     };
   }, [state.amount.targetCurrency, state.amount.value, state.rateHold?.corridorCurrency, state.rateHold?.rate, state.rateHold?.state, state.recipient.bank?.account, set]);
-
-  useEffect(() => {
-    if (state.rateHold?.state === 'ACTIVE') return;
-    const interval = window.setInterval(() => {
-      const change = (Math.random() - 0.5) * 0.002;
-      setRateDirection(change > 0 ? 'up' : change < 0 ? 'down' : 'neutral');
-      setLiveRate((current) => Math.max(current + change, 0));
-    }, 5000);
-
-    return () => window.clearInterval(interval);
-  }, [state.rateHold?.state]);
 
   const createTransferIntent = useCallback(async () => {
     try {
@@ -208,7 +197,7 @@ export default function StepQuote({ state, set, prev, next }: { state: TransferS
         <HoverPopup title="Splash fees" content="1.4% transaction fee + $4.50 fixed fee per transfer.">
           <Row label="Splash fees" value={state.deliveryTier === 'STORED_BALANCE' ? '$0.00 transfer fee' : `$${state.quote.fee}`} />
         </HoverPopup>
-        <HoverPopup title="Live FX rate" content="Real-time exchange rate updated every 5 seconds. Rate may fluctuate until authorization.">
+        <HoverPopup title="Live FX rate" content="Quote engine rate from the latest pricing call. Rate may change when you refresh or authorize unless a rate hold is active.">
           <div className="flex justify-between gap-4 items-center">
             <span className="text-[#326273]/60">FX rate</span>
             <div className="flex items-center gap-2">
@@ -227,7 +216,7 @@ export default function StepQuote({ state, set, prev, next }: { state: TransferS
           <Info className="h-3 w-3" />
           {state.rateHold?.state === 'ACTIVE'
             ? `Rate hold active until ${new Date(state.rateHold.holdUntil).toLocaleString()}. You still authorize before value moves.`
-            : 'Quote valid for 30 seconds. AI can suggest timing, but you always sign before value moves.'}
+            : 'Quote valid for 30 seconds. AI can suggest timing, but you always authorize before value moves.'}
         </div>
         <Row label="Delivery" value={state.deliveryTier === 'PAYOUT_ONLY' ? 'Bank payout' : state.deliveryTier === 'SWEEP_ACCOUNT' ? 'Receive account + auto-sweep' : 'Splash balance'} bold />
       </div>

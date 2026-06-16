@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { createIntercompanyTransfer } from '@/lib/server/intercompany';
 import { convertUsdToUsdc, usdCentsToUsdcMicro } from '@/lib/server/labuan-settlement';
+import { executeComposedPayment } from '@/lib/server/composed-payment';
 import {
   createRecipient,
   createTransferIntent,
@@ -14,7 +15,6 @@ import { pythAdapter } from '@/lib/server/pyth';
 import { calculateQuote } from '@/lib/server/quote';
 import { selectStablecoin } from '@/lib/server/stable-router';
 import { completeDeliveryForTransfer } from '@/lib/server/sweep';
-import { recordSingleTransferOnSui } from '@/lib/server/sui-settlement';
 
 export const maxDuration = 60;
 
@@ -98,19 +98,39 @@ export async function POST(request: Request) {
     updateTransferIntent(intent.id, { state: 'QUEUED' });
     try {
       updateTransferIntent(intent.id, { state: 'SETTLING' });
-      const result = await recordSingleTransferOnSui({
+      const result = await executeComposedPayment({
         transferId: intent.id,
-        recipient: '',
-        amountUsd: sourceAmount,
-        stablecoinAmountMicro,
+        recipientAddress: '',
+        recipientLabel: intent.recipientName,
+        amountMist: Math.max(1_000_000, stablecoinAmountMicro),
         targetCurrency: serverQuote?.targetCurrency ?? body.amount.targetCurrency,
-        feeBps: serverQuote?.feeBps,
+        fxRate: serverQuote?.exchangeRate ?? intent.exchangeRate,
       });
       updateTransferIntent(intent.id, {
         state: 'SETTLED',
         suiTxDigest: result.digest,
         verificationReference: result.digest,
-        receiptObjectId: `receipt_${intent.id}`,
+        receiptObjectId: result.auditAnchorObjectId ?? undefined,
+        paymentIntentId: result.intentId,
+        intentCreateDigest: result.intentCreateDigest,
+        walrusBlobId: result.walrus.blobId,
+        sealPolicyId: result.sealPolicy.policyId,
+        auditHash: result.auditHash,
+        auditAnchorId: result.auditAnchorObjectId ?? undefined,
+        smartTreasuryId: result.smartTreasuryId ?? undefined,
+        composedActions: result.composedActions,
+      });
+      updateAuditReceipt(intent.id, {
+        suiTxDigest: result.digest,
+        paymentIntentId: result.intentId,
+        intentCreateDigest: result.intentCreateDigest,
+        walrusBlobId: result.walrus.blobId,
+        sealPolicyId: result.sealPolicy.policyId,
+        auditHash: result.auditHash,
+        auditAnchorId: result.auditAnchorObjectId ?? undefined,
+        auditAnchorDigest: result.digest,
+        smartTreasuryId: result.smartTreasuryId ?? undefined,
+        composedActions: result.composedActions,
       });
       await completeDeliveryForTransfer(intent.id);
     } catch (error) {

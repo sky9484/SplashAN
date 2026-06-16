@@ -12,6 +12,7 @@
 
 # testing
 /coverage
+/artifacts/
 
 # next.js
 /.next/
@@ -44,6 +45,8 @@ yarn-error.log*
 # admin-managed runtime config (contract IDs etc.)
 /data/contract-config.json
 /data/contract-config.json.tmp.*
+/data/operating-settings.json
+/data/operating-settings.json.tmp.*
 
 # vercel
 .vercel

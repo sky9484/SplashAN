@@ -16,6 +16,7 @@ export type ContractConfigField =
   | 'usdtType'
   | 'usdtBufferId'
   | 'usdyType'
+  | 'smartTreasurySuiId'
   | 'usdcTreasuryId'
   | 'usdyTreasuryId';
 
@@ -36,6 +37,7 @@ const FIELD_TO_ENV: Record<ContractConfigField, string> = {
   usdtType: 'USDT_TYPE',
   usdtBufferId: 'USDT_BUFFER_ID',
   usdyType: 'USDY_TYPE',
+  smartTreasurySuiId: 'SPLASH_SMART_TREASURY_SUI_ID',
   usdcTreasuryId: 'SPLASH_USDC_TREASURY_ID',
   usdyTreasuryId: 'SPLASH_USDY_TREASURY_ID',
 };
@@ -124,6 +126,7 @@ const ID_FIELDS: ContractConfigField[] = [
   'businessAccountId',
   'transferCoinId',
   'settlementRegistryId',
+  'smartTreasurySuiId',
   'usdcTreasuryId',
   'usdyTreasuryId',
 ];

@@ -17,9 +17,9 @@ export const mockPdaxAdapter: PayoutPartnerAdapter = {
     return { fxRate: currency === 'PHP' ? String(process.env.PHP_PER_USDC ?? '56.5') : '1', partnerFeeBps: 20 };
   },
   async payout(job) {
-    const delay = 1500 + Math.floor(Math.random() * 2500);
+    const delay = 1800;
     await new Promise((resolve) => setTimeout(resolve, delay));
-    return { partnerPayoutRef: `pdax_mock_${job.id}_${delay}` };
+    return { partnerPayoutRef: `DEMO_PDAX_${job.id}_${delay}` };
   },
 };
 

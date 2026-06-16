@@ -25,6 +25,7 @@ const FIELDS: Field[] = [
   { key: 'usdcType', label: 'USDC Type', envKey: 'USDC_TYPE', placeholder: '0x2::sui::SUI' },
   { key: 'usdtType', label: 'USDT Type', envKey: 'USDT_TYPE', placeholder: '0xpkg::usdt::USDT (optional)' },
   { key: 'usdtBufferId', label: 'USDT Buffer ID', envKey: 'USDT_BUFFER_ID', placeholder: '0x… (optional)' },
+  { key: 'smartTreasurySuiId', label: 'Smart Treasury (SUI)', envKey: 'SPLASH_SMART_TREASURY_SUI_ID', placeholder: '0x…', help: 'Shared smart_treasury::SmartTreasury<0x2::sui::SUI> used by the composed payment allocation leg.' },
 ];
 
 type Meta = { path: string; exists: boolean; updatedAt: string | null };
