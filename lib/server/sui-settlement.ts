@@ -303,6 +303,10 @@ async function executeSdkTransaction(tx: Transaction) {
     throw new Error(humanizeSuiError(result.effects?.status?.error, result.errors?.join('\n') ?? ''));
   }
 
+  // Wait for the tx to be indexed so any objects it created/changed are
+  // visible to follow-up transactions in the same flow (composed payments).
+  try { await suiClient.waitForTransaction({ digest: result.digest }); } catch {}
+
   return result;
 }
 
