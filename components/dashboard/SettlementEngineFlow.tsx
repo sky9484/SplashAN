@@ -177,7 +177,7 @@ export default function SettlementEngineFlow({
         <div className="dash-flow-core">
           <div className="dash-flow-core-orb">
             <span className="dash-flow-core-ring" aria-hidden="true" />
-            <Image src="/splash-main-icon.png" alt="" width={56} height={56} />
+            <Image src="/splash-main-icon.png" alt="" width={48} height={47} loading="eager" />
           </div>
           <strong>{core.title}</strong>
           <small>{core.sub}</small>

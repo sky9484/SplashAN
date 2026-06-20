@@ -92,9 +92,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           <Image
             src="/splash-main-icon.png"
             alt="Splash"
-            width={32}
-            height={32}
-            className="h-8 w-8 shrink-0 object-contain"
+            width={48}
+            height={47}
+            className="h-auto w-8 shrink-0 object-contain"
+            loading="eager"
             unoptimized
           />
           {!collapsed && (
@@ -213,9 +214,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           <Image
             src="/splash-main-icon.png"
             alt="Splash"
-            width={28}
-            height={28}
-            className="h-7 w-7 object-contain"
+            width={48}
+            height={47}
+            className="h-auto w-7 object-contain"
+            loading="eager"
             unoptimized
           />
           <span className="text-lg font-bold text-white">

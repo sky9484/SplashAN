@@ -25,16 +25,20 @@ function remaining(holdUntil: string, now: number) {
 
 export default function RateHoldsPage() {
   const [holds, setHolds] = useState<RateHold[]>([]);
-  const [now, setNow] = useState(() => Date.now());
+  const [now, setNow] = useState(0);
 
   useEffect(() => {
+    const initialTimer = window.setTimeout(() => setNow(Date.now()), 0);
     void fetch('/api/rate-holds').then((response) => response.json()).then((body: { items?: RateHold[] }) => setHolds(body.items ?? []));
     const interval = window.setInterval(() => setNow(Date.now()), 1_000);
-    return () => window.clearInterval(interval);
+    return () => {
+      window.clearTimeout(initialTimer);
+      window.clearInterval(interval);
+    };
   }, []);
 
-  const active = useMemo(() => holds.filter((hold) => hold.state === 'ACTIVE' && new Date(hold.holdUntil).getTime() > now), [holds, now]);
-  const inactive = useMemo(() => holds.filter((hold) => !active.includes(hold)), [active, holds]);
+  const active = useMemo(() => now === 0 ? [] : holds.filter((hold) => hold.state === 'ACTIVE' && new Date(hold.holdUntil).getTime() > now), [holds, now]);
+  const inactive = useMemo(() => now === 0 ? [] : holds.filter((hold) => !active.includes(hold)), [active, holds, now]);
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-5">

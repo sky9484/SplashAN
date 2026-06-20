@@ -435,7 +435,7 @@ export default function IsometricLanding() {
       <header className="iso-header">
         <div className="iso-shell iso-header-inner">
           <Link href="/" className="iso-brand" aria-label="Splash Finance home">
-            <Image src="/splash-main-icon.png" alt="" width={36} height={36} className="iso-header-brand-icon" priority />
+            <Image src="/splash-main-icon.png" alt="" width={48} height={47} className="iso-header-brand-icon" priority />
             <span className="iso-header-wordmark">
               <strong>Splash</strong>
               <small>Account network for cross-border money</small>

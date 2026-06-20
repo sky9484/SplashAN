@@ -5216,7 +5216,7 @@ button.iso-product-row {
 
 .admin-login-brand img {
   width: 42px;
-  height: 42px;
+  height: auto;
   object-fit: contain;
 }
 
@@ -5625,7 +5625,7 @@ button.iso-product-row {
 
 .splash-loading-copy img {
   width: 72px;
-  height: 72px;
+  height: auto;
   object-fit: contain;
   filter: drop-shadow(0 12px 12px rgba(0, 0, 0, .2));
 }
@@ -5762,7 +5762,7 @@ button.iso-product-row {
 
 .iso-header-brand-icon {
   width: 34px;
-  height: 34px;
+  height: auto;
   object-fit: contain;
   filter: none !important;
 }
@@ -5803,7 +5803,7 @@ button.iso-product-row {
 @media (max-width: 700px) {
   .iso-header-brand-icon {
     width: 30px;
-    height: 30px;
+    height: auto;
   }
 
   .iso-header-wordmark strong {
@@ -5880,9 +5880,9 @@ button.iso-product-row {
 
 .dash-flow-core-orb img {
   width: 49px;
-  height: 49px;
+  height: auto;
   max-width: 49px;
-  max-height: 49px;
+  max-height: none;
 }
 
 .dash-flow-core strong {
@@ -6012,9 +6012,9 @@ button.iso-product-row {
 
 .dash-flow-core-orb img {
   width: clamp(39px, 4.4vw, 49px);
-  height: clamp(39px, 4.4vw, 49px);
+  height: auto;
   max-width: 64%;
-  max-height: 64%;
+  max-height: none;
 }
 
 @media (max-width: 1100px) {
