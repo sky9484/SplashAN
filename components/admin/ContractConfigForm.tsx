@@ -16,6 +16,9 @@ const FIELDS: Field[] = [
   { key: 'treasuryId', label: 'Treasury / Settlement Pool', envKey: 'SPLASH_TREASURY_ID', placeholder: '0x…', help: 'SettlementPool<SUI> object created on deploy.' },
   { key: 'adminCapId', label: 'Admin Cap', envKey: 'SPLASH_ADMIN_CAP_ID', placeholder: '0x…', help: 'business_account::AdminCap object owned by the operator wallet.' },
   { key: 'pegStateId', label: 'Peg State', envKey: 'SPLASH_PEG_STATE_ID', placeholder: '0x…', help: 'peg_monitor::PegState shared object.' },
+  { key: 'complianceConfigId', label: 'Compliance Config', envKey: 'SPLASH_COMPLIANCE_CONFIG_ID', placeholder: '0x…', help: 'Shared Pyth staleness, deviation, DeepBook slippage, depth, and pause controls.' },
+  { key: 'complianceCapId', label: 'Compliance Cap', envKey: 'SPLASH_COMPLIANCE_CAP_ID', placeholder: '0x…', help: 'Owned capability required to update settlement risk thresholds.' },
+  { key: 'deepbookPoolId', label: 'DeepBook V3 Pool', envKey: 'DEEPBOOK_POOL_ID', placeholder: '0x…', help: 'Independent amount-sized liquidity source used by the Move settlement guard.' },
   { key: 'businessAccountId', label: 'Business Account', envKey: 'SPLASH_BUSINESS_ACCOUNT_ID', placeholder: '0x…', help: 'business_account::BusinessAccount shared object.' },
   { key: 'transferCoinId', label: 'Transfer Coin (test)', envKey: 'SPLASH_TRANSFER_COIN_ID', placeholder: '0x…', help: 'Optional. SUI coin object pre-funded for test transfers.' },
   { key: 'settlementRegistryId', label: 'Settlement Registry', envKey: 'SPLASH_SETTLEMENT_REGISTRY_ID', placeholder: '0x… (optional)' },
@@ -25,6 +28,7 @@ const FIELDS: Field[] = [
   { key: 'usdcType', label: 'USDC Type', envKey: 'USDC_TYPE', placeholder: '0x2::sui::SUI' },
   { key: 'usdtType', label: 'USDT Type', envKey: 'USDT_TYPE', placeholder: '0xpkg::usdt::USDT (optional)' },
   { key: 'usdtBufferId', label: 'USDT Buffer ID', envKey: 'USDT_BUFFER_ID', placeholder: '0x… (optional)' },
+  { key: 'deepbookQuoteType', label: 'DeepBook Quote Type', envKey: 'DEEPBOOK_QUOTE_TYPE', placeholder: '0xpkg::usdc::USDC', help: 'Quote asset paired with USDC_TYPE in the configured DeepBook V3 pool.' },
   { key: 'smartTreasurySuiId', label: 'Smart Treasury (SUI)', envKey: 'SPLASH_SMART_TREASURY_SUI_ID', placeholder: '0x…', help: 'Shared smart_treasury::SmartTreasury<0x2::sui::SUI> used by the composed payment allocation leg.' },
 ];
 

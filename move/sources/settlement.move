@@ -1,7 +1,9 @@
 module splash_protocol::settlement;
 
 use splash_protocol::business_account::{Self, BusinessAccount, AdminCap};
+use splash_protocol::compliance_config::ComplianceConfig;
 use splash_protocol::peg_monitor::{Self, PegState};
+use deepbook::pool::Pool;
 use sui::clock::Clock;
 use sui::balance::{Self, Balance};
 use sui::coin::{Self, Coin};
@@ -78,10 +80,12 @@ public fun deposit<T>(pool: &mut SettlementPool<T>, coin: Coin<T>) {
 
 /// Settle a single payment. `fee_bps` is set by the off-chain quote engine
 /// per corridor (e.g. 80 for PHP, 110 for EUR) and is bounded by MAX_FEE_BPS.
-public fun settle_payment<T>(
+public fun settle_payment<T, QuoteAsset>(
     pool: &mut SettlementPool<T>,
     business_account: &BusinessAccount,
     peg_state: &PegState,
+    compliance_config: &ComplianceConfig,
+    deepbook_pool: &Pool<T, QuoteAsset>,
     payment: Coin<T>,
     recipient: address,
     fee_bps: u64,
@@ -91,10 +95,11 @@ public fun settle_payment<T>(
     assert!(business_account::is_verified(business_account), E_NOT_VERIFIED);
     assert!(fee_bps <= MAX_FEE_BPS, E_FEE_EXCEEDED);
     assert!(recipient != @0x0, E_INVALID_RECIPIENT);
-    peg_monitor::assert_pegged(peg_state, clock);
+    peg_monitor::assert_pegged(peg_state, compliance_config, clock);
 
     let gross = coin::value(&payment);
     assert!(gross > 0, E_INVALID_AMOUNT);
+    peg_monitor::assert_deepbook_liquidity(compliance_config, deepbook_pool, gross, clock);
     // u128 intermediate: gross * fee_bps can exceed u64::MAX for large amounts
     // (Move aborts on overflow), which would DoS legitimate large settlements.
     let fee = (((gross as u128) * (fee_bps as u128)) / (BPS_DENOMINATOR as u128)) as u64;
@@ -129,11 +134,13 @@ public fun settle_payment<T>(
 /// payouts) can move pool liquidity — `is_verified(business_account)` alone is
 /// NOT sufficient, since any one KYB-approved tenant could otherwise drain the
 /// pooled liquidity of every other business to an address they control.
-public fun settle_batch<T>(
+public fun settle_batch<T, QuoteAsset>(
     _admin: &AdminCap,
     pool: &mut SettlementPool<T>,
     business_account: &BusinessAccount,
     peg_state: &PegState,
+    compliance_config: &ComplianceConfig,
+    deepbook_pool: &Pool<T, QuoteAsset>,
     payments: vector<Payment>,
     fee_bps: u64,
     clock: &Clock,
@@ -141,8 +148,16 @@ public fun settle_batch<T>(
 ) {
     assert!(business_account::is_verified(business_account), E_NOT_VERIFIED);
     assert!(fee_bps <= MAX_FEE_BPS, E_FEE_EXCEEDED);
-    peg_monitor::assert_pegged(peg_state, clock);
+    peg_monitor::assert_pegged(peg_state, compliance_config, clock);
     assert!(vector::length(&payments) > 0, E_EMPTY_BATCH);
+
+    let mut total_amount = 0;
+    let mut index = 0;
+    while (index < vector::length(&payments)) {
+        total_amount = total_amount + vector::borrow(&payments, index).amount;
+        index = index + 1;
+    };
+    peg_monitor::assert_deepbook_liquidity(compliance_config, deepbook_pool, total_amount, clock);
 
     let business_owner = business_account::owner(business_account);
     let mut payments = payments;
@@ -175,17 +190,30 @@ public fun settle_batch<T>(
     };
 }
 
-public fun settle_sui_batch(
+public fun settle_sui_batch<QuoteAsset>(
     admin: &AdminCap,
     pool: &mut SettlementPool<SUI>,
     business_account: &BusinessAccount,
     peg_state: &PegState,
+    compliance_config: &ComplianceConfig,
+    deepbook_pool: &Pool<SUI, QuoteAsset>,
     payments: vector<Payment>,
     fee_bps: u64,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    settle_batch<SUI>(admin, pool, business_account, peg_state, payments, fee_bps, clock, ctx);
+    settle_batch<SUI, QuoteAsset>(
+        admin,
+        pool,
+        business_account,
+        peg_state,
+        compliance_config,
+        deepbook_pool,
+        payments,
+        fee_bps,
+        clock,
+        ctx,
+    );
 }
 
 public fun pool_balance<T>(pool: &SettlementPool<T>): u64 {

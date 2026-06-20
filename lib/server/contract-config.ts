@@ -6,6 +6,9 @@ export type ContractConfigField =
   | 'treasuryId'
   | 'adminCapId'
   | 'pegStateId'
+  | 'complianceConfigId'
+  | 'complianceCapId'
+  | 'deepbookPoolId'
   | 'businessAccountId'
   | 'transferCoinId'
   | 'settlementRegistryId'
@@ -15,6 +18,7 @@ export type ContractConfigField =
   | 'usdcType'
   | 'usdtType'
   | 'usdtBufferId'
+  | 'deepbookQuoteType'
   | 'usdyType'
   | 'smartTreasurySuiId'
   | 'usdcTreasuryId'
@@ -27,6 +31,9 @@ const FIELD_TO_ENV: Record<ContractConfigField, string> = {
   treasuryId: 'SPLASH_TREASURY_ID',
   adminCapId: 'SPLASH_ADMIN_CAP_ID',
   pegStateId: 'SPLASH_PEG_STATE_ID',
+  complianceConfigId: 'SPLASH_COMPLIANCE_CONFIG_ID',
+  complianceCapId: 'SPLASH_COMPLIANCE_CAP_ID',
+  deepbookPoolId: 'DEEPBOOK_POOL_ID',
   businessAccountId: 'SPLASH_BUSINESS_ACCOUNT_ID',
   transferCoinId: 'SPLASH_TRANSFER_COIN_ID',
   settlementRegistryId: 'SPLASH_SETTLEMENT_REGISTRY_ID',
@@ -36,6 +43,7 @@ const FIELD_TO_ENV: Record<ContractConfigField, string> = {
   usdcType: 'USDC_TYPE',
   usdtType: 'USDT_TYPE',
   usdtBufferId: 'USDT_BUFFER_ID',
+  deepbookQuoteType: 'DEEPBOOK_QUOTE_TYPE',
   usdyType: 'USDY_TYPE',
   smartTreasurySuiId: 'SPLASH_SMART_TREASURY_SUI_ID',
   usdcTreasuryId: 'SPLASH_USDC_TREASURY_ID',
@@ -123,6 +131,9 @@ const ID_FIELDS: ContractConfigField[] = [
   'treasuryId',
   'adminCapId',
   'pegStateId',
+  'complianceConfigId',
+  'complianceCapId',
+  'deepbookPoolId',
   'businessAccountId',
   'transferCoinId',
   'settlementRegistryId',
@@ -137,7 +148,7 @@ const ADDRESS_FIELDS: ContractConfigField[] = [
   'treasuryAddress',
 ];
 
-const MOVE_TYPE_FIELDS: ContractConfigField[] = ['usdcType', 'usdtType', 'usdyType'];
+const MOVE_TYPE_FIELDS: ContractConfigField[] = ['usdcType', 'usdtType', 'usdyType', 'deepbookQuoteType'];
 
 export function validateContractConfig(input: Partial<ContractConfig>): { ok: true } | { ok: false; errors: Record<string, string> } {
   const errors: Record<string, string> = {};

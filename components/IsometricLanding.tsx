@@ -97,6 +97,7 @@ const partnerRail = [
   { src: '/stripe-logo.svg', name: 'Stripe', role: 'USD collection' },
   { src: '/airwallex-logo.png', name: 'Airwallex', role: 'bank rails' },
   { src: '/pyth-logo.png', name: 'Pyth', role: 'FX and peg data' },
+  { src: '/deepbook-logo-white.png', name: 'DeepBook V3', role: 'amount-sized liquidity' },
   { src: '/sumsub-logo.png', name: 'Sumsub', role: 'KYB and KYC' },
   { src: '/walrus-logo.svg', name: 'Walrus', role: 'permanent records' },
   { src: '/sui-logo-blue.svg', name: 'Sui', role: 'settlement network' },
@@ -542,7 +543,13 @@ export default function IsometricLanding() {
           <div className="iso-partner-grid">
             {partnerRail.map((partner) => (
               <div className="iso-partner-item" key={partner.name}>
-                <Image src={partner.src} alt={`${partner.name} logo`} width={120} height={80} />
+                <Image
+                  src={partner.src}
+                  alt={`${partner.name} logo`}
+                  width={120}
+                  height={80}
+                  className={partner.name === 'DeepBook V3' ? 'iso-deepbook-logo' : undefined}
+                />
                 <span>
                   <strong>{partner.name}</strong>
                   <small>{partner.role}</small>

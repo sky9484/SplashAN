@@ -1,5 +1,7 @@
 import { listBatches, listTransfers, listTransactions } from '@/lib/server/operations';
 import { pythAdapter } from '@/lib/server/pyth';
+import { readComplianceControls } from '@/lib/server/sui-settlement';
+import ComplianceControlForm from '@/components/admin/ComplianceControlForm';
 import { Activity, CheckCircle2, Circle, ExternalLink, Loader2, ReceiptText, XCircle } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
@@ -9,6 +11,7 @@ export default async function AdminTransactionsPage() {
   const transfers = listTransfers();
   const transactions = listTransactions();
   const pegStatus = await pythAdapter.getPegStatus();
+  const complianceControls = await readComplianceControls();
   const usdcDevBps = Math.abs(pegStatus.usdcUsd.price - 1.0) * 10_000;
   const usdtDevBps = Math.abs(pegStatus.usdtUsd.price - 1.0) * 10_000;
   const maxDev = Math.max(usdcDevBps, usdtDevBps);
@@ -29,6 +32,8 @@ export default async function AdminTransactionsPage() {
         <MonitorCard icon={Activity} label="24h Volume" value={`RM ${volume.toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} detail={`${transfers.length} transfer intents`} />
         <MonitorCard icon={ReceiptText} label="Fees" value={`RM ${fees.toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} detail="Estimated at 1.5% headline" />
       </section>
+
+      <ComplianceControlForm initial={complianceControls} />
 
       <div className="dash-surface">
         <div className="border-b border-[#326273]/10 p-5">

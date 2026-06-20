@@ -212,6 +212,12 @@ const ABORT_CODES: Record<number, string> = {
   301: 'E_PEG_BROKEN_USDT — USDT deviation > 30 bps. Update peg with valid data.',
   302: 'E_PEG_STALE — Peg price update is older than 60 seconds OR no real update_peg has fired since init. The app refreshes it automatically; verify SPLASH_ADMIN_CAP_ID and SPLASH_PEG_STATE_ID if this appears.',
   303: 'E_TIMESTAMP_REGRESSION — peg_monitor::update_peg called with a Clock timestamp older than the stored one. Indicates a clock bug or replay.',
+  304: 'E_INSUFFICIENT_DEPTH — DeepBook cannot completely fill this settlement amount inside the configured depth window.',
+  305: 'E_SLIPPAGE_EXCEEDED — DeepBook amount-sized execution price exceeds the configured slippage limit.',
+  306: 'E_INVALID_MARKET_PRICE — DeepBook returned an invalid zero mid-price.',
+  350: 'E_INVALID_CONFIG — Compliance threshold is outside its bounded safety range.',
+  351: 'E_INVALID_CAP — ComplianceCap does not own authority for this ComplianceConfig.',
+  352: 'E_SETTLEMENT_PAUSED — Settlement has been paused by the compliance operator.',
 
   // ── payment_intent ───────────────────────────────────────────────────────
   400: 'E_NOT_PENDING — payment_intent confirm/cancel called on an intent that is not in STATUS_PENDING.',
@@ -759,9 +765,13 @@ export async function recordSingleTransferOnSui(input: {
   const SPLASH_PACKAGE_ID = configIdOrThrow('packageId', 'SPLASH_PACKAGE_ID');
   const SPLASH_TREASURY_ID = configIdOrThrow('treasuryId', 'SPLASH_TREASURY_ID');
   const SPLASH_PEG_STATE_ID = configIdOrThrow('pegStateId', 'SPLASH_PEG_STATE_ID');
+  const SPLASH_COMPLIANCE_CONFIG_ID = configIdOrThrow('complianceConfigId', 'SPLASH_COMPLIANCE_CONFIG_ID');
+  const DEEPBOOK_POOL_ID = configIdOrThrow('deepbookPoolId', 'DEEPBOOK_POOL_ID');
   const SPLASH_BUSINESS_ACCOUNT_ID = configIdOrThrow('businessAccountId', 'SPLASH_BUSINESS_ACCOUNT_ID');
   if (!cfg.usdcType) throw new Error('USDC_TYPE is not configured. Set it in admin → Contract config (or in .env.local) and try again.');
   const USDC_TYPE = cfg.usdcType;
+  if (!cfg.deepbookQuoteType) throw new Error('DEEPBOOK_QUOTE_TYPE is not configured. Set it in admin → Contract config.');
+  const DEEPBOOK_QUOTE_TYPE = cfg.deepbookQuoteType;
   const SPLASH_TEST_RECIPIENT_ADDRESS = cfg.testRecipientAddress;
 
   const recipientAddress = SPLASH_TEST_RECIPIENT_ADDRESS || input.recipient;
@@ -796,11 +806,13 @@ export async function recordSingleTransferOnSui(input: {
     const [payment] = tx.splitCoins(tx.gas, [paymentMist]);
     tx.moveCall({
       target: `${SPLASH_PACKAGE_ID}::settlement::settle_payment`,
-      typeArguments: [USDC_TYPE],
+      typeArguments: [USDC_TYPE, DEEPBOOK_QUOTE_TYPE],
       arguments: [
         tx.object(SPLASH_TREASURY_ID),
         tx.object(SPLASH_BUSINESS_ACCOUNT_ID),
         tx.object(SPLASH_PEG_STATE_ID),
+        tx.object(SPLASH_COMPLIANCE_CONFIG_ID),
+        tx.object(DEEPBOOK_POOL_ID),
         payment,
         tx.pure.address(recipientAddress),
         tx.pure.u64(feeBps),
@@ -844,10 +856,12 @@ export async function recordSingleTransferOnSui(input: {
     //    Published v1 requires fee_bps before the Clock argument.
     '--move-call',
     `${SPLASH_PACKAGE_ID}::settlement::settle_payment`,
-    `<${USDC_TYPE}>`,
+    `<${USDC_TYPE},${DEEPBOOK_QUOTE_TYPE}>`,
     `@${SPLASH_TREASURY_ID}`,
     `@${SPLASH_BUSINESS_ACCOUNT_ID}`,
     `@${SPLASH_PEG_STATE_ID}`,
+    `@${SPLASH_COMPLIANCE_CONFIG_ID}`,
+    `@${DEEPBOOK_POOL_ID}`,
     'payment.0',
     `@${recipientAddress}`,
     feeBps.toString(),
@@ -918,9 +932,13 @@ export async function recordBatchSettlementOnSui(input: {
   const SPLASH_PACKAGE_ID = configIdOrThrow('packageId', 'SPLASH_PACKAGE_ID');
   const SPLASH_TREASURY_ID = configIdOrThrow('treasuryId', 'SPLASH_TREASURY_ID');
   const SPLASH_PEG_STATE_ID = configIdOrThrow('pegStateId', 'SPLASH_PEG_STATE_ID');
+  const SPLASH_COMPLIANCE_CONFIG_ID = configIdOrThrow('complianceConfigId', 'SPLASH_COMPLIANCE_CONFIG_ID');
+  const DEEPBOOK_POOL_ID = configIdOrThrow('deepbookPoolId', 'DEEPBOOK_POOL_ID');
   const SPLASH_BUSINESS_ACCOUNT_ID = configIdOrThrow('businessAccountId', 'SPLASH_BUSINESS_ACCOUNT_ID');
   if (!cfg.usdcType) throw new Error('USDC_TYPE is not configured. Set it in admin → Contract config (or in .env.local) and try again.');
   const USDC_TYPE = cfg.usdcType;
+  if (!cfg.deepbookQuoteType) throw new Error('DEEPBOOK_QUOTE_TYPE is not configured. Set it in admin → Contract config.');
+  const DEEPBOOK_QUOTE_TYPE = cfg.deepbookQuoteType;
   const SPLASH_TEST_RECIPIENT_ADDRESS = cfg.testRecipientAddress;
   const feeBps = resolveFeeBps({ feeBps: input.feeBps, targetCurrency: input.targetCurrency });
 
@@ -962,12 +980,14 @@ export async function recordBatchSettlementOnSui(input: {
     });
     tx.moveCall({
       target: `${SPLASH_PACKAGE_ID}::settlement::settle_batch`,
-      typeArguments: [USDC_TYPE],
+      typeArguments: [USDC_TYPE, DEEPBOOK_QUOTE_TYPE],
       arguments: [
         tx.object(SPLASH_ADMIN_CAP_ID),
         tx.object(SPLASH_TREASURY_ID),
         tx.object(SPLASH_BUSINESS_ACCOUNT_ID),
         tx.object(SPLASH_PEG_STATE_ID),
+        tx.object(SPLASH_COMPLIANCE_CONFIG_ID),
+        tx.object(DEEPBOOK_POOL_ID),
         paymentVector,
         tx.pure.u64(feeBps),
         tx.object('0x6'),
@@ -1010,13 +1030,16 @@ export async function recordBatchSettlementOnSui(input: {
     `[${paymentObjects.map((_, index) => `payment_${index}`).join(',')}]`,
     '--assign',
     'payments',
-    // Published v1 is not AdminCap-gated and requires fee_bps before Clock.
+    // AdminCap gates pooled liquidity; compliance + DeepBook guard the amount.
     '--move-call',
     `${SPLASH_PACKAGE_ID}::settlement::settle_batch`,
-    `<${USDC_TYPE}>`,
+    `<${USDC_TYPE},${DEEPBOOK_QUOTE_TYPE}>`,
+    `@${SPLASH_ADMIN_CAP_ID}`,
     `@${SPLASH_TREASURY_ID}`,
     `@${SPLASH_BUSINESS_ACCOUNT_ID}`,
     `@${SPLASH_PEG_STATE_ID}`,
+    `@${SPLASH_COMPLIANCE_CONFIG_ID}`,
+    `@${DEEPBOOK_POOL_ID}`,
     'payments',
     feeBps.toString(),
     '@0x6',
@@ -1062,4 +1085,68 @@ export async function recordBatchSettlementOnSui(input: {
     packageId: SPLASH_PACKAGE_ID,
     treasuryId: SPLASH_TREASURY_ID,
   };
+}
+
+export type ComplianceControls = {
+  configured: boolean;
+  maxDeviationPpm: number;
+  maxStalenessMs: number;
+  maxSlippageBps: number;
+  minDepthBaseUnits: number;
+  paused: boolean;
+};
+
+const DEFAULT_COMPLIANCE_CONTROLS: ComplianceControls = {
+  configured: false,
+  maxDeviationPpm: 3_000,
+  maxStalenessMs: 60_000,
+  maxSlippageBps: 100,
+  minDepthBaseUnits: 100_000_000,
+  paused: false,
+};
+
+export async function readComplianceControls(): Promise<ComplianceControls> {
+  const config = getContractConfig();
+  if (!config.complianceConfigId) return DEFAULT_COMPLIANCE_CONTROLS;
+  try {
+    const object = await suiClient.getObject({ id: config.complianceConfigId, options: { showContent: true } });
+    const content = object.data?.content;
+    if (!content || content.dataType !== 'moveObject') return DEFAULT_COMPLIANCE_CONTROLS;
+    const fields = content.fields as Record<string, unknown>;
+    return {
+      configured: true,
+      maxDeviationPpm: Number(fields.max_deviation_ppm),
+      maxStalenessMs: Number(fields.max_staleness_ms),
+      maxSlippageBps: Number(fields.max_slippage_bps),
+      minDepthBaseUnits: Number(fields.min_depth_base_units),
+      paused: Boolean(fields.paused),
+    };
+  } catch {
+    return DEFAULT_COMPLIANCE_CONTROLS;
+  }
+}
+
+export async function updateComplianceControls(input: Omit<ComplianceControls, 'configured'>) {
+  const packageId = configIdOrThrow('packageId', 'SPLASH_PACKAGE_ID');
+  const configId = configIdOrThrow('complianceConfigId', 'SPLASH_COMPLIANCE_CONFIG_ID');
+  const capId = configIdOrThrow('complianceCapId', 'SPLASH_COMPLIANCE_CAP_ID');
+  if (!getOperatorKeypair()) throw new Error('OPERATOR_SUI_PRIVATE_KEY is required to update compliance controls.');
+
+  const tx = new Transaction();
+  tx.moveCall({
+    target: `${packageId}::compliance_config::update`,
+    arguments: [
+      tx.object(configId),
+      tx.object(capId),
+      tx.pure.u64(input.maxDeviationPpm),
+      tx.pure.u64(input.maxStalenessMs),
+      tx.pure.u64(input.maxSlippageBps),
+      tx.pure.u64(input.minDepthBaseUnits),
+    ],
+  });
+  tx.moveCall({
+    target: `${packageId}::compliance_config::set_paused`,
+    arguments: [tx.object(configId), tx.object(capId), tx.pure.bool(input.paused)],
+  });
+  return executeSdkTransaction(tx);
 }

@@ -11,18 +11,25 @@
 module splash_protocol::peg_monitor;
 
 use splash_protocol::business_account::AdminCap;
+use splash_protocol::compliance_config::{Self, ComplianceConfig};
+use deepbook::pool::Pool;
+use openzeppelin_math::rounding;
+use openzeppelin_math::u64 as oz_u64;
 use sui::clock::{Self, Clock};
 use sui::event;
 
 /// 30 bps = 0.30% = 3,000 ppm — matches what off-chain `lib/server/pyth.ts` uses.
 const MAX_DEVIATION_PPM: u64 = 3_000;
-/// Reject if last operator update is older than 60 seconds.
-const MAX_STALENESS_MS:  u64 = 60_000;
-
 const E_PEG_BROKEN_USDC:         u64 = 300;
 const E_PEG_BROKEN_USDT:         u64 = 301;
 const E_PEG_STALE:               u64 = 302;
 const E_TIMESTAMP_REGRESSION:    u64 = 303;
+const E_INSUFFICIENT_DEPTH:      u64 = 304;
+const E_SLIPPAGE_EXCEEDED:       u64 = 305;
+const E_INVALID_MARKET_PRICE:    u64 = 306;
+
+const BPS_DENOMINATOR: u64 = 10_000;
+const DEEPBOOK_PRICE_SCALING: u64 = 1_000_000_000;
 
 public struct PegState has key {
     id: UID,
@@ -101,12 +108,50 @@ public fun update_peg(
 
 /// Hot-path check called from settle_payment / settle_batch.
 /// Aborts the PTB if peg is broken OR state is stale.
-public fun assert_pegged(state: &PegState, clock: &Clock) {
+public fun assert_pegged(state: &PegState, config: &ComplianceConfig, clock: &Clock) {
+    compliance_config::assert_active(config);
     let now = clock::timestamp_ms(clock);
     let age = if (now > state.last_update_ms) { now - state.last_update_ms } else { 0 };
-    assert!(age <= MAX_STALENESS_MS, E_PEG_STALE);
-    assert!(state.usdc_deviation_ppm <= MAX_DEVIATION_PPM, E_PEG_BROKEN_USDC);
-    assert!(state.usdt_deviation_ppm <= MAX_DEVIATION_PPM, E_PEG_BROKEN_USDT);
+    assert!(age <= compliance_config::max_staleness_ms(config), E_PEG_STALE);
+    assert!(state.usdc_deviation_ppm <= compliance_config::max_deviation_ppm(config), E_PEG_BROKEN_USDC);
+    assert!(state.usdt_deviation_ppm <= compliance_config::max_deviation_ppm(config), E_PEG_BROKEN_USDT);
+}
+
+/// Independent execution guard. Pyth establishes stablecoin peg truth above;
+/// DeepBook only proves that this exact settlement amount can clear inside the
+/// configured depth and price-impact limits.
+public fun assert_deepbook_liquidity<BaseAsset, QuoteAsset>(
+    config: &ComplianceConfig,
+    pool: &Pool<BaseAsset, QuoteAsset>,
+    base_quantity: u64,
+    clock: &Clock,
+) {
+    let (remaining_base, quote_out, _) = pool.get_quote_quantity_out_input_fee(base_quantity, clock);
+    assert!(remaining_base == 0 && quote_out > 0, E_INSUFFICIENT_DEPTH);
+
+    let mid_price = pool.mid_price(clock);
+    assert!(mid_price > 0, E_INVALID_MARKET_PRICE);
+    let effective_price = mul_div(base_quantity, quote_out, DEEPBOOK_PRICE_SCALING);
+    let slippage_bps = if (effective_price >= mid_price) {
+        0
+    } else {
+        mul_div(mid_price, mid_price - effective_price, BPS_DENOMINATOR)
+    };
+    assert!(slippage_bps <= compliance_config::max_slippage_bps(config), E_SLIPPAGE_EXCEEDED);
+
+    let price_floor = mul_div(
+        BPS_DENOMINATOR,
+        mid_price,
+        BPS_DENOMINATOR - compliance_config::max_slippage_bps(config),
+    );
+    let (_, quantities) = pool.get_level2_range(price_floor, mid_price, true, clock);
+    let depth = quantities.fold!(0, |sum, quantity| sum + quantity);
+    assert!(depth >= compliance_config::min_depth_base_units(config), E_INSUFFICIENT_DEPTH);
+    assert!(depth >= base_quantity, E_INSUFFICIENT_DEPTH);
+}
+
+fun mul_div(denominator: u64, a: u64, b: u64): u64 {
+    oz_u64::mul_div(a, b, denominator, rounding::down()).destroy_some()
 }
 
 // ── views ────────────────────────────────────────────────────────────────

@@ -23,6 +23,7 @@
 
 # production
 /build
+/move/build/
 
 # misc
 .DS_Store
