@@ -24,6 +24,7 @@
 # production
 /build
 /move/build/
+/.tools/
 
 # misc
 .DS_Store

@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "npm run check:copy && eslint",
     "check:copy": "node scripts/check-copy.mjs",
+    "setup:sui-pilot": "powershell -ExecutionPolicy Bypass -File scripts/setup-sui-pilot.ps1",
     "bootstrap:testnet": "node --use-system-ca --experimental-strip-types --env-file=.env.local scripts/bootstrap-testnet.ts",
     "test:seal:integration": "node --use-system-ca --experimental-strip-types --env-file=.env.local tests/seal-decentralized.integration.mjs"
   },
