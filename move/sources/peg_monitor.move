@@ -131,18 +131,18 @@ public fun assert_deepbook_liquidity<BaseAsset, QuoteAsset>(
 
     let mid_price = pool.mid_price(clock);
     assert!(mid_price > 0, E_INVALID_MARKET_PRICE);
-    let effective_price = mul_div(base_quantity, quote_out, DEEPBOOK_PRICE_SCALING);
+    let effective_price = mul_div_down(quote_out, DEEPBOOK_PRICE_SCALING, base_quantity);
     let slippage_bps = if (effective_price >= mid_price) {
         0
     } else {
-        mul_div(mid_price, mid_price - effective_price, BPS_DENOMINATOR)
+        mul_div_down(mid_price - effective_price, BPS_DENOMINATOR, mid_price)
     };
     assert!(slippage_bps <= compliance_config::max_slippage_bps(config), E_SLIPPAGE_EXCEEDED);
 
-    let price_floor = mul_div(
-        BPS_DENOMINATOR,
+    let price_floor = mul_div_down(
         mid_price,
         BPS_DENOMINATOR - compliance_config::max_slippage_bps(config),
+        BPS_DENOMINATOR,
     );
     let (_, quantities) = pool.get_level2_range(price_floor, mid_price, true, clock);
     let depth = quantities.fold!(0, |sum, quantity| sum + quantity);
@@ -150,7 +150,7 @@ public fun assert_deepbook_liquidity<BaseAsset, QuoteAsset>(
     assert!(depth >= base_quantity, E_INSUFFICIENT_DEPTH);
 }
 
-fun mul_div(denominator: u64, a: u64, b: u64): u64 {
+fun mul_div_down(a: u64, b: u64, denominator: u64): u64 {
     oz_u64::mul_div(a, b, denominator, rounding::down()).destroy_some()
 }
 

@@ -1119,7 +1119,7 @@ export async function readComplianceControls(): Promise<ComplianceControls> {
       maxStalenessMs: Number(fields.max_staleness_ms),
       maxSlippageBps: Number(fields.max_slippage_bps),
       minDepthBaseUnits: Number(fields.min_depth_base_units),
-      paused: Boolean(fields.paused),
+      paused: fields.paused === true || fields.paused === 'true',
     };
   } catch {
     return DEFAULT_COMPLIANCE_CONTROLS;
