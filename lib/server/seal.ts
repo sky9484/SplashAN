@@ -1,11 +1,24 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+
+import { SealClient, SessionKey } from '@mysten/seal';
+import { Transaction } from '@mysten/sui/transactions';
+import { fromHex, toHex } from '@mysten/sui/utils';
+
+import { getSealConfig } from '@/lib/server/seal-config';
+import { assertSealWritable } from '@/lib/server/seal-health';
+import { getOperatorKeypair } from '@/lib/server/sui-settlement';
+import { suiClient } from '@/lib/sui';
 
 export type SealPolicy = {
   policyId: string;
   allowlist: string[];
   createdAt: string;
   mode: 'demo' | 'live';
+  sealId?: string;
 };
+
 export interface SealAdapter {
   encrypt(data: string, allowlist: string[]): Promise<{ ciphertext: string; policy: SealPolicy }>;
   canDecrypt(policyId: string, identity: string): Promise<boolean>;
@@ -19,9 +32,36 @@ export class NotConfiguredError extends Error {
   }
 }
 
-const globalPolicies = globalThis as typeof globalThis & { splashSealPolicies?: Map<string, SealPolicy> };
-const policies = globalPolicies.splashSealPolicies ?? new Map<string, SealPolicy>();
+const DATA_DIR = process.env.SPLASH_DATA_DIR ?? path.join(process.cwd(), 'data');
+const POLICY_PATH = path.join(DATA_DIR, 'seal-policies.json');
+const globalPolicies = globalThis as typeof globalThis & {
+  splashSealPolicies?: Map<string, SealPolicy>;
+  splashSealClient?: SealClient;
+};
+
+function readPolicies() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(POLICY_PATH, 'utf8')) as SealPolicy[];
+    return new Map(parsed.filter((policy) => policy?.policyId).map((policy) => [policy.policyId, policy]));
+  } catch {
+    return new Map<string, SealPolicy>();
+  }
+}
+
+const policies = globalPolicies.splashSealPolicies ?? readPolicies();
 globalPolicies.splashSealPolicies = policies;
+
+function persistPolicies() {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  const tempPath = `${POLICY_PATH}.tmp.${process.pid}.${Date.now()}`;
+  fs.writeFileSync(tempPath, `${JSON.stringify([...policies.values()], null, 2)}\n`, { mode: 0o600 });
+  fs.renameSync(tempPath, POLICY_PATH);
+}
+
+function rememberPolicy(policy: SealPolicy) {
+  policies.set(policy.policyId, policy);
+  persistPolicies();
+}
 
 function secretKey() {
   return createHash('sha256').update(process.env.ADMIN_SESSION_SECRET || 'splash-seal-mock-development-key').digest();
@@ -37,7 +77,7 @@ export const mockSealAdapter: SealAdapter = {
     const normalized = normalizedAllowlist(allowlist);
     const policyId = `DEMO_SEAL_${createHash('sha256').update(`${normalized.join('|')}:${createdAt}`).digest('hex').slice(0, 16)}`;
     const policy: SealPolicy = { policyId, allowlist: normalized, createdAt, mode: 'demo' };
-    policies.set(policyId, policy);
+    rememberPolicy(policy);
 
     const iv = randomBytes(12);
     const cipher = createCipheriv('aes-256-gcm', secretKey(), iv);
@@ -60,20 +100,101 @@ export const mockSealAdapter: SealAdapter = {
   },
 };
 
+function liveClient() {
+  if (globalPolicies.splashSealClient) return globalPolicies.splashSealClient;
+  const config = getSealConfig();
+  if (!config.configured) {
+    throw new NotConfiguredError('Live Seal package, policy object, or key-server committee is not configured.');
+  }
+  globalPolicies.splashSealClient = new SealClient({
+    suiClient,
+    serverConfigs: config.serverConfigs,
+    verifyKeyServers: config.mode !== 'decentralized',
+    timeout: config.timeoutMs,
+  });
+  return globalPolicies.splashSealClient;
+}
+
+function sealIdFor(policyId: string) {
+  const policy = policies.get(policyId);
+  return policy?.sealId ?? (policyId.startsWith('SEAL:') ? policyId.slice(5) : null);
+}
+
 export const liveSealAdapter: SealAdapter = {
-  async encrypt() {
-    throw new NotConfiguredError('Live Seal threshold encryption is not configured for this environment.');
+  async encrypt(data, allowlist) {
+    await assertSealWritable();
+    const config = getSealConfig();
+    const sealId = toHex(new Uint8Array([...fromHex(config.policyObjectId), ...randomBytes(5)]));
+    const { encryptedObject } = await liveClient().encrypt({
+      threshold: config.threshold,
+      packageId: config.packageId,
+      id: sealId,
+      data: new TextEncoder().encode(data),
+    });
+    const policy: SealPolicy = {
+      policyId: `SEAL:${sealId}`,
+      allowlist: normalizedAllowlist(allowlist),
+      createdAt: new Date().toISOString(),
+      mode: 'live',
+      sealId,
+    };
+    rememberPolicy(policy);
+    return { ciphertext: Buffer.from(encryptedObject).toString('base64'), policy };
   },
-  async canDecrypt() {
-    throw new NotConfiguredError('Live Seal access checks are not configured for this environment.');
+  async canDecrypt(policyId, identity) {
+    const policy = policies.get(policyId);
+    if (!policy || !sealIdFor(policyId)) return false;
+    return policy.allowlist.includes(identity.trim().toLowerCase());
   },
-  async decrypt() {
-    throw new NotConfiguredError('Live Seal decryption is not configured for this environment.');
+  async decrypt(ciphertext, policyId, identity) {
+    await assertSealWritable();
+    if (!(await this.canDecrypt(policyId, identity))) return null;
+    const sealId = sealIdFor(policyId);
+    if (!sealId) return null;
+    const config = getSealConfig();
+    const signer = getOperatorKeypair();
+    if (!signer) throw new NotConfiguredError('OPERATOR_SUI_PRIVATE_KEY is required for live Seal decryption.');
+
+    const sessionKey = await SessionKey.create({
+      address: signer.toSuiAddress(),
+      packageId: config.packageId,
+      ttlMin: 10,
+      signer,
+      suiClient,
+    });
+    const tx = new Transaction();
+    tx.moveCall({
+      target: config.approveTarget as `${string}::${string}::${string}`,
+      arguments: [tx.pure.vector('u8', fromHex(sealId)), tx.object(config.policyObjectId)],
+    });
+    const txBytes = await tx.build({ client: suiClient, onlyTransactionKind: true });
+    const plaintext = await liveClient().decrypt({
+      data: Buffer.from(ciphertext, 'base64'),
+      sessionKey,
+      txBytes,
+      checkShareConsistency: true,
+    });
+    return new TextDecoder().decode(plaintext);
   },
 };
 
-export const sealAdapter =
-  process.env.USE_MOCK_APIS === 'true' || !process.env.SEAL_KEY_SERVER_URLS ? mockSealAdapter : liveSealAdapter;
+export const sealAdapter: SealAdapter = {
+  encrypt(data, allowlist) {
+    return process.env.USE_MOCK_APIS === 'true'
+      ? mockSealAdapter.encrypt(data, allowlist)
+      : liveSealAdapter.encrypt(data, allowlist);
+  },
+  canDecrypt(policyId, identity) {
+    return policyId.startsWith('DEMO_SEAL_')
+      ? mockSealAdapter.canDecrypt(policyId, identity)
+      : liveSealAdapter.canDecrypt(policyId, identity);
+  },
+  decrypt(ciphertext, policyId, identity) {
+    return policyId.startsWith('DEMO_SEAL_')
+      ? mockSealAdapter.decrypt(ciphertext, policyId, identity)
+      : liveSealAdapter.decrypt(ciphertext, policyId, identity);
+  },
+};
 
 export function readSealPolicy(policyId: string) {
   return policies.get(policyId) ?? null;

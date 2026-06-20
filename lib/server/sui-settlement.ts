@@ -36,7 +36,7 @@ function configuredOperatorAddress(): string {
   return (getContractConfig().operatorAddress ?? '').trim();
 }
 
-function getOperatorKeypair(): Ed25519Keypair | null {
+export function getOperatorKeypair(): Ed25519Keypair | null {
   if (cachedOperatorKeypair !== undefined) return cachedOperatorKeypair;
 
   const encoded = (

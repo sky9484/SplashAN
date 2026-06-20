@@ -47,6 +47,8 @@ yarn-error.log*
 /data/contract-config.json.tmp.*
 /data/operating-settings.json
 /data/operating-settings.json.tmp.*
+/data/seal-policies.json
+/data/seal-policies.json.tmp.*
 
 # vercel
 .vercel

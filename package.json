@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "npm run check:copy && eslint",
     "check:copy": "node scripts/check-copy.mjs",
-    "bootstrap:testnet": "node --use-system-ca --experimental-strip-types --env-file=.env.local scripts/bootstrap-testnet.ts"
+    "bootstrap:testnet": "node --use-system-ca --experimental-strip-types --env-file=.env.local scripts/bootstrap-testnet.ts",
+    "test:seal:integration": "node --use-system-ca --experimental-strip-types --env-file=.env.local tests/seal-decentralized.integration.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.99.0",
