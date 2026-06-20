@@ -5946,3 +5946,218 @@ button.iso-product-row {
     min-height: auto;
   }
 }
+
+/* Responsive composition guardrails. These final rules intentionally own the
+   hero artwork and the shared dashboard engine across viewport sizes. */
+.iso-hero-stage {
+  width: min(100%, 780px);
+  min-height: clamp(430px, 34vw, 610px);
+  justify-self: center;
+}
+
+.iso-hero-main-art {
+  top: 50%;
+  right: 0;
+  width: min(100%, 760px);
+  max-width: 100%;
+  transform: translate(2%, -52%) scale(1.02);
+  transform-origin: center;
+}
+
+.iso-stage-shadow {
+  right: 6%;
+  bottom: 11%;
+  width: 82%;
+  transform: translateX(2%) scale(1.05) rotate(-7deg);
+}
+
+.iso-floating-note {
+  min-width: clamp(124px, 10vw, 158px);
+  padding: clamp(9px, .7vw, 13px) clamp(11px, .9vw, 17px);
+}
+
+.iso-floating-note-a,
+.iso-floating-note-b,
+.iso-floating-note-c {
+  --note-scale: .68;
+}
+
+.dash-flow {
+  container-type: inline-size;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  padding: clamp(12px, 1.3vw, 17px) clamp(12px, 1.5vw, 18px) clamp(14px, 1.6vw, 19px);
+}
+
+.dash-flow-stage {
+  grid-template-columns: minmax(90px, 1fr) minmax(26px, .48fr) auto minmax(26px, .48fr) minmax(90px, 1fr);
+  min-height: clamp(148px, 16vw, 174px);
+}
+
+.dash-flow-node {
+  min-width: 0;
+  padding: clamp(5px, .55vw, 7px) clamp(6px, .7vw, 9px);
+}
+
+.dash-flow-node-mark {
+  width: clamp(27px, 3vw, 31px);
+  height: clamp(27px, 3vw, 31px);
+}
+
+.dash-flow-core-orb {
+  width: clamp(64px, 7vw, 78px);
+  height: clamp(64px, 7vw, 78px);
+}
+
+.dash-flow-core-orb img {
+  width: clamp(39px, 4.4vw, 49px);
+  height: clamp(39px, 4.4vw, 49px);
+  max-width: 64%;
+  max-height: 64%;
+}
+
+@media (max-width: 1100px) {
+  .iso-hero-stage {
+    width: min(100%, 840px);
+    min-height: clamp(430px, 64vw, 590px);
+  }
+
+  .iso-hero-main-art {
+    width: min(100%, 810px);
+    transform: translate(9%, -52%) scale(1.04);
+  }
+
+  .iso-stage-shadow {
+    transform: translateX(9%) scale(1.08) rotate(-7deg);
+  }
+
+  .iso-floating-note-a,
+  .iso-floating-note-b,
+  .iso-floating-note-c {
+    --note-scale: .62;
+  }
+}
+
+@media (max-width: 768px) {
+  .dash-flow-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .dash-flow-stage {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    min-height: auto;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .dash-flow-wires {
+    display: none;
+  }
+
+  .dash-flow-col-dests .dash-flow-node {
+    flex-direction: row-reverse;
+    text-align: right;
+  }
+
+  .dash-flow-core {
+    padding: 8px 0;
+  }
+
+  .dash-flow-node {
+    gap: 5px;
+    padding: 5px;
+  }
+
+  .dash-flow-node-mark {
+    width: 26px;
+    height: 26px;
+  }
+
+  .dash-flow-node-copy strong {
+    font-size: 10px;
+  }
+
+  .dash-flow-node-copy small {
+    display: none;
+  }
+
+  .dash-flow-core-orb {
+    width: 58px;
+    height: 58px;
+  }
+
+  .dash-flow-core strong {
+    font-size: 10px;
+  }
+
+  .dash-flow-core small {
+    max-width: 66px;
+    font-size: 6px;
+  }
+}
+
+@media (max-width: 700px) {
+  .iso-hero-stage {
+    width: 100%;
+    min-height: clamp(300px, 78vw, 380px);
+    margin-top: 0;
+  }
+
+  .iso-hero-main-art {
+    top: 48%;
+    width: 102%;
+    max-width: none;
+    transform: translate(4%, -50%) scale(.98);
+  }
+
+  .iso-stage-shadow {
+    right: 7%;
+    bottom: 9%;
+    width: 78%;
+    transform: translateX(4%) scale(1.02) rotate(-7deg);
+  }
+
+  .iso-floating-note {
+    min-width: 112px;
+    padding: 8px 10px;
+  }
+
+  .iso-floating-note-a,
+  .iso-floating-note-b,
+  .iso-floating-note-c {
+    --note-scale: .48;
+  }
+
+  .iso-floating-note-a {
+    bottom: -1%;
+    left: 0;
+  }
+
+  .iso-floating-note-b {
+    top: 0;
+    left: -4%;
+  }
+
+  .iso-floating-note-c {
+    top: 29%;
+    right: -7%;
+  }
+}
+
+@media (max-width: 420px) {
+  .iso-hero-stage {
+    min-height: 285px;
+  }
+
+  .iso-floating-note {
+    min-width: 104px;
+  }
+
+  .iso-floating-note-a,
+  .iso-floating-note-b,
+  .iso-floating-note-c {
+    --note-scale: .42;
+  }
+}
