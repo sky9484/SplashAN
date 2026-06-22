@@ -13,8 +13,9 @@ import {
 } from '@/lib/server/operations';
 import { pythAdapter } from '@/lib/server/pyth';
 import { calculateQuote } from '@/lib/server/quote';
-import { selectStablecoin } from '@/lib/server/stable-router';
 import { completeDeliveryForTransfer } from '@/lib/server/sweep';
+import { confirmUsdFunding } from '@/lib/server/funding-intake';
+import { readFundingSession, updateFundingSession } from '@/lib/server/funding-sessions';
 
 export const maxDuration = 60;
 
@@ -29,6 +30,7 @@ const authorizeSchema = z.object({
   deliveryTier: z.enum(['PAYOUT_ONLY', 'SWEEP_ACCOUNT', 'STORED_BALANCE']).default('PAYOUT_ONLY'),
   invoiceId: z.string().optional(),
   paymentRail: z.string().optional(),
+  fundingSessionId: z.string().optional(),
   totp: z.string().optional(),
   kycTier: z.union([z.number(), z.string()]).optional(),
 });
@@ -39,29 +41,51 @@ export async function POST(request: Request) {
   const body = parsed.data;
   const totp = String(body.totp ?? '');
   const paymentRail = String(body.paymentRail ?? 'STRIPE_CHECKOUT');
-  if (paymentRail !== 'STRIPE_CHECKOUT' && paymentRail !== 'AIRWALLEX_WIRE' && !/^\d{6}$/.test(totp)) {
+  if (!body.fundingSessionId && paymentRail !== 'STRIPE_CHECKOUT' && paymentRail !== 'AIRWALLEX_WIRE' && !/^\d{6}$/.test(totp)) {
     return NextResponse.json({ error: 'A valid 6-digit authorization code is required' }, { status: 400 });
   }
 
   const sourceAmount = Number.parseFloat(body.amount.value);
   const sourceAmountCents = Math.round(sourceAmount * 100);
-  const serverQuote = sourceAmountCents > 0 ? await calculateQuote(sourceAmountCents, undefined, body.amount.targetCurrency) : null;
+  let fundingSession = body.fundingSessionId ? readFundingSession(body.fundingSessionId) : null;
+  if (body.fundingSessionId && !fundingSession) {
+    return NextResponse.json({ error: 'Funding session not found' }, { status: 404 });
+  }
+  if (fundingSession?.transferIntentId) {
+    return NextResponse.json({ error: 'Funding session is already bound to a transfer' }, { status: 409 });
+  }
+  if (fundingSession && Math.abs(fundingSession.amountExpectedMicro - Math.round(sourceAmount * 1_000_000)) > 1) {
+    return NextResponse.json({ error: 'Funding session amount does not match the transfer' }, { status: 409 });
+  }
+  if (fundingSession?.selection.method === 'USD') {
+    try {
+      fundingSession = confirmUsdFunding(fundingSession.id);
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : 'USD provider confirmation is pending' },
+        { status: 409 },
+      );
+    }
+  }
+  if (fundingSession?.selection.method === 'STABLECOIN' && fundingSession.status !== 'CREDITED') {
+    return NextResponse.json({ error: `Stablecoin funding is ${fundingSession.status}; settlement cannot start` }, { status: 409 });
+  }
+  const feeTier = fundingSession?.feeTier ?? 'STANDARD';
+  const serverQuote = sourceAmountCents > 0
+    ? await calculateQuote(sourceAmountCents, undefined, body.amount.targetCurrency, feeTier)
+    : null;
   const pegStatus = await pythAdapter.getPegStatus();
   if (!pegStatus.pegged) {
     return NextResponse.json({ error: `Settlement blocked: stablecoin peg deviation too high (${pegStatus.deviationPpm} ppm).` }, { status: 409 });
   }
 
-  const stablecoinAmountMicro = sourceAmountCents > 0 ? await usdCentsToUsdcMicro(sourceAmountCents) : 0;
-  const conversion = sourceAmount > 0 ? await convertUsdToUsdc(sourceAmount) : null;
-  const sourceStablecoin = selectStablecoin({
-    kycTier: Number.parseInt(String(body.kycTier ?? process.env.DEFAULT_KYC_TIER ?? '1'), 10),
-    usdcSpreadBps: 0,
-    usdtSpreadBps: -pegStatus.spreadBps,
-    usdcAvailableMicro: Number.parseInt(process.env.USDC_AVAILABLE_MICRO ?? '1000000000000000', 10),
-    usdtAvailableMicro: Number.parseInt(process.env.USDT_AVAILABLE_MICRO ?? '0', 10),
-    transferAmountMicro: stablecoinAmountMicro,
-    usdtBufferAgeMs: Number.parseInt(process.env.USDT_BUFFER_AGE_MS ?? '0', 10),
-  });
+  const stablecoinAmountMicro = fundingSession?.selection.method === 'STABLECOIN'
+    ? fundingSession.normalizedAmountUsdcMicro ?? 0
+    : sourceAmountCents > 0 ? await usdCentsToUsdcMicro(sourceAmountCents) : 0;
+  const conversion = fundingSession?.selection.method === 'STABLECOIN'
+    ? null
+    : sourceAmount > 0 ? await convertUsdToUsdc(sourceAmount) : null;
+  const sourceStablecoin = 'USDC' as const;
   const recipient = createRecipient({
     name: body.recipient.name,
     country: body.recipient.country,
@@ -83,7 +107,18 @@ export async function POST(request: Request) {
     stablecoinAmountMicro,
     daxTier: conversion?.tier ?? null,
     pegChecked: true,
+    fundingSessionId: fundingSession?.id,
+    fundingMethod: fundingSession?.selection.method ?? 'USD',
+    fundingProvider: fundingSession?.selection.method === 'USD' ? fundingSession.selection.provider : undefined,
+    fundingAsset: fundingSession?.selection.method === 'STABLECOIN' ? fundingSession.selection.asset : undefined,
+    fundingRail: fundingSession?.selection.method === 'STABLECOIN' ? fundingSession.selection.rail : undefined,
+    fundingSourceChain: fundingSession?.selection.method === 'STABLECOIN' ? fundingSession.selection.sourceChain : undefined,
+    fundingFeeTier: feeTier,
+    fundingKytStatus: fundingSession?.selection.method === 'STABLECOIN' ? fundingSession.status : undefined,
+    fundingNormalizeVenue: fundingSession?.normalizeVenue,
+    fundingEffectiveSlippageBps: fundingSession?.effectiveSlippageBps,
   });
+  if (fundingSession) updateFundingSession(fundingSession.id, { transferIntentId: intent.id });
   updateAuditReceipt(intent.id, {
     approvedBy: 'dashboard-operator',
     approvedAt: new Date().toISOString(),
@@ -105,6 +140,18 @@ export async function POST(request: Request) {
         amountMist: Math.max(1_000_000, stablecoinAmountMicro),
         targetCurrency: serverQuote?.targetCurrency ?? body.amount.targetCurrency,
         fxRate: serverQuote?.exchangeRate ?? intent.exchangeRate,
+        funding: {
+          sessionId: intent.fundingSessionId,
+          method: intent.fundingMethod,
+          provider: intent.fundingProvider,
+          asset: intent.fundingAsset,
+          rail: intent.fundingRail,
+          sourceChain: intent.fundingSourceChain,
+          feeTier: intent.fundingFeeTier,
+          kytStatus: intent.fundingKytStatus,
+          normalizeVenue: intent.fundingNormalizeVenue,
+          effectiveSlippageBps: intent.fundingEffectiveSlippageBps,
+        },
       });
       updateTransferIntent(intent.id, {
         state: 'SETTLED',
@@ -150,5 +197,10 @@ export async function POST(request: Request) {
     daxProvider: intent.daxProvider,
     daxTier: intent.daxTier,
     deliveryTier: intent.deliveryTier,
+    funding: {
+      method: intent.fundingMethod,
+      feeTier: intent.fundingFeeTier,
+      sessionId: intent.fundingSessionId,
+    },
   });
 }

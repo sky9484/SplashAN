@@ -9,15 +9,34 @@ type Memory = { text: string; confidence: number; demo: boolean };
 
 export default function MemWalBehaviorCard({ compact = false }: { compact?: boolean }) {
   const [memories, setMemories] = useState<Memory[]>([]);
+  const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
 
   useEffect(() => {
-    let active = true;
-    void fetch('/api/memwal/behaviors')
-      .then((response) => response.json())
-      .then((result: { memories?: Memory[] }) => {
-        if (active) setMemories(Array.isArray(result.memories) ? result.memories : []);
-      });
-    return () => { active = false; };
+    const controller = new AbortController();
+
+    async function loadMemories() {
+      try {
+        const response = await fetch('/api/memwal/behaviors', {
+          cache: 'no-store',
+          signal: controller.signal,
+        });
+        const contentType = response.headers.get('content-type') ?? '';
+        if (!response.ok || !contentType.includes('application/json')) {
+          throw new Error(`MemWal behaviors returned ${response.status} ${contentType || 'without a content type'}`);
+        }
+        const result = (await response.json()) as { memories?: Memory[] };
+        setMemories(Array.isArray(result.memories) ? result.memories : []);
+        setLoadState('ready');
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        console.warn('[memwal] behavior card unavailable:', error instanceof Error ? error.message : String(error));
+        setMemories([]);
+        setLoadState('error');
+      }
+    }
+
+    void loadMemories();
+    return () => controller.abort();
   }, []);
 
   const displayMemories = useMemo(() => {
@@ -32,7 +51,11 @@ export default function MemWalBehaviorCard({ compact = false }: { compact?: bool
 
   const memoryCards = displayMemories.length > 0
     ? displayMemories
-    : [{ text: 'Recalling behavior patterns...', confidence: 0, demo: false }];
+    : [{
+        text: loadState === 'error' ? 'Behavior memory is temporarily unavailable.' : 'Recalling behavior patterns...',
+        confidence: 0,
+        demo: false,
+      }];
 
   return (
     <section className="dash-surface p-5">

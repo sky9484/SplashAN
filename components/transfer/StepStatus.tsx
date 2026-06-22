@@ -92,8 +92,10 @@ export default function StepStatus({ state, set, next }: { state: TransferState;
   }, [chainState, status]);
   const stages = [
     {
-      label: 'USD received',
-      detail: `Stripe/Airwallex deposit confirmed $${state.amount.value || '0.00'}`,
+      label: state.funding.selection.method === 'USD' ? 'USD received' : 'Stablecoin cleared',
+      detail: state.funding.selection.method === 'USD'
+        ? `${state.funding.selection.provider} deposit confirmed $${state.amount.value || '0.00'}`
+        : `${state.funding.selection.asset} passed KYT and normalized to native USDC`,
       icon: Banknote,
     },
     {

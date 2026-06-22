@@ -10,7 +10,8 @@
     "check:copy": "node scripts/check-copy.mjs",
     "setup:sui-pilot": "powershell -ExecutionPolicy Bypass -File scripts/setup-sui-pilot.ps1",
     "bootstrap:testnet": "node --use-system-ca --experimental-strip-types --env-file=.env.local scripts/bootstrap-testnet.ts",
-    "test:seal:integration": "node --use-system-ca --experimental-strip-types --env-file=.env.local tests/seal-decentralized.integration.mjs"
+    "test:seal:integration": "node --use-system-ca --experimental-strip-types --env-file=.env.local tests/seal-decentralized.integration.mjs",
+    "test:funding": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test tests/funding-registry.test.mjs tests/funding-policy.test.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.99.0",
@@ -24,6 +25,7 @@
     "@react-three/fiber": "^9.6.1",
     "@shinami/clients": "^0.10.0",
     "@tanstack/react-query": "^5.100.9",
+    "@types/qrcode": "^1.5.6",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "framer-motion": "^12.38.0",
@@ -31,6 +33,7 @@
     "next": "16.2.6",
     "node": "^26.3.0",
     "papaparse": "^5.5.3",
+    "qrcode": "^1.5.4",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-hook-form": "^7.75.0",

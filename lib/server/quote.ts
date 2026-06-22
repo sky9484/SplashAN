@@ -8,6 +8,7 @@ import {
 } from '@/lib/fx/corridors';
 import { getCachedJson, setCachedJson } from '@/lib/server/redis-cache';
 import { evaluateTransferLimits, type LimitResult } from '@/lib/server/limits';
+import type { FundingFeeTier } from '@/lib/funding/registry';
 
 /**
  * Default platform fee — used as a floor only when corridor-specific fee
@@ -49,6 +50,7 @@ export type QuoteData = {
   recipientId?: string;
   targetCurrency: string;
   source: 'corridor' | 'fallback';
+  feeTier: FundingFeeTier;
   /** Rail + KYB-tier + AML evaluation (no MYR monthly cap). */
   limit: LimitResult;
 };
@@ -80,7 +82,12 @@ export async function getLiveUsdToTargetRate(targetCurrency = 'PHP'): Promise<{ 
   return fallback;
 }
 
-export async function calculateQuote(fromAmountCents: number, recipientId?: string, targetCurrency = 'PHP'): Promise<QuoteData> {
+export async function calculateQuote(
+  fromAmountCents: number,
+  recipientId?: string,
+  targetCurrency = 'PHP',
+  feeTier: FundingFeeTier = 'STANDARD',
+): Promise<QuoteData> {
   const { rate, source } = await getLiveUsdToTargetRate(targetCurrency);
   // Per-corridor fee from the single source of truth. Already clamped to
   // CONTRACT_MAX_FEE_BPS in getCorridorFeeBps, so it will pass the
@@ -88,7 +95,11 @@ export async function calculateQuote(fromAmountCents: number, recipientId?: stri
   const corridorFeeBps = source === 'corridor'
     ? getCorridorFeeBps(targetCurrency)
     : DEFAULT_PLATFORM_FEE_BPS;
-  const percentageFee = Math.floor((fromAmountCents * corridorFeeBps) / 10_000);
+  const discountBps = feeTier === 'DISCOUNT'
+    ? Math.max(0, Number.parseInt(process.env.FUNDING_DISCOUNT_BPS ?? '20', 10) || 0)
+    : 0;
+  const appliedFeeBps = Math.max(0, corridorFeeBps - discountBps);
+  const percentageFee = Math.floor((fromAmountCents * appliedFeeBps) / 10_000);
   const platformFee = percentageFee + FIXED_FEE_CENTS;
   const netCents = Math.max(fromAmountCents - platformFee, 0);
   const toAmount = Math.floor((netCents / 100) * rate * 100) / 100;
@@ -103,7 +114,7 @@ export async function calculateQuote(fromAmountCents: number, recipientId?: stri
     toAmount,
     exchangeRate: rate.toFixed(4),
     platformFee,
-    feeBps: corridorFeeBps,
+    feeBps: appliedFeeBps,
     networkFee: 0,
     fixedFee: FIXED_FEE_CENTS,
     expiresAt,
@@ -111,6 +122,7 @@ export async function calculateQuote(fromAmountCents: number, recipientId?: stri
     recipientId,
     targetCurrency: targetCurrency.toUpperCase(),
     source,
+    feeTier,
     limit,
   };
 }

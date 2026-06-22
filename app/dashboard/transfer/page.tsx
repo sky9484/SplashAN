@@ -10,6 +10,7 @@ import StepReceipt from '@/components/transfer/StepReceipt';
 import StepStatus from '@/components/transfer/StepStatus';
 import StepDelivery from '@/components/transfer/StepDelivery';
 import type { RecipientTier } from '@/lib/server/operations';
+import type { FundingSelection } from '@/lib/funding/registry';
 
 // Target-currency display metadata for the settlement-flow corridor node.
 const CURRENCY_META: Record<string, { flag: string; country: string }> = {
@@ -34,6 +35,14 @@ export type TransferState = {
   };
   amount: { value: string; sourceCurrency: 'USD'; targetCurrency: 'MYR' | 'PHP' | 'IDR' | 'SGD' | 'VND' | 'THB' | 'EUR' | 'GBP' };
   quote?: { fxRate: number; netReceived: string; fee: string };
+  funding: {
+    selection: FundingSelection;
+    sessionId?: string;
+    sessionStatus?: string;
+    depositAddress?: string;
+    qrDataUrl?: string | null;
+    demoMode?: boolean;
+  };
   txDigest?: string;
   txStatus?: 'pending' | 'success' | 'failed';
   transferIntentId?: string;
@@ -64,6 +73,9 @@ const initial: TransferState = {
   recipient: { name: '', country: 'PH', rail: 'bank' },
   amount: { value: '', sourceCurrency: 'USD', targetCurrency: 'PHP' },
   deliveryTier: 'PAYOUT_ONLY',
+  funding: {
+    selection: { method: 'USD', provider: 'STRIPE', feeTier: 'STANDARD' },
+  },
 };
 
 const stepLabels = ['Beneficiary', 'Delivery', 'Quote & Send', 'Status', 'Receipt'] as const;

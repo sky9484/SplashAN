@@ -1,5 +1,13 @@
 import { getContractConfig } from '@/lib/server/contract-config';
 import { analyzeAndRemember } from '@/lib/server/memwal';
+import type {
+  CctpSourceChain,
+  FundingFeeTier,
+  PaymentMethod,
+  StablecoinAssetSymbol,
+  StablecoinRail,
+  UsdProviderId,
+} from '@/lib/funding/registry';
 
 export type RecipientTier = 'PAYOUT_ONLY' | 'SWEEP_ACCOUNT' | 'STORED_BALANCE';
 
@@ -32,6 +40,16 @@ export type TransferIntentRecord = {
   daxProvider: 'LABUAN' | 'STRIPE' | 'AIRWALLEX';
   daxTier: string | null;
   pegChecked: boolean;
+  fundingSessionId?: string;
+  fundingMethod: PaymentMethod;
+  fundingProvider?: UsdProviderId;
+  fundingAsset?: StablecoinAssetSymbol;
+  fundingRail?: StablecoinRail;
+  fundingSourceChain?: CctpSourceChain;
+  fundingFeeTier: FundingFeeTier;
+  fundingKytStatus?: string;
+  fundingNormalizeVenue?: string;
+  fundingEffectiveSlippageBps?: number;
   verificationReference: string | null;
   receiptObjectId: string | null;
   suiTxDigest: string | null;
@@ -123,7 +141,7 @@ export type LedgerEntry = {
   direction: 'CREDIT' | 'DEBIT';
   amountUsdcMicro: number;
   balanceAfterMicro: number;
-  refType: 'TRANSFER' | 'SWEEP' | 'FEE' | 'YIELD_SIM' | 'SEED';
+  refType: 'TRANSFER' | 'SWEEP' | 'FEE' | 'FUNDING' | 'YIELD_SIM' | 'SEED';
   refId: string;
   suiTxDigest?: string;
   demo?: boolean;
@@ -178,6 +196,18 @@ export type AuditReceipt = {
   intentCreateDigest?: string;
   smartTreasuryId?: string;
   composedActions?: TransferIntentRecord['composedActions'];
+  funding?: {
+    sessionId?: string;
+    method: PaymentMethod;
+    provider?: UsdProviderId;
+    asset?: StablecoinAssetSymbol;
+    rail?: StablecoinRail;
+    sourceChain?: CctpSourceChain;
+    feeTier: FundingFeeTier;
+    kytStatus?: string;
+    normalizeVenue?: string;
+    effectiveSlippageBps?: number;
+  };
   demo?: boolean;
   statusHistory: Array<{ state: string; at: string }>;
 };
@@ -254,6 +284,16 @@ export function createTransferIntent(input: {
   deliveryTier?: RecipientTier;
   recipientId?: string;
   invoiceId?: string;
+  fundingSessionId?: string;
+  fundingMethod?: PaymentMethod;
+  fundingProvider?: UsdProviderId;
+  fundingAsset?: StablecoinAssetSymbol;
+  fundingRail?: StablecoinRail;
+  fundingSourceChain?: CctpSourceChain;
+  fundingFeeTier?: FundingFeeTier;
+  fundingKytStatus?: string;
+  fundingNormalizeVenue?: string;
+  fundingEffectiveSlippageBps?: number;
   demo?: boolean;
 }) {
   const now = new Date().toISOString();
@@ -271,6 +311,16 @@ export function createTransferIntent(input: {
     daxProvider: 'LABUAN',
     daxTier: input.daxTier ?? null,
     pegChecked: input.pegChecked ?? false,
+    fundingSessionId: input.fundingSessionId,
+    fundingMethod: input.fundingMethod ?? 'USD',
+    fundingProvider: input.fundingProvider,
+    fundingAsset: input.fundingAsset,
+    fundingRail: input.fundingRail,
+    fundingSourceChain: input.fundingSourceChain,
+    fundingFeeTier: input.fundingFeeTier ?? 'STANDARD',
+    fundingKytStatus: input.fundingKytStatus,
+    fundingNormalizeVenue: input.fundingNormalizeVenue,
+    fundingEffectiveSlippageBps: input.fundingEffectiveSlippageBps,
     verificationReference: null,
     receiptObjectId: null,
     suiTxDigest: null,
@@ -288,6 +338,18 @@ export function createTransferIntent(input: {
     transferIntentId: record.id,
     invoiceId: input.invoiceId,
     demo: input.demo,
+    funding: {
+      sessionId: record.fundingSessionId,
+      method: record.fundingMethod,
+      provider: record.fundingProvider,
+      asset: record.fundingAsset,
+      rail: record.fundingRail,
+      sourceChain: record.fundingSourceChain,
+      feeTier: record.fundingFeeTier,
+      kytStatus: record.fundingKytStatus,
+      normalizeVenue: record.fundingNormalizeVenue,
+      effectiveSlippageBps: record.fundingEffectiveSlippageBps,
+    },
     statusHistory: [{ state: record.state, at: now }],
   });
   return record;
