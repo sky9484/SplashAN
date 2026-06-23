@@ -1,11 +1,13 @@
 import { createHash } from 'node:crypto';
 
 import { sealAdapter } from '@/lib/server/seal';
+import { assertSealWritable } from '@/lib/server/seal-health';
 import {
   confirmComposedPaymentOnSui,
   createPaymentIntentOnSui,
 } from '@/lib/server/sui-settlement';
 import { storeEncryptedInvoice } from '@/lib/server/walrus';
+import type { AuditReceipt } from '@/lib/server/operations';
 
 function scaleFxRate(rate: string | number | null | undefined) {
   const parsed = Number(rate);
@@ -27,7 +29,11 @@ export async function executeComposedPayment(input: {
   amountMist: number;
   targetCurrency: string;
   fxRate: string | number | null | undefined;
+  funding?: AuditReceipt['funding'];
 }) {
+  // Fail before creating an on-chain intent if the audit encryption boundary
+  // cannot accept the receipt payload.
+  if (process.env.USE_MOCK_APIS !== 'true') await assertSealWritable();
   const paymentMist = Math.max(1, Math.floor(input.amountMist));
   const intent = await createPaymentIntentOnSui({
     recipient: input.recipientAddress,
@@ -44,6 +50,7 @@ export async function executeComposedPayment(input: {
     recipient: input.recipientLabel,
     targetCurrency: input.targetCurrency,
     paymentMist,
+    funding: input.funding,
     createdAt: new Date().toISOString(),
   });
   const { ciphertext, policy } = await sealAdapter.encrypt(auditPayload, [

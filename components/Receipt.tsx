@@ -14,6 +14,8 @@ export type ReceiptProps = {
   amount: string;
   currency: string;
   fee: string;
+  feeTier?: 'STANDARD' | 'DISCOUNT';
+  fundingMethod?: 'USD' | 'STABLECOIN';
   timestamp: string;
   reference?: string;
   explorerUrl?: string | null;
@@ -44,7 +46,8 @@ const SettlementReceipt = forwardRef<HTMLDivElement, ReceiptProps>(function Sett
         <ReceiptRow label="Sender" value={props.sender} />
         <ReceiptRow label="Recipient" value={props.recipient} />
         <ReceiptRow label="Amount" value={`${props.amount} ${props.currency}`} />
-        <ReceiptRow label="Fee (1.5%)" value={`${props.fee} ${props.currency}`} />
+        <ReceiptRow label={`Fee (${props.feeTier ?? 'STANDARD'})`} value={`${props.fee} ${props.currency}`} />
+        <ReceiptRow label="Funding method" value={props.fundingMethod === 'STABLECOIN' ? 'Stablecoin to native USDC' : 'USD bank rail to USDC'} />
         <ReceiptRow label="On-chain digest" value={props.txDigest} mono />
         {props.explorerUrl && (
           <ReceiptRow label="Sui Explorer" value={props.explorerUrl} mono />

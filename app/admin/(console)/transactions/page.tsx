@@ -3,6 +3,7 @@ import { pythAdapter } from '@/lib/server/pyth';
 import { readComplianceControls } from '@/lib/server/sui-settlement';
 import ComplianceControlForm from '@/components/admin/ComplianceControlForm';
 import { Activity, CheckCircle2, Circle, ExternalLink, Loader2, ReceiptText, XCircle } from 'lucide-react';
+import { listFundingSessions } from '@/lib/server/funding-sessions';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,6 +11,7 @@ export default async function AdminTransactionsPage() {
   const batches = listBatches();
   const transfers = listTransfers();
   const transactions = listTransactions();
+  const fundingSessions = listFundingSessions();
   const pegStatus = await pythAdapter.getPegStatus();
   const complianceControls = await readComplianceControls();
   const usdcDevBps = Math.abs(pegStatus.usdcUsd.price - 1.0) * 10_000;
@@ -36,6 +38,47 @@ export default async function AdminTransactionsPage() {
       </section>
 
       <ComplianceControlForm initial={complianceControls} />
+
+      <div className="dash-surface">
+        <div className="border-b border-[#326273]/10 p-5">
+          <h2 className="text-lg font-bold text-[#1f4350]">Funding intake and KYT</h2>
+          <p className="mt-1 text-xs text-[#326273]/60">Deposits stay outside the available balance until KYT and normalization complete.</p>
+        </div>
+        {fundingSessions.length === 0 ? (
+          <div className="p-8 text-center text-sm text-[#326273]/60">No funding sessions yet.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1050px] text-sm">
+              <thead className="bg-[#326273]/5">
+                <tr className="text-left text-[#326273]/70">
+                  <th className="p-3">Session</th>
+                  <th>Status</th>
+                  <th>Method</th>
+                  <th>Asset / provider</th>
+                  <th>KYT</th>
+                  <th>Normalize</th>
+                  <th>Fee tier</th>
+                  <th>Operator flag</th>
+                </tr>
+              </thead>
+              <tbody>
+                {fundingSessions.map((session) => (
+                  <tr key={session.id} className="border-t border-[#326273]/5">
+                    <td className="p-3 font-mono text-xs text-[#326273]">{session.id}</td>
+                    <td><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${session.status === 'QUARANTINED' ? 'bg-[#E39774]/20 text-[#9b4e32]' : session.status === 'CREDITED' || session.status === 'CLEARED' ? 'bg-[#5C9EAD]/15 text-[#326273]' : 'bg-[#F6F0ED] text-[#326273]'}`}>{session.status}</span></td>
+                    <td className="font-semibold text-[#326273]">{session.selection.method}</td>
+                    <td className="text-[#326273]">{session.selection.method === 'USD' ? session.selection.provider : `${session.selection.asset} / ${session.selection.rail}${session.selection.sourceChain ? ` / ${session.selection.sourceChain}` : ''}`}</td>
+                    <td className="text-[#326273]">{session.kytPolicy ?? '-'}{session.sourceType ? ` / ${session.sourceType}` : ''}</td>
+                    <td className="font-mono text-xs text-[#326273]">{session.normalizeVenue ?? '-'}{session.effectiveSlippageBps !== undefined ? ` / ${session.effectiveSlippageBps} bps` : ''}</td>
+                    <td className="font-bold text-[#326273]">{session.feeTier}</td>
+                    <td className="max-w-64 text-xs text-[#9b4e32]">{session.adminFlag ?? session.kytReasons?.join('; ') ?? '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
       <div className="dash-surface">
         <div className="border-b border-[#326273]/10 p-5">

@@ -1,0 +1,61 @@
+import QRCode from 'qrcode';
+import { NextResponse } from 'next/server';
+import { z } from 'zod';
+
+import { FundingRegistryError, type FundingSelection } from '@/lib/funding/registry';
+import { createFundingSession } from '@/lib/server/funding-sessions';
+
+const usdSelectionSchema = z.object({
+  method: z.literal('USD'),
+  provider: z.enum(['STRIPE', 'AIRWALLEX']),
+  feeTier: z.literal('STANDARD'),
+});
+
+const stablecoinSelectionSchema = z.object({
+  method: z.literal('STABLECOIN'),
+  asset: z.enum(['USDC', 'USDSUI', 'USDT']),
+  rail: z.enum(['SUI_NATIVE', 'CCTP']),
+  sourceChain: z.enum(['ETHEREUM', 'SOLANA', 'BASE', 'ARBITRUM']).optional(),
+  feeTier: z.literal('DISCOUNT'),
+});
+
+const sessionSchema = z.object({
+  amountUsd: z.number().positive().max(10_000_000),
+  businessAccountId: z.string().trim().min(1).optional(),
+  selection: z.discriminatedUnion('method', [usdSelectionSchema, stablecoinSelectionSchema]),
+});
+
+export async function POST(request: Request) {
+  const parsed = sessionSchema.safeParse(await request.json());
+  if (!parsed.success) return NextResponse.json({ error: 'Invalid funding session request' }, { status: 400 });
+
+  try {
+    const amountExpectedMicro = Math.round(parsed.data.amountUsd * 1_000_000);
+    const session = createFundingSession({
+      businessAccountId: parsed.data.businessAccountId
+        ?? process.env.SPLASH_BUSINESS_ACCOUNT_ID
+        ?? 'dashboard-primary',
+      selection: parsed.data.selection as FundingSelection,
+      amountExpectedMicro,
+    });
+    const qrDataUrl = session.depositUri
+      ? await QRCode.toDataURL(session.depositUri, {
+          errorCorrectionLevel: 'M',
+          margin: 1,
+          width: 224,
+          color: { dark: '#0C3E48', light: '#F6F0ED' },
+        })
+      : null;
+    return NextResponse.json({
+      session,
+      qrDataUrl,
+      demoMode: process.env.NODE_ENV !== 'production' || process.env.USE_MOCK_APIS === 'true' || process.env.NEXT_PUBLIC_DEMO_MODE === 'true',
+    }, { status: 201 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Funding session could not be created';
+    return NextResponse.json(
+      { error: message },
+      { status: error instanceof FundingRegistryError ? 400 : 503 },
+    );
+  }
+}

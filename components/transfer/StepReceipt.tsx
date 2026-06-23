@@ -33,6 +33,8 @@ export default function StepReceipt({ state, reset }: { state: TransferState; re
         amount={state.amount.value}
         currency="USD"
         fee={state.quote?.fee ?? '0.00'}
+        feeTier={state.funding.selection.feeTier}
+        fundingMethod={state.funding.selection.method}
         timestamp={issuedAt}
         reference={reference}
         explorerUrl={explorerUrl}
