@@ -17,7 +17,6 @@
 module splash_protocol::receipt_v2;
 
 use splash_protocol::business_account::AdminCap;
-use std::option::{Self, Option};
 use std::string::String;
 use sui::clock::{Self, Clock};
 use sui::event;

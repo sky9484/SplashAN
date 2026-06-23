@@ -33,7 +33,7 @@ const INITIAL_MESSAGES: Message[] = [
   {
     id: 1,
     role: 'assistant',
-    text: "Good morning! I'm 0xWal, your Splash copilot — powered by Claude and grounded in your MemWal behavioral memory.\n\nI've analysed your last 8 weeks of payment activity. You have a Friday morning PHP payroll batch pattern that I can pre-stage for you — current PHP rate (56.42) is within 0.3% of your 30-day best. Splash fee: 0.80%.\n\nWant me to draft the Friday batch?",
+    text: "Hi! I'm 0xWal, your Splash copilot — powered by Claude and grounded in your MemWal behavioral memory.\n\nI've analysed your last 8 weeks of payment activity. You have a Friday morning PHP payroll batch pattern that I can pre-stage for you — current PHP rate (56.42) is within 0.3% of your 30-day best. Splash fee: 0.80%.\n\nWant me to draft the Friday batch?",
     time: '09:01',
   },
   {
@@ -104,7 +104,7 @@ const CONTEXT_RESPONSES: { keywords: string[]; reply: string }[] = [
       '• Smart Treasury: earns the floating USDY net rate',
       '• Withdrawals Smart Treasury → Available: 1–3 business days (USDY→USDC swap)',
       '',
-      'Idle Available cash earns nothing. Moving idle USDC into Smart Treasury starts earning real T-bill yield.',
+      'Available cash is modeled at 0%. Smart Treasury can model a variable T-bill-backed return pending approval.',
       '',
       'Want me to prepare a move into Smart Treasury?',
     ].join('\n'),
@@ -208,8 +208,8 @@ const CONTEXT_RESPONSES: { keywords: string[]; reply: string }[] = [
     reply: [
       '**Quick Transfer — Today\'s Capacity**',
       '• Daily limit remaining: $12,100 (43% utilised)',
-      '• All 8 corridors: active, healthy liquidity',
-      '• Recommended: PHP 56.42 or IDR 16,284 for fastest settlement',
+      '• PHP payout path: live-model · seven additional corridors implemented in code',
+      '• Recommended live-model path: PHP 56.42',
       '',
       'No AML flags today. Your last transfer was $8,500 to Jakarta Textile Exports (USD→IDR, settled in 2.8 minutes).',
       '',
@@ -223,7 +223,7 @@ const FALLBACK_REPLIES: string[] = [
     '**Account Health — All Clear**',
     '• Blended fee this month: 0.89% across all corridors',
     '• vs. industry average of 1.5% — you\'re saving 41% on fees',
-    '• All 8 corridors active with no performance issues',
+    '• PHP live-model path healthy · seven additional corridors implemented in code',
     '',
     'Your MemWal patterns show consistent Friday PHP batches and growing IDR volume. I\'m monitoring rates across all corridors and will surface opportunities proactively.',
     '',
@@ -235,9 +235,9 @@ const FALLBACK_REPLIES: string[] = [
     '• Available balance (USDC): 0%, instant',
     '• Withdrawals from Smart Treasury: 1–3 business days',
     '',
-    'Move idle USDC into Smart Treasury to earn, or keep it Available for instant payments.',
+    'I can prepare a Smart Treasury projection, or keep Available USDC modeled for instant payments.',
     '',
-    'Want me to prepare a move?',
+    'Want me to prepare a projection for approval?',
   ].join('\n'),
   [
     '**Rate Monitoring — This Week**',
@@ -327,12 +327,13 @@ const INITIAL_SUGGESTIONS: SuggestionCard[] = [
   },
 ];
 
-type ApiSuggestion = { suggestionId: string; type: string; title: string; description: string; confidence: number };
+type ApiSuggestion = { suggestionId: string; type: string; title: string; description: string; confidence: number; suggestedAction?: string };
 
 function mapSuggestion(s: ApiSuggestion): SuggestionCard {
   const conf = Math.round((s.confidence ?? 0.6) * 100);
   const urgency: SuggestionCard['urgency'] = conf >= 80 ? 'high' : conf >= 65 ? 'medium' : 'low';
-  const href = s.type === 'treasury' ? '/dashboard/treasury' : s.type === 'batch' ? '/dashboard/batch' : s.type === 'invoice' ? '/dashboard/invoices' : '/dashboard';
+  const batchCurrency = s.suggestedAction?.startsWith('batch:') ? s.suggestedAction.split(':')[1] : null;
+  const href = s.type === 'treasury' ? '/dashboard/treasury' : s.type === 'batch' ? `/dashboard/batch${batchCurrency ? `?corridor=${batchCurrency}` : ''}` : s.type === 'invoice' ? '/dashboard/invoices' : '/dashboard';
   const action = s.type === 'treasury' ? 'Open Treasury' : s.type === 'batch' ? 'Draft batch' : s.type === 'invoice' ? 'Open invoices' : 'View';
   const corridor = s.type === 'timing' ? 'FX timing' : s.type.charAt(0).toUpperCase() + s.type.slice(1);
   return { id: s.suggestionId, title: s.title, body: s.description, corridor, action, href, confidence: conf, urgency };

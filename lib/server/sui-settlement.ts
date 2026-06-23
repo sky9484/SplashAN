@@ -2,41 +2,140 @@ import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { promisify } from 'node:util';
 
+import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { Transaction } from '@mysten/sui/transactions';
+
 import {
   CONTRACT_MAX_FEE_BPS,
   FALLBACK_FEE_BPS,
   getCorridorFeeBps,
 } from '@/lib/fx/corridors';
 import { getContractConfig, type ContractConfigField } from '@/lib/server/contract-config';
+import { suiClient } from '@/lib/sui';
 
 const execFileAsync = promisify(execFile);
 
 // ── Settlement mode / CLI availability ──────────────────────────────────────
-// On-chain settlement shells out to the `sui` CLI. In environments where the
-// CLI isn't installed (local dev, CI, most demo machines) those calls fail with
-// ENOENT, so every transfer/batch was marked FAILED ("Unknown Sui error at
-// SETTLING"). To keep the product usable, settlement falls back to a *simulated*
-// success when the CLI is unavailable. Control via SUI_SETTLEMENT_MODE:
-//   'live'     → always use the real CLI (surfaces the real error if missing)
-//   'simulate' → always simulate (never touch the chain)
-//   'auto'     → (default) real CLI when available, otherwise simulate
-let suiCliAvailable: boolean | null = null;
-async function isSuiCliAvailable(): Promise<boolean> {
-  if (suiCliAvailable !== null) return suiCliAvailable;
-  try {
-    await execFileAsync('sui', ['--version'], { windowsHide: true, timeout: 5000 });
-    suiCliAvailable = true;
-  } catch {
-    suiCliAvailable = false;
-  }
-  return suiCliAvailable;
+// Production prefers the server-side SDK signer because serverless instances do
+// not have persistent Sui CLI keystores. A fully configured CLI is retained as
+// a local/operator fallback. Simulation must be explicit, or auto + mock APIs.
+type SettlementExecution = 'sdk' | 'cli' | 'simulate';
+type CliReadiness = { ready: true; address: string } | { ready: false; reason: string };
+
+let cachedOperatorKeypair: Ed25519Keypair | null | undefined;
+let cachedCliReadiness: CliReadiness | null = null;
+
+function settlementMode(): 'auto' | 'live' | 'simulate' {
+  const mode = (process.env.SUI_SETTLEMENT_MODE ?? 'auto').trim().toLowerCase();
+  if (mode === 'auto' || mode === 'live' || mode === 'simulate') return mode;
+  throw new Error(`Invalid SUI_SETTLEMENT_MODE "${mode}". Use auto, live, or simulate.`);
 }
 
-async function shouldSimulateSettlement(): Promise<boolean> {
-  const mode = (process.env.SUI_SETTLEMENT_MODE ?? 'auto').trim().toLowerCase();
-  if (mode === 'live') return false;
-  if (mode === 'simulate') return true;
-  return !(await isSuiCliAvailable());
+function configuredOperatorAddress(): string {
+  return (getContractConfig().operatorAddress ?? '').trim();
+}
+
+export function getOperatorKeypair(): Ed25519Keypair | null {
+  if (cachedOperatorKeypair !== undefined) return cachedOperatorKeypair;
+
+  const encoded = (
+    process.env.OPERATOR_SUI_PRIVATE_KEY ??
+    process.env.SUI_SPONSOR_PRIVATE_KEY ??
+    ''
+  ).trim();
+
+  if (!encoded) {
+    cachedOperatorKeypair = null;
+    return null;
+  }
+
+  try {
+    const parsed = decodeSuiPrivateKey(encoded);
+    if (parsed.scheme !== 'ED25519') {
+      throw new Error(`unsupported key scheme ${parsed.scheme}; Splash currently requires ED25519`);
+    }
+
+    const keypair = Ed25519Keypair.fromSecretKey(parsed.secretKey);
+    const signerAddress = keypair.toSuiAddress();
+    const expectedAddress = configuredOperatorAddress();
+    if (expectedAddress && signerAddress.toLowerCase() !== expectedAddress.toLowerCase()) {
+      throw new Error('OPERATOR_SUI_PRIVATE_KEY does not match OPERATOR_SUI_ADDRESS');
+    }
+
+    cachedOperatorKeypair = keypair;
+    return keypair;
+  } catch (error) {
+    throw new Error(`Invalid OPERATOR_SUI_PRIVATE_KEY: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+function parseCliGasCoins(stdout: string): OperatorGasCoin[] {
+  const jsonStart = stdout.indexOf('[');
+  if (jsonStart === -1) throw new Error(`'sui client gas --json' returned no JSON. stdout: ${stdout.substring(0, 200)}`);
+  const coins = JSON.parse(stdout.slice(jsonStart)) as Array<{ gasCoinId: string; mistBalance: number | string }>;
+  return coins
+    .map((coin) => ({ id: coin.gasCoinId, balance: Number(coin.mistBalance) }))
+    .filter((coin) => Number.isFinite(coin.balance) && coin.balance > 0)
+    .sort((a, b) => b.balance - a.balance);
+}
+
+async function getCliReadiness(): Promise<CliReadiness> {
+  if (cachedCliReadiness) return cachedCliReadiness;
+
+  try {
+    await execFileAsync('sui', ['--version'], { windowsHide: true, timeout: 5000 });
+    const { stdout: addressOutput } = await execFileAsync('sui', ['client', 'active-address'], {
+      cwd: process.cwd(),
+      windowsHide: true,
+      timeout: 5000,
+    });
+    const address = addressOutput.trim();
+    if (!/^0x[a-fA-F0-9]{64}$/.test(address)) {
+      throw new Error('the Sui CLI has no active managed address');
+    }
+
+    const expectedAddress = configuredOperatorAddress();
+    if (expectedAddress && address.toLowerCase() !== expectedAddress.toLowerCase()) {
+      throw new Error('the Sui CLI active address does not match OPERATOR_SUI_ADDRESS');
+    }
+
+    const { stdout: gasOutput } = await execFileAsync('sui', ['client', 'gas', '--json'], {
+      cwd: process.cwd(),
+      windowsHide: true,
+      timeout: 10_000,
+      maxBuffer: 1024 * 1024 * 5,
+    });
+    if (parseCliGasCoins(gasOutput).length === 0) {
+      throw new Error('the Sui CLI active address has no funded gas coins');
+    }
+
+    cachedCliReadiness = { ready: true, address };
+  } catch (error) {
+    const commandError = error as { message?: string; stdout?: string; stderr?: string };
+    cachedCliReadiness = {
+      ready: false,
+      reason: humanizeSuiError(commandError.stdout ?? commandError.message, commandError.stderr ?? ''),
+    };
+  }
+  return cachedCliReadiness;
+}
+
+async function resolveSettlementExecution(): Promise<SettlementExecution> {
+  const mode = settlementMode();
+  if (mode === 'simulate') return 'simulate';
+  if (getOperatorKeypair()) return 'sdk';
+
+  const cli = await getCliReadiness();
+  if (cli.ready) return 'cli';
+
+  if (mode === 'auto' && process.env.USE_MOCK_APIS === 'true') return 'simulate';
+
+  throw new Error(
+    `Real Sui settlement is not configured: ${cli.reason}. ` +
+    'Set OPERATOR_SUI_PRIVATE_KEY to the funded ED25519 operator key in the production environment, ' +
+    'or configure a persistent funded Sui CLI keystore. Use SUI_SETTLEMENT_MODE=simulate only for an explicitly labeled demo.',
+  );
 }
 
 function simulatedDigest(seed: string): string {
@@ -113,6 +212,12 @@ const ABORT_CODES: Record<number, string> = {
   301: 'E_PEG_BROKEN_USDT — USDT deviation > 30 bps. Update peg with valid data.',
   302: 'E_PEG_STALE — Peg price update is older than 60 seconds OR no real update_peg has fired since init. The app refreshes it automatically; verify SPLASH_ADMIN_CAP_ID and SPLASH_PEG_STATE_ID if this appears.',
   303: 'E_TIMESTAMP_REGRESSION — peg_monitor::update_peg called with a Clock timestamp older than the stored one. Indicates a clock bug or replay.',
+  304: 'E_INSUFFICIENT_DEPTH — DeepBook cannot completely fill this settlement amount inside the configured depth window.',
+  305: 'E_SLIPPAGE_EXCEEDED — DeepBook amount-sized execution price exceeds the configured slippage limit.',
+  306: 'E_INVALID_MARKET_PRICE — DeepBook returned an invalid zero mid-price.',
+  350: 'E_INVALID_CONFIG — Compliance threshold is outside its bounded safety range.',
+  351: 'E_INVALID_CAP — ComplianceCap does not own authority for this ComplianceConfig.',
+  352: 'E_SETTLEMENT_PAUSED — Settlement has been paused by the compliance operator.',
 
   // ── payment_intent ───────────────────────────────────────────────────────
   400: 'E_NOT_PENDING — payment_intent confirm/cancel called on an intent that is not in STATUS_PENDING.',
@@ -153,6 +258,9 @@ const ABORT_CODES: Record<number, string> = {
 
 function humanizeSuiError(rawError: string | undefined | null, stderr: string): string {
   const error = [rawError, stderr].filter(Boolean).join('\n') || 'Unknown Sui error';
+  if (/No managed addresses|no active managed address/i.test(error)) {
+    return 'The Sui CLI has no managed operator address. Configure OPERATOR_SUI_PRIVATE_KEY for server-side settlement, or create and fund a persistent CLI address.';
+  }
   const abortMatch = error.match(/MoveAbort\([^)]*?,\s*(\d+)\)/) ?? error.match(/with code\s+(\d+)/i);
   if (abortMatch) {
     const code = Number.parseInt(abortMatch[1], 10);
@@ -183,44 +291,350 @@ async function runSuiCommand(args: string[], maxBuffer = 1024 * 1024 * 10) {
 
 type OperatorGasCoin = { id: string; balance: number };
 
+async function executeSdkTransaction(tx: Transaction) {
+  const signer = getOperatorKeypair();
+  if (!signer) throw new Error('OPERATOR_SUI_PRIVATE_KEY is required for SDK settlement.');
+
+  const result = await suiClient.signAndExecuteTransaction({
+    signer,
+    transaction: tx,
+    options: {
+      showEffects: true,
+      showEvents: true,
+      showObjectChanges: true,
+    },
+  });
+
+  if (result.effects?.status?.status !== 'success') {
+    throw new Error(humanizeSuiError(result.effects?.status?.error, result.errors?.join('\n') ?? ''));
+  }
+
+  // Wait for the tx to be indexed so any objects it created/changed are
+  // visible to follow-up transactions in the same flow (composed payments).
+  try { await suiClient.waitForTransaction({ digest: result.digest }); } catch {}
+
+  return result;
+}
+
+type SuiEventView = {
+  type: string;
+  data: Record<string, unknown>;
+};
+
+export type ComposedAction = {
+  kind: 'paid' | 'allocated' | 'anchored';
+  label: string;
+  eventType: string;
+  data: Record<string, unknown>;
+};
+
+export type ComposedSettlementResult = {
+  digest: string;
+  intentId: string;
+  intentCreateDigest: string;
+  auditAnchorObjectId: string | null;
+  smartTreasuryId: string | null;
+  events: SuiEventView[];
+  objectChanges: unknown[];
+  composedActions: ComposedAction[];
+  demo: boolean;
+};
+
+function resultEvents(result: Awaited<ReturnType<typeof executeSdkTransaction>>): SuiEventView[] {
+  return (result.events ?? []).map((event) => ({
+    type: event.type,
+    data: (event.parsedJson && typeof event.parsedJson === 'object'
+      ? event.parsedJson
+      : {}) as Record<string, unknown>,
+  }));
+}
+
+function eventBySuffix(events: SuiEventView[], suffix: string) {
+  return events.find((event) => event.type.endsWith(suffix)) ?? null;
+}
+
+function requireConfiguredRecipient(inputRecipient: string) {
+  const configured = getContractConfig().testRecipientAddress;
+  return requireSuiAddress(configured || inputRecipient, 'Composed payment recipient');
+}
+
+function configuredSmartTreasuryId() {
+  const value = getContractConfig().smartTreasurySuiId.trim();
+  return value ? requireSuiObjectId(value, 'SPLASH_SMART_TREASURY_SUI_ID') : '';
+}
+
+async function requireSdkExecution() {
+  const execution = await resolveSettlementExecution();
+  if (execution !== 'sdk') {
+    throw new Error(
+      'The composed payment proof requires OPERATOR_SUI_PRIVATE_KEY so one server-signed SDK transaction can confirm, allocate, and anchor atomically.',
+    );
+  }
+}
+
+export async function createPaymentIntentOnSui(input: {
+  recipient: string;
+  amountMist: number;
+  targetCurrency: string;
+  fxRateScaled: number;
+}) {
+  await requireSdkExecution();
+  const packageId = configIdOrThrow('packageId', 'SPLASH_PACKAGE_ID');
+  const recipient = requireConfiguredRecipient(input.recipient);
+  const amountMist = Math.max(1, Math.floor(input.amountMist));
+  const fxRateScaled = Math.max(1, Math.floor(input.fxRateScaled));
+  const tx = new Transaction();
+  tx.setGasBudget(process.env.SUI_COMPOSED_GAS_BUDGET ?? '30000000');
+  tx.moveCall({
+    target: `${packageId}::payment_intent::create_payment_intent`,
+    arguments: [
+      tx.pure.address(recipient),
+      tx.pure.u64(amountMist),
+      tx.pure.string(input.targetCurrency.toUpperCase()),
+      tx.pure.u64(fxRateScaled),
+      tx.object('0x6'),
+    ],
+  });
+
+  const result = await executeSdkTransaction(tx);
+  const events = resultEvents(result);
+  const created = eventBySuffix(events, '::payment_intent::IntentCreated');
+  const intentId = typeof created?.data.intent_id === 'string' ? created.data.intent_id : '';
+  if (!intentId) {
+    throw new Error(`PaymentIntent creation succeeded but IntentCreated was missing. Digest: ${result.digest}`);
+  }
+
+  return {
+    digest: result.digest,
+    intentId,
+    event: created,
+  };
+}
+
+export async function confirmComposedPaymentOnSui(input: {
+  intentId: string;
+  intentCreateDigest: string;
+  paymentMist: number;
+  treasuryAmountMist: number;
+  auditHash: string;
+  anchorId: string;
+  backingBlobId: string;
+}): Promise<ComposedSettlementResult> {
+  await requireSdkExecution();
+  const packageId = configIdOrThrow('packageId', 'SPLASH_PACKAGE_ID');
+  const adminCapId = configIdOrThrow('adminCapId', 'SPLASH_ADMIN_CAP_ID');
+  const businessAccountId = configIdOrThrow('businessAccountId', 'SPLASH_BUSINESS_ACCOUNT_ID');
+  const smartTreasuryId = configuredSmartTreasuryId();
+  const paymentMist = Math.max(1, Math.floor(input.paymentMist));
+  const treasuryAmountMist = Math.max(0, Math.floor(input.treasuryAmountMist));
+
+  if (treasuryAmountMist > 0 && !smartTreasuryId) {
+    throw new Error('SPLASH_SMART_TREASURY_SUI_ID is required when treasuryAmountMist is greater than zero.');
+  }
+
+  const tx = new Transaction();
+  tx.setGasBudget(process.env.SUI_COMPOSED_GAS_BUDGET ?? '30000000');
+  const [paymentCoin] = tx.splitCoins(tx.gas, [paymentMist]);
+  tx.moveCall({
+    target: `${packageId}::payment_intent::confirm_payment_intent`,
+    arguments: [
+      tx.object(input.intentId),
+      paymentCoin,
+      tx.object('0x6'),
+    ],
+  });
+
+  if (treasuryAmountMist > 0) {
+    const [treasuryCoin] = tx.splitCoins(tx.gas, [treasuryAmountMist]);
+    tx.moveCall({
+      target: `${packageId}::smart_treasury::deposit`,
+      typeArguments: ['0x2::sui::SUI'],
+      arguments: [
+        tx.object(smartTreasuryId),
+        treasuryCoin,
+        tx.object('0x6'),
+      ],
+    });
+  }
+
+  tx.moveCall({
+    target: `${packageId}::audit_anchor::anchor_audit_hash`,
+    arguments: [
+      tx.object(adminCapId),
+      tx.pure.string(input.auditHash),
+      tx.pure.string(input.anchorId),
+      tx.pure.string(input.backingBlobId),
+      tx.pure.address(businessAccountId),
+      tx.object('0x6'),
+    ],
+  });
+
+  const result = await executeSdkTransaction(tx);
+  const events = resultEvents(result);
+  const paid = eventBySuffix(events, '::payment_intent::IntentConfirmed');
+  const allocated = eventBySuffix(events, '::smart_treasury::TreasuryDeposited');
+  const anchored = eventBySuffix(events, '::audit_anchor::AuditAnchored');
+  const auditAnchorObjectId =
+    typeof anchored?.data.anchor_object === 'string' ? anchored.data.anchor_object : null;
+
+  if (!paid || !anchored || (treasuryAmountMist > 0 && !allocated)) {
+    throw new Error(`Composed transaction succeeded but required proof events were missing. Digest: ${result.digest}`);
+  }
+
+  return {
+    digest: result.digest,
+    intentId: input.intentId,
+    intentCreateDigest: input.intentCreateDigest,
+    auditAnchorObjectId,
+    smartTreasuryId: smartTreasuryId || null,
+    events,
+    objectChanges: result.objectChanges ?? [],
+    composedActions: [
+      {
+        kind: 'paid',
+        label: 'Payment intent confirmed',
+        eventType: paid.type,
+        data: paid.data,
+      },
+      ...(allocated
+        ? [{
+            kind: 'allocated' as const,
+            label: 'Reserve allocated to Smart Treasury',
+            eventType: allocated.type,
+            data: allocated.data,
+          }]
+        : []),
+      {
+        kind: 'anchored',
+        label: 'Audit proof anchored on Sui',
+        eventType: anchored.type,
+        data: anchored.data,
+      },
+    ],
+    demo: false,
+  };
+}
+
+export async function anchorAuditHashOnSui(input: {
+  auditHash: string;
+  anchorId: string;
+  backingBlobId: string;
+}) {
+  await requireSdkExecution();
+  const packageId = configIdOrThrow('packageId', 'SPLASH_PACKAGE_ID');
+  const adminCapId = configIdOrThrow('adminCapId', 'SPLASH_ADMIN_CAP_ID');
+  const businessAccountId = configIdOrThrow('businessAccountId', 'SPLASH_BUSINESS_ACCOUNT_ID');
+  const tx = new Transaction();
+  tx.setGasBudget(process.env.SUI_AUDIT_ANCHOR_GAS_BUDGET ?? '20000000');
+  tx.moveCall({
+    target: `${packageId}::audit_anchor::anchor_audit_hash`,
+    arguments: [
+      tx.object(adminCapId),
+      tx.pure.string(input.auditHash),
+      tx.pure.string(input.anchorId),
+      tx.pure.string(input.backingBlobId),
+      tx.pure.address(businessAccountId),
+      tx.object('0x6'),
+    ],
+  });
+  const result = await executeSdkTransaction(tx);
+  const anchored = eventBySuffix(resultEvents(result), '::audit_anchor::AuditAnchored');
+  if (!anchored) throw new Error(`Audit anchor event missing. Digest: ${result.digest}`);
+  return {
+    digest: result.digest,
+    anchorObjectId: typeof anchored.data.anchor_object === 'string' ? anchored.data.anchor_object : null,
+    event: anchored,
+  };
+}
+
+export async function refreshPegOnSui(input: { usdcPrice: number; usdtPrice: number }) {
+  await requireSdkExecution();
+  const packageId = configIdOrThrow('packageId', 'SPLASH_PACKAGE_ID');
+  const pegStateId = configIdOrThrow('pegStateId', 'SPLASH_PEG_STATE_ID');
+  const adminCapId = configIdOrThrow('adminCapId', 'SPLASH_ADMIN_CAP_ID');
+  const usdcDeviationPpm = Math.max(0, Math.round(Math.abs(input.usdcPrice - 1) * 1_000_000));
+  const usdtDeviationPpm = Math.max(0, Math.round(Math.abs(input.usdtPrice - 1) * 1_000_000));
+
+  const tx = new Transaction();
+  tx.setGasBudget(process.env.SUI_PEG_UPDATE_GAS_BUDGET ?? '10000000');
+  tx.moveCall({
+    target: `${packageId}::peg_monitor::update_peg`,
+    arguments: [
+      tx.object(pegStateId),
+      tx.object(adminCapId),
+      tx.pure.u64(usdcDeviationPpm),
+      tx.pure.u64(usdtDeviationPpm),
+      tx.object('0x6'),
+    ],
+  });
+
+  const result = await executeSdkTransaction(tx);
+  return {
+    digest: result.digest,
+    usdcDeviationPpm,
+    usdtDeviationPpm,
+  };
+}
+
 export async function getOperatorWalletInfo(): Promise<{
   address: string;
   totalMist: number;
   totalSui: string;
   coinCount: number;
 }> {
-  // When the sui CLI isn't available, return a benign placeholder instead of
-  // throwing, so the admin dashboard's operator-wallet panel renders cleanly.
-  if (await shouldSimulateSettlement()) {
-    const address =
-      (process.env.SPLASH_OPERATOR_ADDRESS ?? '').trim() ||
-      '0x0000000000000000000000000000000000000000000000000000000000000000';
-    return { address, totalMist: 0, totalSui: '0.000000', coinCount: 0 };
+  const signer = getOperatorKeypair();
+  if (signer) {
+    const address = signer.toSuiAddress();
+    const coins = await listSdkGasCoins(address);
+    const totalMist = coins.reduce((sum, coin) => sum + coin.balance, 0);
+    return {
+      address,
+      totalMist,
+      totalSui: (totalMist / 1_000_000_000).toFixed(6),
+      coinCount: coins.length,
+    };
   }
 
-  const { stdout } = await runSuiCommand(['client', 'active-address']);
-  const address = stdout.trim();
-
-  const coins = await listOperatorGasCoins();
-  const totalMist = coins.reduce((sum, c) => sum + c.balance, 0);
+  const cli = await getCliReadiness();
+  if (cli.ready) {
+    const coins = await listOperatorGasCoins();
+    const totalMist = coins.reduce((sum, coin) => sum + coin.balance, 0);
+    return {
+      address: cli.address,
+      totalMist,
+      totalSui: (totalMist / 1_000_000_000).toFixed(6),
+      coinCount: coins.length,
+    };
+  }
 
   return {
-    address,
-    totalMist,
-    totalSui: (totalMist / 1_000_000_000).toFixed(6),
-    coinCount: coins.length,
+    address: configuredOperatorAddress() || '0x0000000000000000000000000000000000000000000000000000000000000000',
+    totalMist: 0,
+    totalSui: '0.000000',
+    coinCount: 0,
   };
 }
 
 async function listOperatorGasCoins(): Promise<OperatorGasCoin[]> {
   const { stdout } = await runSuiCommand(['client', 'gas', '--json']);
-  const jsonStart = stdout.indexOf('[');
-  if (jsonStart === -1) throw new Error(`'sui client gas --json' returned no JSON. stdout: ${stdout.substring(0, 200)}`);
-  const coins = JSON.parse(stdout.slice(jsonStart)) as Array<{ gasCoinId: string; mistBalance: number | string }>;
-  return coins
-    .map((coin) => ({ id: coin.gasCoinId, balance: Number(coin.mistBalance) }))
-    .filter((coin) => Number.isFinite(coin.balance) && coin.balance > 0)
-    .sort((a, b) => b.balance - a.balance);
+  return parseCliGasCoins(stdout);
+}
+
+async function listSdkGasCoins(address: string): Promise<OperatorGasCoin[]> {
+  const coins: OperatorGasCoin[] = [];
+  let cursor: string | null | undefined;
+
+  do {
+    const page = await suiClient.getCoins({ owner: address, cursor, coinType: '0x2::sui::SUI' });
+    coins.push(
+      ...page.data
+        .map((coin) => ({ id: coin.coinObjectId, balance: Number(coin.balance) }))
+        .filter((coin) => Number.isFinite(coin.balance) && coin.balance > 0),
+    );
+    cursor = page.hasNextPage ? page.nextCursor : null;
+  } while (cursor);
+
+  return coins.sort((a, b) => b.balance - a.balance);
 }
 
 /**
@@ -315,8 +729,8 @@ type SuiCliCallOutput = {
   };
 };
 
-function moneyToMinor(value: number) {
-  return Math.max(0, Math.round(value * 100));
+function moneyToMicro(value: number) {
+  return Math.max(0, Math.round(value * 1_000_000));
 }
 
 function requireSuiAddress(value: string, label: string) {
@@ -345,7 +759,8 @@ export async function recordSingleTransferOnSui(input: {
   /** Override the corridor fee. Bounded to CONTRACT_MAX_FEE_BPS. */
   feeBps?: number;
 }) {
-  if (await shouldSimulateSettlement()) {
+  const execution = await resolveSettlementExecution();
+  if (execution === 'simulate') {
     const sim = simulatedSettlement(input.transferId);
     console.warn(`[Sui Single Transfer] sui CLI unavailable or simulate mode — recording SIMULATED settlement. transfer=${input.transferId} digest=${sim.digest}`);
     return sim;
@@ -354,9 +769,13 @@ export async function recordSingleTransferOnSui(input: {
   const SPLASH_PACKAGE_ID = configIdOrThrow('packageId', 'SPLASH_PACKAGE_ID');
   const SPLASH_TREASURY_ID = configIdOrThrow('treasuryId', 'SPLASH_TREASURY_ID');
   const SPLASH_PEG_STATE_ID = configIdOrThrow('pegStateId', 'SPLASH_PEG_STATE_ID');
+  const SPLASH_COMPLIANCE_CONFIG_ID = configIdOrThrow('complianceConfigId', 'SPLASH_COMPLIANCE_CONFIG_ID');
+  const DEEPBOOK_POOL_ID = configIdOrThrow('deepbookPoolId', 'DEEPBOOK_POOL_ID');
   const SPLASH_BUSINESS_ACCOUNT_ID = configIdOrThrow('businessAccountId', 'SPLASH_BUSINESS_ACCOUNT_ID');
   if (!cfg.usdcType) throw new Error('USDC_TYPE is not configured. Set it in admin → Contract config (or in .env.local) and try again.');
   const USDC_TYPE = cfg.usdcType;
+  if (!cfg.deepbookQuoteType) throw new Error('DEEPBOOK_QUOTE_TYPE is not configured. Set it in admin → Contract config.');
+  const DEEPBOOK_QUOTE_TYPE = cfg.deepbookQuoteType;
   const SPLASH_TEST_RECIPIENT_ADDRESS = cfg.testRecipientAddress;
 
   const recipientAddress = SPLASH_TEST_RECIPIENT_ADDRESS || input.recipient;
@@ -374,6 +793,44 @@ export async function recordSingleTransferOnSui(input: {
   const usdtDeviationPpm = process.env.SPLASH_PEG_USDT_DEVIATION_PPM ?? '0';
 
   const gasBudget = process.env.SUI_RECORD_SETTLEMENT_GAS_BUDGET ?? '10000000';
+
+  if (execution === 'sdk') {
+    const tx = new Transaction();
+    tx.setGasBudget(gasBudget);
+    tx.moveCall({
+      target: `${SPLASH_PACKAGE_ID}::peg_monitor::update_peg`,
+      arguments: [
+        tx.object(SPLASH_PEG_STATE_ID),
+        tx.object(SPLASH_ADMIN_CAP_ID),
+        tx.pure.u64(usdcDeviationPpm),
+        tx.pure.u64(usdtDeviationPpm),
+        tx.object('0x6'),
+      ],
+    });
+    const [payment] = tx.splitCoins(tx.gas, [paymentMist]);
+    tx.moveCall({
+      target: `${SPLASH_PACKAGE_ID}::settlement::settle_payment`,
+      typeArguments: [USDC_TYPE, DEEPBOOK_QUOTE_TYPE],
+      arguments: [
+        tx.object(SPLASH_TREASURY_ID),
+        tx.object(SPLASH_BUSINESS_ACCOUNT_ID),
+        tx.object(SPLASH_PEG_STATE_ID),
+        tx.object(SPLASH_COMPLIANCE_CONFIG_ID),
+        tx.object(DEEPBOOK_POOL_ID),
+        payment,
+        tx.pure.address(recipientAddress),
+        tx.pure.u64(feeBps),
+        tx.object('0x6'),
+      ],
+    });
+
+    const result = await executeSdkTransaction(tx);
+    return {
+      digest: result.digest,
+      packageId: SPLASH_PACKAGE_ID,
+      treasuryId: SPLASH_TREASURY_ID,
+    };
+  }
 
   // The PTB will split `paymentMist` from the gas coin and burn up to
   // `gasBudget` MIST for fees, so the chosen gas coin must cover both.
@@ -400,20 +857,18 @@ export async function recordSingleTransferOnSui(input: {
     '--split-coins', 'gas', `[${paymentMist}]`,
     '--assign', 'payment',
     // 3. Settle — assert_pegged reads the freshly-updated PegState from step 1.
-    //    NOTE: the deployed package (v1, see move/Published.toml) does NOT take a
-    //    fee_bps argument. Its on-chain signature is
-    //    settle_payment<T>(pool, business_account, peg_state, payment, recipient, clock).
-    //    The corridor fee is still applied off-chain in the quote engine; feeBps
-    //    is retained here only for logging/audit until the contract is re-published
-    //    with the fee_bps parameter (then re-add it before `@0x6`).
+    //    Published v1 requires fee_bps before the Clock argument.
     '--move-call',
     `${SPLASH_PACKAGE_ID}::settlement::settle_payment`,
-    `<${USDC_TYPE}>`,
+    `<${USDC_TYPE},${DEEPBOOK_QUOTE_TYPE}>`,
     `@${SPLASH_TREASURY_ID}`,
     `@${SPLASH_BUSINESS_ACCOUNT_ID}`,
     `@${SPLASH_PEG_STATE_ID}`,
+    `@${SPLASH_COMPLIANCE_CONFIG_ID}`,
+    `@${DEEPBOOK_POOL_ID}`,
     'payment.0',
     `@${recipientAddress}`,
+    feeBps.toString(),
     '@0x6',
     '--gas-coin', `@${primaryId}`,
     '--gas-budget', gasBudget,
@@ -471,7 +926,8 @@ export async function recordBatchSettlementOnSui(input: {
   /** Override the corridor fee. Bounded to CONTRACT_MAX_FEE_BPS. */
   feeBps?: number;
 }) {
-  if (await shouldSimulateSettlement()) {
+  const execution = await resolveSettlementExecution();
+  if (execution === 'simulate') {
     const sim = simulatedSettlement(input.batchId);
     console.warn(`[Sui Batch Settlement] sui CLI unavailable or simulate mode — recording SIMULATED settlement. batch=${input.batchId} rows=${input.rows.length} digest=${sim.digest}`);
     return sim;
@@ -480,9 +936,13 @@ export async function recordBatchSettlementOnSui(input: {
   const SPLASH_PACKAGE_ID = configIdOrThrow('packageId', 'SPLASH_PACKAGE_ID');
   const SPLASH_TREASURY_ID = configIdOrThrow('treasuryId', 'SPLASH_TREASURY_ID');
   const SPLASH_PEG_STATE_ID = configIdOrThrow('pegStateId', 'SPLASH_PEG_STATE_ID');
+  const SPLASH_COMPLIANCE_CONFIG_ID = configIdOrThrow('complianceConfigId', 'SPLASH_COMPLIANCE_CONFIG_ID');
+  const DEEPBOOK_POOL_ID = configIdOrThrow('deepbookPoolId', 'DEEPBOOK_POOL_ID');
   const SPLASH_BUSINESS_ACCOUNT_ID = configIdOrThrow('businessAccountId', 'SPLASH_BUSINESS_ACCOUNT_ID');
   if (!cfg.usdcType) throw new Error('USDC_TYPE is not configured. Set it in admin → Contract config (or in .env.local) and try again.');
   const USDC_TYPE = cfg.usdcType;
+  if (!cfg.deepbookQuoteType) throw new Error('DEEPBOOK_QUOTE_TYPE is not configured. Set it in admin → Contract config.');
+  const DEEPBOOK_QUOTE_TYPE = cfg.deepbookQuoteType;
   const SPLASH_TEST_RECIPIENT_ADDRESS = cfg.testRecipientAddress;
   const feeBps = resolveFeeBps({ feeBps: input.feeBps, targetCurrency: input.targetCurrency });
 
@@ -494,10 +954,57 @@ export async function recordBatchSettlementOnSui(input: {
   const gasBudget = process.env.SUI_RECORD_SETTLEMENT_GAS_BUDGET ?? '10000000';
 
   const paymentObjects = input.rows.map((row) => {
-    const amount = moneyToMinor(Number.parseFloat(row.amount ?? '0'));
+    const amount = moneyToMicro(Number.parseFloat(row.amount ?? '0'));
     const recipient = requireSuiAddress(SPLASH_TEST_RECIPIENT_ADDRESS || row.address || '', `Batch recipient ${row.name ?? row.address ?? ''}`.trim());
     return { recipient, amount };
   });
+
+  if (execution === 'sdk') {
+    const tx = new Transaction();
+    tx.setGasBudget(gasBudget);
+    tx.moveCall({
+      target: `${SPLASH_PACKAGE_ID}::peg_monitor::update_peg`,
+      arguments: [
+        tx.object(SPLASH_PEG_STATE_ID),
+        tx.object(SPLASH_ADMIN_CAP_ID),
+        tx.pure.u64(usdcDeviationPpm),
+        tx.pure.u64(usdtDeviationPpm),
+        tx.object('0x6'),
+      ],
+    });
+    const payments = paymentObjects.map((payment) =>
+      tx.moveCall({
+        target: `${SPLASH_PACKAGE_ID}::settlement::new_payment`,
+        arguments: [tx.pure.address(payment.recipient), tx.pure.u64(payment.amount)],
+      }),
+    );
+    const paymentVector = tx.makeMoveVec({
+      type: `${SPLASH_PACKAGE_ID}::settlement::Payment`,
+      elements: payments,
+    });
+    tx.moveCall({
+      target: `${SPLASH_PACKAGE_ID}::settlement::settle_batch`,
+      typeArguments: [USDC_TYPE, DEEPBOOK_QUOTE_TYPE],
+      arguments: [
+        tx.object(SPLASH_ADMIN_CAP_ID),
+        tx.object(SPLASH_TREASURY_ID),
+        tx.object(SPLASH_BUSINESS_ACCOUNT_ID),
+        tx.object(SPLASH_PEG_STATE_ID),
+        tx.object(SPLASH_COMPLIANCE_CONFIG_ID),
+        tx.object(DEEPBOOK_POOL_ID),
+        paymentVector,
+        tx.pure.u64(feeBps),
+        tx.object('0x6'),
+      ],
+    });
+
+    const result = await executeSdkTransaction(tx);
+    return {
+      digest: result.digest,
+      packageId: SPLASH_PACKAGE_ID,
+      treasuryId: SPLASH_TREASURY_ID,
+    };
+  }
 
   const ptbArgs = ['client', 'ptb',
     // 1. Push fresh Pyth-derived peg reading on chain (atomic with settle_batch below)
@@ -527,19 +1034,18 @@ export async function recordBatchSettlementOnSui(input: {
     `[${paymentObjects.map((_, index) => `payment_${index}`).join(',')}]`,
     '--assign',
     'payments',
-    // NOTE: the deployed package (v1, see move/Published.toml) settle_batch takes
-    // settle_batch<T>(pool, business_account, peg_state, payments, clock) — it is
-    // NOT AdminCap-gated and takes NO fee_bps. The AdminCap gate and fee_bps were
-    // added to the source later but never re-published. The corridor fee is still
-    // applied off-chain in the quote engine. Re-add `@${SPLASH_ADMIN_CAP_ID}`
-    // (first) and feeBps (before `@0x6`) once the contract is re-published.
+    // AdminCap gates pooled liquidity; compliance + DeepBook guard the amount.
     '--move-call',
     `${SPLASH_PACKAGE_ID}::settlement::settle_batch`,
-    `<${USDC_TYPE}>`,
+    `<${USDC_TYPE},${DEEPBOOK_QUOTE_TYPE}>`,
+    `@${SPLASH_ADMIN_CAP_ID}`,
     `@${SPLASH_TREASURY_ID}`,
     `@${SPLASH_BUSINESS_ACCOUNT_ID}`,
     `@${SPLASH_PEG_STATE_ID}`,
+    `@${SPLASH_COMPLIANCE_CONFIG_ID}`,
+    `@${DEEPBOOK_POOL_ID}`,
     'payments',
+    feeBps.toString(),
     '@0x6',
     '--gas-budget',
     gasBudget,
@@ -583,4 +1089,68 @@ export async function recordBatchSettlementOnSui(input: {
     packageId: SPLASH_PACKAGE_ID,
     treasuryId: SPLASH_TREASURY_ID,
   };
+}
+
+export type ComplianceControls = {
+  configured: boolean;
+  maxDeviationPpm: number;
+  maxStalenessMs: number;
+  maxSlippageBps: number;
+  minDepthBaseUnits: number;
+  paused: boolean;
+};
+
+const DEFAULT_COMPLIANCE_CONTROLS: ComplianceControls = {
+  configured: false,
+  maxDeviationPpm: 3_000,
+  maxStalenessMs: 60_000,
+  maxSlippageBps: 100,
+  minDepthBaseUnits: 100_000_000,
+  paused: false,
+};
+
+export async function readComplianceControls(): Promise<ComplianceControls> {
+  const config = getContractConfig();
+  if (!config.complianceConfigId) return DEFAULT_COMPLIANCE_CONTROLS;
+  try {
+    const object = await suiClient.getObject({ id: config.complianceConfigId, options: { showContent: true } });
+    const content = object.data?.content;
+    if (!content || content.dataType !== 'moveObject') return DEFAULT_COMPLIANCE_CONTROLS;
+    const fields = content.fields as Record<string, unknown>;
+    return {
+      configured: true,
+      maxDeviationPpm: Number(fields.max_deviation_ppm),
+      maxStalenessMs: Number(fields.max_staleness_ms),
+      maxSlippageBps: Number(fields.max_slippage_bps),
+      minDepthBaseUnits: Number(fields.min_depth_base_units),
+      paused: fields.paused === true || fields.paused === 'true',
+    };
+  } catch {
+    return DEFAULT_COMPLIANCE_CONTROLS;
+  }
+}
+
+export async function updateComplianceControls(input: Omit<ComplianceControls, 'configured'>) {
+  const packageId = configIdOrThrow('packageId', 'SPLASH_PACKAGE_ID');
+  const configId = configIdOrThrow('complianceConfigId', 'SPLASH_COMPLIANCE_CONFIG_ID');
+  const capId = configIdOrThrow('complianceCapId', 'SPLASH_COMPLIANCE_CAP_ID');
+  if (!getOperatorKeypair()) throw new Error('OPERATOR_SUI_PRIVATE_KEY is required to update compliance controls.');
+
+  const tx = new Transaction();
+  tx.moveCall({
+    target: `${packageId}::compliance_config::update`,
+    arguments: [
+      tx.object(configId),
+      tx.object(capId),
+      tx.pure.u64(input.maxDeviationPpm),
+      tx.pure.u64(input.maxStalenessMs),
+      tx.pure.u64(input.maxSlippageBps),
+      tx.pure.u64(input.minDepthBaseUnits),
+    ],
+  });
+  tx.moveCall({
+    target: `${packageId}::compliance_config::set_paused`,
+    arguments: [tx.object(configId), tx.object(capId), tx.pure.bool(input.paused)],
+  });
+  return executeSdkTransaction(tx);
 }

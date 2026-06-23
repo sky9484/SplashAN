@@ -12,7 +12,6 @@ import {
   ShieldCheck,
   TrendingUp,
   Upload,
-  Wallet,
   Zap,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -21,6 +20,7 @@ import HoverPopup from '@/components/HoverPopup';
 import LiveExchangeTicker from '@/components/LiveExchangeTicker';
 import SettlementEngineFlow from '@/components/dashboard/SettlementEngineFlow';
 import StatusBadge, { type Status } from '@/components/StatusBadge';
+import MemWalBehaviorCard from '@/components/MemWalBehaviorCard';
 import { cn } from '../../lib/utils';
 import { getCorridorFeeBps } from '@/lib/fx/corridors';
 
@@ -32,10 +32,10 @@ function bpsToPct(bps: number) {
 // ─── Data ────────────────────────────────────────────────────────────────────
 
 const TOP_STATS = [
-  { label: 'Operating Balance', value: null, icon: Wallet, accent: 'text-[#5C9EAD]', bg: 'bg-[#5C9EAD]/10', id: 'balance' },
+  { label: '0xWal operating scan', value: null, icon: Bot, accent: 'text-[#E39774]', bg: 'bg-[#E39774]/10', id: '0xwal' },
   { label: 'Volume (30d)', value: '$39,120', delta: '+12.4%', icon: ArrowUpRight, accent: 'text-[#326273]', bg: 'bg-[#326273]/10', id: 'volume' },
-  { label: 'Yield Earned (30d)', value: null, icon: TrendingUp, accent: 'text-emerald-600', bg: 'bg-emerald-100', id: 'yield' },
-  { label: 'Active Corridors', value: '8 / 8', delta: 'All live', icon: Globe, accent: 'text-[#5C9EAD]', bg: 'bg-[#5C9EAD]/10', id: 'corridors' },
+  { label: 'Treasury Projection', value: null, icon: TrendingUp, accent: 'text-amber-600', bg: 'bg-amber-100', id: 'yield' },
+  { label: 'Corridor Coverage', value: '1 live-model', delta: '8 implemented in code', icon: Globe, accent: 'text-[#5C9EAD]', bg: 'bg-[#5C9EAD]/10', id: 'corridors' },
   { label: 'Settlement SLA', value: '400ms', delta: 'On target', icon: Zap, accent: 'text-[#E39774]', bg: 'bg-[#E39774]/10', id: 'sla' },
 ] as const;
 
@@ -78,6 +78,13 @@ const COMPLIANCE: Array<{ label: string; value: string; status: Status }> = [
   { label: 'Walrus audit', value: 'Active · 7-year retention',         status: 'verified' },
 ];
 
+const NETWORK_STATUS = [
+  { label: 'Pay', status: 'Live-model', copy: 'MY-to-PH payout path' },
+  { label: 'Get paid', status: 'Built', copy: 'Invoice and pay links' },
+  { label: 'Sweep', status: 'Launch product', copy: 'Recipient account loop' },
+  { label: 'Keep', status: 'Corridor gated', copy: 'Stored balance by approval' },
+] as const;
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function fmt(n: number) {
@@ -107,26 +114,12 @@ function TxPill({ status }: { status: TxStatus }) {
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export default function DashboardOverview() {
-  const [corridors, setCorridors] = useState(INITIAL_CORRIDORS);
-  const [balance, setBalance]     = useState(11140.00);
+  const [corridors] = useState(INITIAL_CORRIDORS);
   const [yieldEarned, setYield]   = useState(98.72);
   const [copilotDismissed, setCopilotDismissed] = useState(false);
   const [treasuryPrincipal, setTreasuryPrincipal] = useState(24500);
+  const [walSummary, setWalSummary] = useState({ detected: 0, batchable: 0, needsApproval: 0 });
   const [treasuryRateLabel, setTreasuryRateLabel] = useState('USDY · variable');
-
-  useEffect(() => {
-    const id = window.setInterval(() => {
-      setCorridors((prev) =>
-        prev.map((c) => ({
-          ...c,
-          rate: Math.max(c.rate * (1 + (Math.random() - 0.49) * 0.001), 0.001),
-        }))
-      );
-      setBalance((v) => Math.max(v + (Math.random() - 0.5) * 40, 0));
-      setYield((v) => v + Math.random() * 0.015);
-    }, 5000);
-    return () => window.clearInterval(id);
-  }, []);
 
   // Real two-bucket balances from the treasury ledger.
   useEffect(() => {
@@ -135,13 +128,25 @@ export default function DashboardOverview() {
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (!active || !d) return;
-        if (typeof d.available === 'number') setBalance(d.available);
         if (typeof d.treasuryPrincipal === 'number') setTreasuryPrincipal(d.treasuryPrincipal);
         if (typeof d.treasuryYield === 'number') setYield(d.treasuryYield);
         if (d.rate?.label) setTreasuryRateLabel(d.rate.label);
       })
       .catch(() => {});
     return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    void fetch('/api/copilot/summary')
+      .then((response) => response.json())
+      .then((summary: { detected?: number; batchable?: number; needsApproval?: number }) => {
+        setWalSummary({
+          detected: summary.detected ?? 0,
+          batchable: summary.batchable ?? 0,
+          needsApproval: summary.needsApproval ?? 0,
+        });
+      })
+      .catch(() => {});
   }, []);
 
   return (
@@ -178,18 +183,47 @@ export default function DashboardOverview() {
       {/* Signature: animated settlement-engine flow */}
       <SettlementEngineFlow variant="settlement" className="dash-reveal" />
 
+      <section className="grid gap-3 dash-reveal-stagger sm:grid-cols-2 xl:grid-cols-4" aria-label="Network build status">
+        {NETWORK_STATUS.map((item, index) => (
+          <div key={item.label} className="dash-block dash-block-interactive p-4">
+            <div className="flex items-center justify-between gap-3">
+              <span className="dash-kicker">0{index + 1} · {item.status}</span>
+              <span className={cn('h-2 w-2 rounded-full', index === 0 ? 'bg-emerald-500' : 'bg-[#E39774]')} />
+            </div>
+            <strong className="mt-2 block text-lg font-extrabold text-[#0c3e48]">{item.label}</strong>
+            <small className="mt-1 block text-[11px] font-semibold text-[#326273]/55">{item.copy}</small>
+          </div>
+        ))}
+      </section>
+
+      <MemWalBehaviorCard />
+
       {/* Top stats row */}
       <section className="grid grid-cols-2 gap-3 dash-reveal-stagger md:grid-cols-3 xl:grid-cols-5">
         {TOP_STATS.map(({ label, value, icon: Icon, accent, bg, id }) => {
+          if (id === '0xwal') {
+            return (
+              <Link key={label} href="/dashboard/0xwal" className="dash-block dash-block-interactive p-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#326273]/55">{label}</span>
+                  <div className={cn('rounded-lg p-1.5', bg)}>
+                    <Icon size={14} className={accent} />
+                  </div>
+                </div>
+                <div className="mt-2 text-sm font-extrabold leading-5 text-[#0c3e48]">
+                  {walSummary.detected} invoices detected · {walSummary.batchable} batchable · {walSummary.needsApproval} needs approval
+                </div>
+                <div className="mt-1 text-[11px] font-semibold text-[#E39774]">Open 0xWal →</div>
+              </Link>
+            );
+          }
           const displayValue =
-            id === 'balance' ? `$${fmt(balance)}` :
-            id === 'yield'   ? `$${yieldEarned.toFixed(2)}` :
+            id === 'yield'   ? `$${yieldEarned.toFixed(2)} modeled` :
             value ?? '—';
           const delta =
-            id === 'balance' ? 'Reconciled' :
-            id === 'yield'   ? 'USDY · variable' :
+            id === 'yield'   ? 'USDY · approval gated' :
             (TOP_STATS.find((s) => s.id === id) as { delta?: string })?.delta ?? '';
-          const deltaGreen = id === 'yield' || id === 'corridors' || id === 'sla' || id === 'balance' || id === 'volume';
+          const deltaGreen = id === 'yield' || id === 'corridors' || id === 'sla' || id === 'volume';
 
           return (
             <div key={label} className="dash-block dash-block-interactive p-4">
@@ -299,10 +333,10 @@ export default function DashboardOverview() {
           {/* Live corridors table */}
           <div className="dash-surface overflow-hidden">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#326273]/8 px-4 py-3">
-              <h2 className="text-sm font-bold text-[#1F4452]">Live Corridors</h2>
+              <h2 className="text-sm font-bold text-[#1F4452]">Corridor Readiness</h2>
               <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[#326273]/50">
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
-                8 corridors active
+                1 live-model · 8 implemented in code
               </div>
             </div>
             <div className="overflow-x-auto">
@@ -310,10 +344,10 @@ export default function DashboardOverview() {
                 <thead>
                   <tr className="border-b border-[#326273]/8 bg-[#F6F0ED]/60">
                     <th className="px-4 py-2 text-left font-semibold text-[#326273]/50">Corridor</th>
-                    <th className="px-4 py-2 text-right font-semibold text-[#326273]/50">Rate (live)</th>
-                    <th className="hidden px-4 py-2 text-right font-semibold text-[#326273]/50 sm:table-cell">Monthly vol</th>
+                    <th className="px-4 py-2 text-right font-semibold text-[#326273]/50">Reference rate</th>
+                    <th className="hidden px-4 py-2 text-right font-semibold text-[#326273]/50 sm:table-cell">Model volume</th>
                     <th className="hidden px-4 py-2 text-right font-semibold text-[#326273]/50 md:table-cell">Splash fee</th>
-                    <th className="px-4 py-2 text-right font-semibold text-[#326273]/50">Success</th>
+                    <th className="px-4 py-2 text-right font-semibold text-[#326273]/50">Test success</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -329,8 +363,11 @@ export default function DashboardOverview() {
                         <div className="flex items-center gap-2">
                           <span className="text-sm leading-none">{c.flag}</span>
                           <span className="font-semibold text-[#1F4452]">{c.pair}</span>
-                          <span className="hidden rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 sm:inline">
-                            Live
+                          <span className={cn(
+                            'hidden rounded-full px-1.5 py-0.5 text-[10px] font-bold sm:inline',
+                            i === 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-[#5C9EAD]/10 text-[#326273]',
+                          )}>
+                            {i === 0 ? 'Live-model' : 'In code'}
                           </span>
                         </div>
                       </td>
@@ -419,7 +456,7 @@ export default function DashboardOverview() {
         {/* ── RIGHT COLUMN ── */}
         <aside className="space-y-4">
 
-          {/* Smart Treasury */}
+          {/* Approval-gated treasury projection */}
           <div className="dash-block dash-block-accent dash-block-interactive p-4">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2.5">
@@ -427,8 +464,8 @@ export default function DashboardOverview() {
                   <TrendingUp size={16} className="text-emerald-600" />
                 </div>
                 <div>
-                  <h2 className="text-sm font-bold text-[#1F4452]">Smart Treasury</h2>
-                  <p className="text-[11px] text-[#326273]/50">Ondo USDY · T-bill</p>
+                  <h2 className="text-sm font-bold text-[#1F4452]">Treasury Projection</h2>
+                  <p className="text-[11px] text-[#326273]/50">Ondo USDY · simulation only</p>
                 </div>
               </div>
               <span className="rounded-full bg-[#D9A441]/15 px-2 py-0.5 text-[10px] font-bold text-[#9a6f15]">
@@ -437,24 +474,24 @@ export default function DashboardOverview() {
             </div>
 
             <div className="mt-3">
-              <p className="text-[11px] uppercase tracking-wide text-[#326273]/45">Treasury Balance</p>
+              <p className="text-[11px] uppercase tracking-wide text-[#326273]/45">Modeled allocation</p>
               <p className="mt-0.5 text-2xl font-extrabold text-[#1F4452]">${fmt(treasuryPrincipal)}</p>
               <p className="mt-1 flex items-center gap-1 text-[11px] font-semibold text-emerald-600">
                 <TrendingUp size={11} />
-                +${yieldEarned.toFixed(2)} earned this month
+                +${yieldEarned.toFixed(2)} modeled this month
               </p>
             </div>
 
             <div className="mt-3 space-y-1 rounded-lg bg-white/70 p-3 text-[11px]">
               <div className="flex items-center justify-between">
-                <span className="text-[#326273]/55">Daily yield</span>
+                <span className="text-[#326273]/55">Modeled daily yield</span>
                 <span className="font-semibold text-emerald-600">+$3.22</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-[#326273]/55">Status</span>
                 <span className="flex items-center gap-1 font-semibold text-emerald-600">
                   <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
-                  Earning
+                  Approval gated
                 </span>
               </div>
               <div className="flex items-center justify-between">
@@ -468,13 +505,13 @@ export default function DashboardOverview() {
                 href="/dashboard/treasury"
                 className="flex-1 rounded-lg bg-emerald-600 py-1.5 text-center text-xs font-bold text-white transition-colors hover:bg-emerald-700"
               >
-                Add funds
+                View projection
               </Link>
               <Link
                 href="/dashboard/treasury"
                 className="flex-1 rounded-lg border border-emerald-200 py-1.5 text-center text-xs font-bold text-emerald-700 transition-colors hover:bg-emerald-50"
               >
-                Withdraw
+                Review controls
               </Link>
             </div>
           </div>

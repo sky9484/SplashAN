@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { readTransferIntent } from '@/lib/server/operations';
+import { readSweepJob, readTransferIntent } from '@/lib/server/operations';
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -10,5 +10,5 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     return NextResponse.json({ error: 'Transfer intent not found' }, { status: 404 });
   }
 
-  return NextResponse.json(intent);
+  return NextResponse.json({ ...intent, sweepJob: intent.sweepJobId ? readSweepJob(intent.sweepJobId) : null });
 }

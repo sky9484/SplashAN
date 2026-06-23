@@ -3,6 +3,8 @@ import { after, NextResponse } from 'next/server';
 import { createBatch, updateBatch } from '@/lib/server/operations';
 import { recordBatchSettlementOnSui } from '@/lib/server/sui-settlement';
 
+export const maxDuration = 60;
+
 type BatchRow = {
   name?: string;
   address?: string;

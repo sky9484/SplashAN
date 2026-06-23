@@ -19,14 +19,17 @@ export default function LiveExchangeTicker() {
     // Initial date is set on mount to avoid SSR hydration mismatch.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLastUpdate(new Date());
+    let tick = 0;
     const interval = window.setInterval(() => {
+      tick += 1;
       setRates((prev) =>
-        prev.map((r) => {
-          const change = (Math.random() - 0.48) * (r.rate * 0.0018);
+        prev.map((r, index) => {
+          const base = RATES.find((item) => item.pair === r.pair)?.rate ?? r.rate;
+          const change = Math.sin(tick / 2 + index) * (base * 0.0009);
 
           return {
             ...r,
-            rate: Math.max(r.rate + change, 0),
+            rate: Math.max(base + change, 0),
             change,
           };
         })
@@ -53,7 +56,7 @@ export default function LiveExchangeTicker() {
               <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#E39774]" />
             </span>
             <Activity className="h-4 w-4 text-[#5C9EAD]" />
-            <span>USD LIVE FX</span>
+            <span>USD INDICATIVE FX</span>
             <span className="hidden text-xs text-white/45 sm:inline">Updated {lastUpdate?.toLocaleTimeString() ?? '—'}</span>
           </div>
           <div className="min-w-0 flex-1 overflow-hidden">

@@ -12,18 +12,37 @@ import {
   ArrowRight,
   Loader2,
   History,
+  Download,
+  Database,
+  BadgeCheck,
 } from 'lucide-react';
 import Link from 'next/link';
+import Papa from 'papaparse';
 
+import StatusBadge from '@/components/StatusBadge';
 import type { TransferIntentRecord, TransferIntentState } from '@/lib/server/operations';
+import { getCorridorFeeBps } from '@/lib/fx/corridors';
 
 type FilterType = 'all' | 'pending' | 'successful' | 'failed';
 
 type ApiResponse = {
-  items: TransferIntentRecord[];
+  items: Array<TransferIntentRecord & { heldDurationMs?: number | null }>;
   total: number;
   page: number;
   perPage: number;
+};
+
+type AuditBatch = {
+  id: string;
+  date: string;
+  merkleRoot: string;
+  settlementCount: number;
+  walrusBlobId: string;
+  walrusMode: 'demo' | 'live';
+  sealMode: 'demo' | 'live';
+  anchorObjectId: string | null;
+  anchorDigest: string;
+  leaves: Array<{ transferId: string }>;
 };
 
 const STATE_ORDER: TransferIntentState[] = [
@@ -34,6 +53,9 @@ const STATE_ORDER: TransferIntentState[] = [
   'QUEUED',
   'SETTLING',
   'SETTLED',
+  'SWEEPING',
+  'DISBURSED',
+  'CREDITED',
 ];
 
 function stateIndex(state: TransferIntentState) {
@@ -42,7 +64,7 @@ function stateIndex(state: TransferIntentState) {
 }
 
 function StateIcon({ state }: { state: TransferIntentState }) {
-  if (state === 'SETTLED' || state === 'DISBURSED') {
+  if (state === 'SETTLED' || state === 'DISBURSED' || state === 'CREDITED') {
     return <CheckCircle2 className="text-[#5C9EAD]" size={18} />;
   }
   if (state === 'FAILED' || state === 'REFUNDED') {
@@ -55,7 +77,7 @@ function StateIcon({ state }: { state: TransferIntentState }) {
 }
 
 function StateBadge({ state }: { state: TransferIntentState }) {
-  if (state === 'SETTLED' || state === 'DISBURSED') {
+  if (state === 'SETTLED' || state === 'DISBURSED' || state === 'CREDITED') {
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-[#5C9EAD]/10 px-2.5 py-0.5 text-xs font-semibold text-[#5C9EAD]">
         <CheckCircle2 size={11} /> {state}
@@ -86,7 +108,7 @@ function StateBadge({ state }: { state: TransferIntentState }) {
 function ProgressSteps({ state }: { state: TransferIntentState }) {
   if (state === 'FAILED' || state === 'REFUNDING' || state === 'REFUNDED') return null;
   const current = stateIndex(state);
-  const steps = ['Authorized', 'Deposit Confirmed', 'Exchanging', 'Exchanged', 'Queued', 'Settling', 'Settled'];
+  const steps = ['Authorized', 'Deposit Confirmed', 'Exchanging', 'Exchanged', 'Queued', 'Settling', 'Settled', 'Sweeping', 'Delivered', 'Credited'];
 
   return (
     <div className="mt-3 flex items-center gap-0.5 overflow-x-auto pb-1">
@@ -112,7 +134,7 @@ function ProgressSteps({ state }: { state: TransferIntentState }) {
   );
 }
 
-function TransferCard({ record }: { record: TransferIntentRecord }) {
+function TransferCard({ record }: { record: TransferIntentRecord & { heldDurationMs?: number | null } }) {
   const suiScanUrl = record.suiTxDigest
     ? `https://suiscan.xyz/testnet/tx/${record.suiTxDigest}`
     : null;
@@ -184,6 +206,13 @@ function TransferCard({ record }: { record: TransferIntentRecord }) {
         </div>
       )}
 
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <span className="rounded-full bg-foreground/8 px-2.5 py-1 text-[11px] font-black text-foreground/60">{record.deliveryTier.replaceAll('_', ' ')}</span>
+        {record.demo && <StatusBadge status="demo" />}
+        {record.heldDurationMs != null && <span className="rounded-full bg-primary/15 px-2.5 py-1 text-[11px] font-black text-primary">Held: {(record.heldDurationMs / 1000).toFixed(1)}s</span>}
+        <Link href={`/dashboard/audit/${record.id}`} className="rounded-full border border-primary/20 px-2.5 py-1 text-[11px] font-black text-primary">Audit</Link>
+      </div>
+
       <div className="mt-3 flex items-center justify-between text-[11px] text-[#326273]/40">
         <span>{new Date(record.createdAt).toLocaleString()}</span>
         {record.exchangeRate && <span>Rate: {record.exchangeRate}</span>}
@@ -204,6 +233,8 @@ export default function HistoryPage() {
   const [data, setData] = useState<ApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [auditBatches, setAuditBatches] = useState<AuditBatch[]>([]);
+  const [verification, setVerification] = useState<Record<string, string>>({});
 
   const fetchTransfers = useCallback(async (f: FilterType, showRefreshing = false) => {
     if (showRefreshing) setRefreshing(true);
@@ -226,6 +257,12 @@ export default function HistoryPage() {
   }, [filter, fetchTransfers]);
 
   useEffect(() => {
+    void fetch('/api/audit-batches')
+      .then((response) => response.json())
+      .then((body: { items?: AuditBatch[] }) => setAuditBatches(body.items ?? []));
+  }, []);
+
+  useEffect(() => {
     const interval = setInterval(() => {
       void fetchTransfers(filter, true);
     }, 5000);
@@ -233,9 +270,9 @@ export default function HistoryPage() {
   }, [filter, fetchTransfers]);
 
   const pending = data?.items.filter(
-    (r) => r.state !== 'SETTLED' && r.state !== 'DISBURSED' && r.state !== 'FAILED' && r.state !== 'REFUNDED' && r.state !== 'REFUNDING',
+    (r) => r.state !== 'SETTLED' && r.state !== 'DISBURSED' && r.state !== 'CREDITED' && r.state !== 'FAILED' && r.state !== 'REFUNDED' && r.state !== 'REFUNDING',
   ) ?? [];
-  const successful = data?.items.filter((r) => r.state === 'SETTLED' || r.state === 'DISBURSED') ?? [];
+  const successful = data?.items.filter((r) => r.state === 'SETTLED' || r.state === 'DISBURSED' || r.state === 'CREDITED') ?? [];
   const failed = data?.items.filter((r) => r.state === 'FAILED' || r.state === 'REFUNDING' || r.state === 'REFUNDED') ?? [];
 
   const counts: Record<FilterType, number> = {
@@ -244,6 +281,55 @@ export default function HistoryPage() {
     successful: successful.length,
     failed: failed.length,
   };
+
+  async function exportReconciliation(format: 'csv' | 'json') {
+    const response = await fetch('/api/transfers?filter=all&export=true');
+    if (!response.ok) return;
+    const body = (await response.json()) as ApiResponse;
+    const rows = body.items.map((record) => {
+      const grossUsd = Number(record.sourceAmountUsd) || 0;
+      const feeUsd = record.deliveryTier === 'STORED_BALANCE'
+        ? 0
+        : grossUsd * (getCorridorFeeBps(record.targetCurrency) / 10_000) + 4.5;
+      return {
+        date: record.createdAt,
+        counterparty: record.recipientName,
+        grossUsd: Number(grossUsd.toFixed(2)),
+        feeUsd: Number(feeUsd.toFixed(2)),
+        fxRate: Number(record.exchangeRate ?? 0),
+        targetAmount: Number(record.targetAmount) || 0,
+        reference: record.invoiceId ?? record.id,
+        suiTxDigest: record.suiTxDigest ?? '',
+        tier: record.deliveryTier,
+      };
+    });
+    const date = new Date().toISOString().slice(0, 10).replaceAll('-', '');
+    const content = format === 'csv' ? Papa.unparse(rows) : JSON.stringify(rows, null, 2);
+    const blob = new Blob([content], { type: format === 'csv' ? 'text/csv;charset=utf-8' : 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `splash-reconciliation-${date}.${format}`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  async function verifyInclusion(batch: AuditBatch, transferId: string) {
+    const key = `${batch.id}:${transferId}`;
+    setVerification((current) => ({ ...current, [key]: 'Verifying…' }));
+    const response = await fetch('/api/audit-batches/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ batchId: batch.id, transferId }),
+    });
+    const body = await response.json() as { verified?: boolean; error?: string };
+    setVerification((current) => ({
+      ...current,
+      [key]: body.verified ? 'Inclusion + Walrus + Sui anchor verified' : body.error ?? 'Verification failed',
+    }));
+  }
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-5">
@@ -257,6 +343,22 @@ export default function HistoryPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void exportReconciliation('csv')}
+            className="inline-flex items-center gap-2 rounded-lg border border-[#326273]/15 bg-white px-3 py-2 text-xs font-semibold text-[#326273] shadow-sm transition-colors hover:border-[#5C9EAD]/40"
+          >
+            <Download size={14} />
+            Export CSV
+          </button>
+          <button
+            type="button"
+            onClick={() => void exportReconciliation('json')}
+            className="inline-flex items-center gap-2 rounded-lg border border-[#326273]/15 bg-white px-3 py-2 text-xs font-semibold text-[#326273] shadow-sm transition-colors hover:border-[#5C9EAD]/40"
+          >
+            <Download size={14} />
+            Export JSON
+          </button>
           <button
             type="button"
             onClick={() => void fetchTransfers(filter, true)}
@@ -322,6 +424,57 @@ export default function HistoryPage() {
           </button>
         ))}
       </div>
+
+      <section className="dash-surface p-5">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <div className="flex items-center gap-2 text-sm font-black text-[#326273]">
+              <Database size={17} className="text-[#5C9EAD]" />
+              Daily audit batches
+            </div>
+            <p className="mt-1 text-xs text-[#326273]/60">
+              Completed payments are Merkle-batched, Seal-encrypted, stored on Walrus, then anchored on Sui.
+            </p>
+          </div>
+          <span className="rounded-full bg-[#5C9EAD]/10 px-3 py-1 text-[11px] font-black text-[#326273]">
+            {auditBatches.length} anchored batch{auditBatches.length === 1 ? '' : 'es'}
+          </span>
+        </div>
+        <div className="mt-4 space-y-3">
+          {auditBatches.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-[#326273]/15 p-4 text-xs text-[#326273]/55">
+              No daily batch has been generated yet. The CRON-gated audit batch job creates one after real settlements complete.
+            </div>
+          ) : auditBatches.map((batch) => (
+            <div key={batch.id} className="rounded-xl border border-[#326273]/10 bg-[#F6F0ED] p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="font-black text-[#326273]">{batch.date} · {batch.settlementCount} settlement{batch.settlementCount === 1 ? '' : 's'}</div>
+                  <div className="mt-1 break-all font-mono text-[10px] text-[#326273]/50">Merkle root {batch.merkleRoot}</div>
+                </div>
+                <div className="flex gap-2">
+                  <StatusBadge status={batch.walrusMode} />
+                  <StatusBadge status={batch.sealMode} />
+                  <a href={`https://testnet.suivision.xyz/txblock/${batch.anchorDigest}`} target="_blank" rel="noreferrer" className="rounded-lg bg-white px-3 py-2 text-[11px] font-black text-[#326273]">
+                    Anchor tx
+                  </a>
+                </div>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {batch.leaves.map((leaf) => {
+                  const key = `${batch.id}:${leaf.transferId}`;
+                  return (
+                    <button key={leaf.transferId} type="button" onClick={() => void verifyInclusion(batch, leaf.transferId)} className="inline-flex items-center gap-1.5 rounded-lg bg-[#326273] px-3 py-2 text-[11px] font-black text-white">
+                      <BadgeCheck size={13} />
+                      {verification[key] ?? `Verify ${leaf.transferId.slice(0, 14)}…`}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
 
       {/* List */}
       {loading ? (

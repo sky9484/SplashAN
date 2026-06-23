@@ -39,7 +39,7 @@ export default function IsometricAuthShell({
           Back to landing page
         </Link>
         <Link href="/" className="iso-brand" aria-label="Splash Finance home">
-          <Image src="/splash-icon.svg" alt="" width={38} height={38} priority />
+          <Image src="/splash-main-icon.png" alt="" width={48} height={47} className="h-auto w-[38px]" priority />
           <span>
             <strong>Splash Finance</strong>
             <small>USD settlement infrastructure</small>

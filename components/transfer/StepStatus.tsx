@@ -6,7 +6,8 @@ import { Banknote, CheckCircle2, Globe2, Loader2, Network, XCircle } from 'lucid
 import type { TransferState } from '@/app/dashboard/transfer/page';
 
 export default function StepStatus({ state, set, next }: { state: TransferState; set: (patch: Partial<TransferState>) => void; next: () => void }) {
-  const [chainState, setChainState] = useState<'AUTHORIZED' | 'QUEUED' | 'SETTLING' | 'SETTLED' | 'FAILED'>('AUTHORIZED');
+  const [chainState, setChainState] = useState<'AUTHORIZED' | 'QUEUED' | 'SETTLING' | 'SETTLED' | 'SWEEPING' | 'DISBURSED' | 'CREDITED' | 'FAILED'>('AUTHORIZED');
+  const [heldDurationMs, setHeldDurationMs] = useState<number | null>(null);
   const [failureReason, setFailureReason] = useState<string | null>(null);
 
   useEffect(() => {
@@ -24,19 +25,35 @@ export default function StepStatus({ state, set, next }: { state: TransferState;
         }
 
         const result = (await response.json()) as {
-          state: 'AUTHORIZED' | 'QUEUED' | 'SETTLING' | 'SETTLED' | 'FAILED';
+          state: 'AUTHORIZED' | 'QUEUED' | 'SETTLING' | 'SETTLED' | 'SWEEPING' | 'DISBURSED' | 'CREDITED' | 'FAILED';
           verificationReference: string | null;
           receiptObjectId: string | null;
+          paymentIntentId?: string;
+          intentCreateDigest?: string;
+          walrusBlobId?: string;
+          auditAnchorId?: string;
+          composedActions?: TransferState['composedActions'];
           failureReason: string | null;
           failedAtState: string | null;
+          sweepJob: { heldDurationMs?: number } | null;
         };
 
         if (cancelled) return;
 
         setChainState(result.state);
 
-        if (result.state === 'SETTLED') {
-          set({ txStatus: 'success', txDigest: result.verificationReference ?? undefined, receiptObjectId: result.receiptObjectId ?? undefined });
+        if (result.state === 'DISBURSED' || result.state === 'CREDITED') {
+          setHeldDurationMs(result.sweepJob?.heldDurationMs ?? null);
+          set({
+            txStatus: 'success',
+            txDigest: result.verificationReference ?? undefined,
+            receiptObjectId: result.receiptObjectId ?? undefined,
+            paymentIntentId: result.paymentIntentId,
+            intentCreateDigest: result.intentCreateDigest,
+            walrusBlobId: result.walrusBlobId,
+            auditAnchorId: result.auditAnchorId,
+            composedActions: result.composedActions,
+          });
           window.setTimeout(next, 1800);
           return;
         }
@@ -67,8 +84,9 @@ export default function StepStatus({ state, set, next }: { state: TransferState;
   const status = state.txStatus ?? 'pending';
   const activeIndex = useMemo(() => {
     if (status === 'failed' || chainState === 'FAILED') return -1;
-    if (chainState === 'SETTLED') return 3;
-    if (chainState === 'SETTLING') return 2;
+    if (chainState === 'DISBURSED' || chainState === 'CREDITED') return 3;
+    if (chainState === 'SETTLED' || chainState === 'SWEEPING') return 2;
+    if (chainState === 'SETTLING') return 1;
     if (chainState === 'QUEUED') return 1;
     return 0;
   }, [chainState, status]);
@@ -84,8 +102,8 @@ export default function StepStatus({ state, set, next }: { state: TransferState;
       icon: Network,
     },
     {
-      label: `Connecting to ${state.recipient.country}`,
-      detail: `Preparing ${state.amount.targetCurrency} payout on the local partner rail`,
+      label: state.deliveryTier === 'SWEEP_ACCOUNT' ? 'Auto-sweeping to bank' : state.deliveryTier === 'STORED_BALANCE' ? 'Crediting Splash balance' : `Connecting to ${state.recipient.country}`,
+      detail: state.deliveryTier === 'SWEEP_ACCOUNT' ? `PDAX converts and pays ${state.amount.targetCurrency}` : state.deliveryTier === 'STORED_BALANCE' ? 'Crediting reusable USDC balance' : `Preparing ${state.amount.targetCurrency} payout on the local partner rail`,
       icon: Globe2,
     },
     {
@@ -145,6 +163,28 @@ export default function StepStatus({ state, set, next }: { state: TransferState;
           <div className="font-mono text-xs leading-5 break-all">{failureReason}</div>
         </div>
       )}
+
+      {heldDurationMs !== null && (
+        <div className="rounded-2xl border border-primary/25 bg-primary/10 p-4 text-sm font-black text-foreground">
+          Pass-through held duration: {(heldDurationMs / 1000).toFixed(1)}s
+        </div>
+      )}
+
+      {state.composedActions?.length ? (
+        <section className="rounded-3xl border-2 border-[#5C9EAD]/35 bg-[#5C9EAD]/10 p-5">
+          <div className="text-[11px] font-black uppercase tracking-[0.16em] text-[#326273]/55">One composed Sui transaction</div>
+          <h3 className="mt-1 text-lg font-extrabold text-[#0c3e48]">Pay, allocate, and prove</h3>
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            {state.composedActions.map((action, index) => (
+              <div key={`${action.kind}-${action.eventType}`} className="rounded-2xl border border-[#326273]/10 bg-white p-4">
+                <div className="text-xs font-black text-[#E39774]">0{index + 1}</div>
+                <div className="mt-1 text-sm font-extrabold text-[#326273]">{action.label}</div>
+                <div className="mt-2 break-all font-mono text-[10px] text-[#326273]/50">{action.eventType}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {state.transferIntentId && <div className="break-all rounded-2xl bg-[#F6F0ED] p-4 font-mono text-xs text-[#326273]/55">Transfer intent: {state.transferIntentId}</div>}
     </div>

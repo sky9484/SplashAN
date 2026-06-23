@@ -7,6 +7,7 @@
 import { NextResponse } from 'next/server';
 
 import { getCopilotSuggestions } from '@/lib/server/copilot';
+import { listInvoices } from '@/lib/server/operations';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -14,5 +15,22 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: Request) {
   const user = new URL(request.url).searchParams.get('user') ?? 'patterns';
   const suggestions = await getCopilotSuggestions(user);
-  return NextResponse.json({ suggestions });
+  const openInvoices = listInvoices().filter((invoice) => invoice.status !== 'paid' && invoice.status !== 'settled');
+  const invoicesByCurrency = openInvoices.reduce<Record<string, typeof openInvoices>>((groups, invoice) => {
+    (groups[invoice.targetCurrency] ??= []).push(invoice);
+    return groups;
+  }, {});
+  const batchSuggestions = Object.entries(invoicesByCurrency)
+    .filter(([, invoices]) => invoices.length >= 2)
+    .map(([currency, invoices]) => ({
+      suggestionId: `invoice_batch_${currency}`,
+      type: 'batch' as const,
+      title: `Batch ${invoices.length} open ${currency} invoices`,
+      description: `These invoices share the USD to ${currency} corridor. Drafting one batch could save about $${((invoices.length - 1) * 23.5).toFixed(0)} in repeated settlement costs.`,
+      confidence: 0.92,
+      requiresAuth: true,
+      suggestedAction: `batch:${currency}:${invoices.map((invoice) => invoice.id).join(',')}`,
+    }));
+
+  return NextResponse.json({ suggestions: [...batchSuggestions, ...suggestions].slice(0, 5) });
 }

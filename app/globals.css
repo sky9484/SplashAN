@@ -1,5 +1,4 @@
 @import "tailwindcss";
-@config "../tailwind.config.ts";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
@@ -864,8 +863,12 @@ body {
 
 .iso-partner-grid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 8px;
+}
+
+.iso-deepbook-logo {
+  filter: brightness(0) saturate(100%) invert(20%) sepia(16%) saturate(1679%) hue-rotate(142deg) brightness(91%);
 }
 
 .iso-partner-item {
@@ -1736,6 +1739,34 @@ body {
   line-height: 1.55;
 }
 
+.iso-scale-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 22px;
+}
+
+.iso-scale-metrics span {
+  display: grid;
+  gap: 2px;
+  border: 1px solid rgba(12, 62, 72, .14);
+  border-radius: 7px;
+  padding: 9px 10px;
+  background: rgba(255, 251, 245, .6);
+}
+
+.iso-scale-metrics strong {
+  color: var(--iso-ink);
+  font-size: 9px;
+  font-weight: 950;
+}
+
+.iso-scale-metrics small {
+  color: rgba(12, 62, 72, .52);
+  font-size: 7px;
+  line-height: 1.4;
+}
+
 .iso-walrus {
   overflow: hidden;
   color: #fffaf1;
@@ -2263,6 +2294,63 @@ body {
   color: #fffaf1;
   background: var(--iso-teal);
   box-shadow: 2px 3px 0 var(--iso-teal-dark);
+}
+
+.iso-recipient-ladder {
+  display: grid;
+  gap: 9px;
+  margin-top: 26px;
+}
+
+.iso-recipient-ladder article {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  gap: 12px;
+  border: 1px solid rgba(12, 62, 72, .17);
+  border-radius: 9px;
+  padding: 11px 12px;
+  background: rgba(255, 251, 245, .66);
+  box-shadow: 3px 4px 0 rgba(12, 62, 72, .1);
+}
+
+.iso-recipient-ladder article > span {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 6px;
+  color: #fffaf1;
+  background: var(--iso-teal);
+  font-family: var(--font-mono), monospace;
+  font-size: 9px;
+  font-weight: 950;
+  box-shadow: 3px 3px 0 var(--iso-teal-dark);
+}
+
+.iso-recipient-ladder div {
+  display: grid;
+  gap: 2px;
+}
+
+.iso-recipient-ladder small {
+  color: #a36b22;
+  font-family: var(--font-mono), monospace;
+  font-size: 7px;
+  font-weight: 950;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.iso-recipient-ladder strong {
+  color: var(--iso-ink);
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.iso-recipient-ladder p {
+  color: rgba(12, 62, 72, .58);
+  font-size: 8px;
+  line-height: 1.5;
 }
 
 .iso-inline-link {
@@ -4711,6 +4799,31 @@ body {
   box-shadow: 7px 7px 0 #276a51, 13px 15px 25px rgba(18, 83, 63, .24);
 }
 
+/* Place the three isometric callouts around the artwork at 1.45x their prior scale. */
+.iso-floating-note-a {
+  top: auto;
+  right: auto;
+  bottom: 20%;
+  left: 14%;
+  --note-scale: .725;
+}
+
+.iso-floating-note-b {
+  top: 16%;
+  right: auto;
+  bottom: auto;
+  left: 1%;
+  --note-scale: .725;
+}
+
+.iso-floating-note-c {
+  top: 30%;
+  right: -8%;
+  bottom: auto;
+  left: auto;
+  --note-scale: .725;
+}
+
 .iso-floating-note small {
   color: rgba(12, 62, 72, .66);
   font-family: var(--font-mono), monospace;
@@ -4860,11 +4973,44 @@ button.iso-product-row {
 
 .iso-tool-modal-art img {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   width: min(82%, 540px);
   height: auto;
   object-fit: contain;
   filter: drop-shadow(0 26px 25px rgba(5, 44, 50, .22));
+}
+
+.iso-tool-modal-wordmark {
+  position: absolute;
+  z-index: 3;
+  top: 25px;
+  left: 28px;
+  display: grid;
+  gap: 2px;
+  max-width: 70%;
+  color: #fffaf1;
+  text-transform: uppercase;
+  transform: skewY(-4deg);
+  transform-origin: left center;
+}
+
+.iso-tool-modal-wordmark span {
+  color: #efad55;
+  font-family: var(--font-mono), monospace;
+  font-size: 12px;
+  font-weight: 950;
+  letter-spacing: .2em;
+}
+
+.iso-tool-modal-wordmark strong {
+  font-size: clamp(30px, 4.8vw, 58px);
+  font-weight: 950;
+  letter-spacing: -.065em;
+  line-height: .84;
+  text-shadow:
+    2px 2px 0 #0d3b44,
+    4px 4px 0 #0d3b44,
+    7px 8px 0 rgba(13, 59, 68, .28);
 }
 
 .iso-tool-modal-metric {
@@ -5070,7 +5216,7 @@ button.iso-product-row {
 
 .admin-login-brand img {
   width: 42px;
-  height: 42px;
+  height: auto;
   object-fit: contain;
 }
 
@@ -5479,7 +5625,7 @@ button.iso-product-row {
 
 .splash-loading-copy img {
   width: 72px;
-  height: 72px;
+  height: auto;
   object-fit: contain;
   filter: drop-shadow(0 12px 12px rgba(0, 0, 0, .2));
 }
@@ -5559,6 +5705,24 @@ button.iso-product-row {
     transform: translateX(10%) scale(1.15);
   }
 
+  .iso-floating-note-a {
+    bottom: 0;
+    left: 4%;
+    --note-scale: .52;
+  }
+
+  .iso-floating-note-b {
+    top: 1%;
+    left: -3%;
+    --note-scale: .52;
+  }
+
+  .iso-floating-note-c {
+    top: 34%;
+    right: -5%;
+    --note-scale: .52;
+  }
+
   .iso-tool-modal {
     padding: 12px;
   }
@@ -5582,5 +5746,418 @@ button.iso-product-row {
 
   .splash-loading-panel {
     min-height: 360px;
+  }
+}
+
+/* Brand-system consolidation */
+.iso-main-logo {
+  width: clamp(108px, 10vw, 142px);
+  height: auto;
+  object-fit: contain;
+}
+
+.iso-main-logo-footer {
+  width: clamp(112px, 11vw, 148px);
+}
+
+.iso-header-brand-icon {
+  width: 34px;
+  height: auto;
+  object-fit: contain;
+  filter: none !important;
+}
+
+.iso-header-wordmark {
+  gap: 0;
+}
+
+.iso-header-wordmark strong {
+  color: #16495c;
+  font-size: 22px;
+  font-weight: 750;
+  letter-spacing: -.055em;
+  line-height: .96;
+}
+
+.iso-header-wordmark small {
+  margin-top: 4px;
+  color: #285c6c;
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  font-size: 6px;
+  font-weight: 650;
+  letter-spacing: .015em;
+  line-height: 1;
+  text-transform: none;
+}
+
+.iso-hero {
+  background-color: var(--iso-paper);
+  background-image: none;
+}
+
+.iso-hero > .iso-grid-plane,
+.iso-hero > .iso-orb {
+  display: none;
+}
+
+@media (max-width: 700px) {
+  .iso-header-brand-icon {
+    width: 30px;
+    height: auto;
+  }
+
+  .iso-header-wordmark strong {
+    font-size: 18px;
+  }
+}
+
+/* A proof-first story: promise, infrastructure, comparison, operation, then scale. */
+.iso-comparison { order: 3; }
+.iso-operating { order: 4; }
+.iso-flow { order: 5; }
+.iso-copilot { order: 6; }
+.iso-walrus { order: 7; }
+.iso-products { order: 8; }
+
+/* Keep the signature engine compact enough to scan without losing the flow. */
+.dash-flow {
+  padding: 15px 17px 18px;
+}
+
+.dash-flow-head {
+  margin-bottom: 6px;
+}
+
+.dash-flow-stage {
+  grid-template-columns: minmax(0, 1fr) minmax(36px, .58fr) auto minmax(36px, .58fr) minmax(0, 1fr);
+  min-height: 174px;
+}
+
+.dash-flow-col,
+.dash-flow-stack {
+  gap: 7px;
+}
+
+.dash-flow-node {
+  gap: 8px;
+  border-radius: 10px;
+  padding: 6px 8px;
+}
+
+.dash-flow-node-mark {
+  width: 31px;
+  height: 31px;
+  border-radius: 8px;
+}
+
+.dash-flow-node-logo {
+  max-width: 25px;
+  max-height: 18px;
+}
+
+.dash-flow-node-copy strong {
+  font-size: 11px;
+}
+
+.dash-flow-node-copy small {
+  font-size: 8.5px;
+}
+
+.dash-flow-wires {
+  min-height: 140px;
+}
+
+.dash-flow-core {
+  gap: 5px;
+  padding-inline: 3px;
+}
+
+.dash-flow-core-orb {
+  width: 78px;
+  height: 78px;
+  box-shadow: 4px 5px 0 rgba(12, 62, 72, .12), 0 12px 24px rgba(8, 54, 64, .1);
+}
+
+.dash-flow-core-orb img {
+  width: 49px;
+  height: auto;
+  max-width: 49px;
+  max-height: none;
+}
+
+.dash-flow-core strong {
+  font-size: 12px;
+}
+
+.dash-flow-core small {
+  max-width: 110px;
+  font-size: 7.5px;
+}
+
+.splash-loading-shell,
+.admin-login-shell,
+.admin-login-form-wrap {
+  background-color: #edf4f2;
+}
+
+.splash-loading-shell {
+  background:
+    radial-gradient(circle at 18% 18%, rgba(92, 158, 173, .18), transparent 26%),
+    radial-gradient(circle at 84% 80%, rgba(159, 207, 199, .2), transparent 24%),
+    #edf4f2;
+}
+
+.splash-loading-panel {
+  background: radial-gradient(circle at 50% 42%, #246875 0%, #103f49 54%, #082b32 100%);
+  box-shadow: 12px 12px 0 #9fcfc7, 0 34px 70px rgba(8, 46, 54, .2);
+}
+
+.admin-login-form-wrap {
+  background:
+    linear-gradient(rgba(16, 63, 72, .038) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(16, 63, 72, .038) 1px, transparent 1px),
+    #edf4f2;
+  background-size: 28px 28px;
+}
+
+.admin-login-form {
+  background: #fbfefd;
+  box-shadow: 10px 10px 0 #9fcfc7, 0 30px 60px rgba(9, 49, 57, .15);
+}
+
+.admin-login-form-heading > svg {
+  box-shadow: 4px 4px 0 #9fcfc7;
+}
+
+.admin-login-form button {
+  box-shadow: 5px 5px 0 #9fcfc7;
+}
+
+.admin-login-note {
+  background: #e9f3f0;
+}
+
+.fintech-admin-shell {
+  background: #edf4f2 !important;
+}
+
+@media (max-width: 768px) {
+  .dash-flow-stage {
+    min-height: auto;
+  }
+}
+
+/* Responsive composition guardrails. These final rules intentionally own the
+   hero artwork and the shared dashboard engine across viewport sizes. */
+.iso-hero-stage {
+  width: min(100%, 780px);
+  min-height: clamp(430px, 34vw, 610px);
+  justify-self: center;
+}
+
+.iso-hero-main-art {
+  top: 50%;
+  right: 0;
+  width: min(100%, 760px);
+  max-width: 100%;
+  transform: translate(2%, -52%) scale(1.02);
+  transform-origin: center;
+}
+
+.iso-stage-shadow {
+  right: 6%;
+  bottom: 11%;
+  width: 82%;
+  transform: translateX(2%) scale(1.05) rotate(-7deg);
+}
+
+.iso-floating-note {
+  min-width: clamp(124px, 10vw, 158px);
+  padding: clamp(9px, .7vw, 13px) clamp(11px, .9vw, 17px);
+}
+
+.iso-floating-note-a,
+.iso-floating-note-b,
+.iso-floating-note-c {
+  --note-scale: .68;
+}
+
+.dash-flow {
+  container-type: inline-size;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  padding: clamp(12px, 1.3vw, 17px) clamp(12px, 1.5vw, 18px) clamp(14px, 1.6vw, 19px);
+}
+
+.dash-flow-stage {
+  grid-template-columns: minmax(90px, 1fr) minmax(26px, .48fr) auto minmax(26px, .48fr) minmax(90px, 1fr);
+  min-height: clamp(148px, 16vw, 174px);
+}
+
+.dash-flow-node {
+  min-width: 0;
+  padding: clamp(5px, .55vw, 7px) clamp(6px, .7vw, 9px);
+}
+
+.dash-flow-node-mark {
+  width: clamp(27px, 3vw, 31px);
+  height: clamp(27px, 3vw, 31px);
+}
+
+.dash-flow-core-orb {
+  width: clamp(64px, 7vw, 78px);
+  height: clamp(64px, 7vw, 78px);
+}
+
+.dash-flow-core-orb img {
+  width: clamp(39px, 4.4vw, 49px);
+  height: auto;
+  max-width: 64%;
+  max-height: none;
+}
+
+@media (max-width: 1100px) {
+  .iso-hero-stage {
+    width: min(100%, 840px);
+    min-height: clamp(430px, 64vw, 590px);
+  }
+
+  .iso-hero-main-art {
+    width: min(100%, 810px);
+    transform: translate(9%, -52%) scale(1.04);
+  }
+
+  .iso-stage-shadow {
+    transform: translateX(9%) scale(1.08) rotate(-7deg);
+  }
+
+  .iso-floating-note-a,
+  .iso-floating-note-b,
+  .iso-floating-note-c {
+    --note-scale: .62;
+  }
+}
+
+@media (max-width: 768px) {
+  .dash-flow-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .dash-flow-stage {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    min-height: auto;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .dash-flow-wires {
+    display: none;
+  }
+
+  .dash-flow-col-dests .dash-flow-node {
+    flex-direction: row-reverse;
+    text-align: right;
+  }
+
+  .dash-flow-core {
+    padding: 8px 0;
+  }
+
+  .dash-flow-node {
+    gap: 5px;
+    padding: 5px;
+  }
+
+  .dash-flow-node-mark {
+    width: 26px;
+    height: 26px;
+  }
+
+  .dash-flow-node-copy strong {
+    font-size: 10px;
+  }
+
+  .dash-flow-node-copy small {
+    display: none;
+  }
+
+  .dash-flow-core-orb {
+    width: 58px;
+    height: 58px;
+  }
+
+  .dash-flow-core strong {
+    font-size: 10px;
+  }
+
+  .dash-flow-core small {
+    max-width: 66px;
+    font-size: 6px;
+  }
+}
+
+@media (max-width: 700px) {
+  .iso-hero-stage {
+    width: 100%;
+    min-height: clamp(300px, 78vw, 380px);
+    margin-top: 0;
+  }
+
+  .iso-hero-main-art {
+    top: 48%;
+    width: 102%;
+    max-width: none;
+    transform: translate(4%, -50%) scale(.98);
+  }
+
+  .iso-stage-shadow {
+    right: 7%;
+    bottom: 9%;
+    width: 78%;
+    transform: translateX(4%) scale(1.02) rotate(-7deg);
+  }
+
+  .iso-floating-note {
+    min-width: 112px;
+    padding: 8px 10px;
+  }
+
+  .iso-floating-note-a,
+  .iso-floating-note-b,
+  .iso-floating-note-c {
+    --note-scale: .48;
+  }
+
+  .iso-floating-note-a {
+    bottom: -1%;
+    left: 0;
+  }
+
+  .iso-floating-note-b {
+    top: 0;
+    left: -4%;
+  }
+
+  .iso-floating-note-c {
+    top: 29%;
+    right: -7%;
+  }
+}
+
+@media (max-width: 420px) {
+  .iso-hero-stage {
+    min-height: 285px;
+  }
+
+  .iso-floating-note {
+    min-width: 104px;
+  }
+
+  .iso-floating-note-a,
+  .iso-floating-note-b,
+  .iso-floating-note-c {
+    --note-scale: .42;
   }
 }

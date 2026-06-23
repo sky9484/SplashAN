@@ -32,15 +32,8 @@ export type ShinamiGasSponsor = {
 }
 
 function createMockDigest(kind: SponsoredTransactionKind) {
-  const seed = `${kind}:${Date.now()}:${Math.random()}`
-  let hash = 0
-
-  for (let index = 0; index < seed.length; index += 1) {
-    hash = (hash << 5) - hash + seed.charCodeAt(index)
-    hash |= 0
-  }
-
-  return `0x${Math.abs(hash).toString(16).padStart(8, "0")}${Date.now().toString(16)}`
+  const seed = `${kind}:${Date.now()}`
+  return `DEMO_SPONSORED_${createHash("sha256").update(seed).digest("hex").slice(0, 40)}`
 }
 
 export async function executeSponsoredTransaction(
@@ -50,6 +43,11 @@ export async function executeSponsoredTransaction(
   const startedAt = performance.now()
 
   if (!sponsor || !request.userSignature) {
+    if (process.env.USE_MOCK_APIS !== "true" && process.env.SUI_SETTLEMENT_MODE !== "simulate") {
+      throw new Error(
+        "Sponsored Sui execution is not configured. Provide a sponsor and user signature, or use the server-side operator signer for live protocol calls.",
+      )
+    }
     await new Promise((resolve) => setTimeout(resolve, 400))
 
     return {
@@ -78,3 +76,4 @@ export async function executeSponsoredTransaction(
     status: "success",
   }
 }
+import { createHash } from "node:crypto"

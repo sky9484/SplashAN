@@ -2,8 +2,7 @@ import { NextResponse } from 'next/server';
 import { timingSafeEqual } from 'crypto';
 
 import { pythAdapter } from '@/lib/server/pyth';
-import { buildUpdatePriceTx } from '@/lib/sui/contracts';
-import { executeSponsoredTransaction } from '@/lib/sui/gas';
+import { refreshPegOnSui } from '@/lib/server/sui-settlement';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 10;
@@ -33,12 +32,7 @@ async function handlePegUpdate(request: Request) {
 
   try {
     const { usdc, usdt } = await pythAdapter.getStablecoinPrices();
-    const tx = buildUpdatePriceTx(usdc.price, usdt.price);
-    const result = await executeSponsoredTransaction({
-      kind: 'peg_monitor::update_peg',
-      sender: process.env.OPERATOR_SUI_ADDRESS ?? '',
-      payload: tx,
-    });
+    const result = await refreshPegOnSui({ usdcPrice: usdc.price, usdtPrice: usdt.price });
 
     return NextResponse.json({
       success: true,
@@ -46,7 +40,9 @@ async function handlePegUpdate(request: Request) {
       usdt_price: usdt.price,
       usdc_source: usdc.source,
       usdt_source: usdt.source,
-      tx_digest: result?.digest ?? null,
+      usdc_deviation_ppm: result.usdcDeviationPpm,
+      usdt_deviation_ppm: result.usdtDeviationPpm,
+      tx_digest: result.digest,
     });
   } catch (error) {
     // Log full detail server-side only; never reflect internal error strings

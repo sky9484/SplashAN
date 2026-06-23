@@ -1,22 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { CheckCircle2, Clock3, Plus, Search, XCircle, Trash2, Building2, Globe2, CreditCard, ShieldCheck, Sparkles, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
+
+import StatusBadge from '@/components/StatusBadge';
+import type { RecipientRecord } from '@/lib/server/operations';
 
 const paymentSummary = [
   { label: 'Pending', count: 8, amount: '$4,540.00', icon: Clock3, tone: 'border-[#E39774]/30 bg-[#E39774]/10 text-[#E39774]' },
   { label: 'Failed', count: 1, amount: '$260.00', icon: XCircle, tone: 'border-red-500/30 bg-red-500/10 text-red-600' },
   { label: 'Success', count: 19, amount: '$14,640.00', icon: CheckCircle2, tone: 'border-[#5C9EAD]/30 bg-[#5C9EAD]/10 text-[#5C9EAD]' },
-];
-
-const initialRecipients = [
-  { id: '1', name: 'Acme Philippines Corp', country: 'PH', bank: 'BDO Unibank', account: '****8912', status: 'active' },
-  { id: '2', name: 'Global IT Solutions Pte Ltd', country: 'SG', bank: 'DBS Bank', account: '****5543', status: 'active' },
-  { id: '3', name: 'Jakarta Supplies PT', country: 'ID', bank: 'Bank Mandiri', account: '****1123', status: 'active' },
-  { id: '4', name: 'Manila BPO Services Inc', country: 'PH', bank: 'Metrobank', account: '****6745', status: 'active' },
-  { id: '5', name: 'Kuala Tech Ventures Sdn Bhd', country: 'MY', bank: 'Maybank', account: '****3341', status: 'active' },
 ];
 
 const initialPayments = [
@@ -34,38 +29,47 @@ const corridorBreakdown = [
 ];
 
 export default function RecipientsPage() {
-  const [recipients, setRecipients] = useState(initialRecipients);
+  const [recipients, setRecipients] = useState<RecipientRecord[]>([]);
   const [payments] = useState(initialPayments);
   const [showAddForm, setShowAddForm] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'recipients' | 'payments'>('recipients');
   const [form, setForm] = useState({ name: '', country: 'PH', bank: '', swift: '', account: '' });
 
+  useEffect(() => {
+    let active = true;
+    void fetch('/api/recipients')
+      .then((response) => response.json())
+      .then((records: RecipientRecord[]) => { if (active) setRecipients(records); });
+    return () => { active = false; };
+  }, []);
+
   const filtered = recipients.filter((r) =>
     String(r.name ?? '').toLowerCase().includes(searchQuery.toLowerCase()) ||
     String(r.bank ?? '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  function addRecipient() {
+  async function addRecipient() {
     if (!form.name || !form.account) {
       toast.error('Name and account number are required');
       return;
     }
-    const newRecipient = {
-      id: `r_${Date.now()}`,
-      name: form.name,
-      country: form.country,
-      bank: form.bank || 'Local Bank',
-      account: `****${form.account.slice(-4)}`,
-      status: 'active',
-    };
+    const response = await fetch('/api/recipients', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(form),
+    });
+    if (!response.ok) return toast.error('Recipient could not be added');
+    const newRecipient = (await response.json()) as RecipientRecord;
     setRecipients((prev) => [...prev, newRecipient]);
     setForm({ name: '', country: 'PH', bank: '', swift: '', account: '' });
     setShowAddForm(false);
     toast.success('Recipient added successfully');
   }
 
-  function removeRecipient(id: string) {
+  async function removeRecipient(id: string) {
+    const response = await fetch(`/api/recipients/${id}`, { method: 'DELETE' });
+    if (!response.ok) return toast.error('Recipient could not be removed');
     setRecipients((prev) => prev.filter((r) => r.id !== id));
     toast.success('Recipient removed');
   }
@@ -76,7 +80,7 @@ export default function RecipientsPage() {
         <div>
           <span className="dash-kicker">Global directory</span>
           <h1 className="dash-title mt-2">Recipients &amp; Payments</h1>
-          <p className="mt-1 text-xs font-medium text-[#326273]/60">Manage beneficiaries and view payment history.</p>
+          <p className="mt-1 text-xs font-medium text-[#326273]/60">Manage beneficiaries, delivery depth, and payment history.</p>
         </div>
         <button
           onClick={() => setShowAddForm((v) => !v)}
@@ -201,11 +205,12 @@ export default function RecipientsPage() {
                         <Building2 className="h-5 w-5" />
                       </div>
                       <div className="min-w-0">
-                        <div className="truncate text-sm font-bold text-[#326273]">{r.name}</div>
+                        <div className="flex flex-wrap items-center gap-2"><span className="truncate text-sm font-bold text-[#326273]">{r.name}</span>{r.demo && <StatusBadge status="demo" />}</div>
                         <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-[#326273]/60">
                           <span className="flex items-center gap-1"><Globe2 className="h-3 w-3" /> {r.country}</span>
-                          <span className="flex items-center gap-1"><CreditCard className="h-3 w-3" /> {r.bank}</span>
-                          <span className="font-mono">{r.account}</span>
+                          <span className="flex items-center gap-1"><CreditCard className="h-3 w-3" /> {r.bank || 'No bank account'}</span>
+                          {r.account && <span className="font-mono">{r.account}</span>}
+                          <span className="rounded-full bg-[#5C9EAD]/10 px-2 py-0.5 font-bold text-[#5C9EAD]">{r.tier.replaceAll('_', ' ')}</span>
                         </div>
                       </div>
                     </div>

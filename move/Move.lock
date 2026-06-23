@@ -2,7 +2,31 @@
 # This file should be checked in.
 
 [move]
-version = 4
+version = 3
+manifest_digest = "5AB2EF463E3093296AFB6724B11BE86C02E468780D6C18813E384BC96FF9FE1A"
+deps_digest = "52B406A7A21811BEF51751CF88DA0E76DAEFFEAC888D4F4060B1A72BBE7D8D35"
+dependencies = [
+  { id = "Bridge", name = "Bridge" },
+  { id = "MoveStdlib", name = "MoveStdlib" },
+  { id = "Sui", name = "Sui" },
+  { id = "SuiSystem", name = "SuiSystem" },
+  { id = "deepbook", name = "deepbook" },
+  { id = "openzeppelin_math", name = "openzeppelin_math" },
+]
+
+[[move.package]]
+id = "Bridge"
+source = { git = "https://github.com/MystenLabs/sui.git", rev = "494fa6ede17f366f1cd850f01ccb9f42dc75c470", subdir = "crates/sui-framework/packages/bridge" }
+
+dependencies = [
+  { id = "MoveStdlib", name = "MoveStdlib" },
+  { id = "Sui", name = "Sui" },
+  { id = "SuiSystem", name = "SuiSystem" },
+]
+
+[[move.package]]
+id = "MoveStdlib"
+source = { git = "https://github.com/MystenLabs/sui.git", rev = "494fa6ede17f366f1cd850f01ccb9f42dc75c470", subdir = "crates/sui-framework/packages/move-stdlib" }
 
 [pinned.testnet.MoveStdlib]
 source = { git = "https://github.com/MystenLabs/sui.git", subdir = 'crates\sui-framework\packages\move-stdlib', rev = "73dd2c2ba6f9fdb21d7ffde2b50a3f2f0ac39bc1" }
@@ -10,14 +34,70 @@ use_environment = "testnet"
 manifest_digest = "C4FE4C91DE74CBF223B2E380AE40F592177D21870DC2D7EB6227D2D694E05363"
 deps = {}
 
+[[move.package]]
+id = "Sui"
+source = { git = "https://github.com/MystenLabs/sui.git", rev = "494fa6ede17f366f1cd850f01ccb9f42dc75c470", subdir = "crates/sui-framework/packages/sui-framework" }
+
+dependencies = [
+  { id = "MoveStdlib", name = "MoveStdlib" },
+]
+
 [pinned.testnet.Sui]
 source = { git = "https://github.com/MystenLabs/sui.git", subdir = 'crates\sui-framework\packages\sui-framework', rev = "73dd2c2ba6f9fdb21d7ffde2b50a3f2f0ac39bc1" }
 use_environment = "testnet"
 manifest_digest = "7AFB66695545775FBFBB2D3078ADFD084244D5002392E837FDE21D9EA1C6D01C"
 deps = { MoveStdlib = "MoveStdlib" }
 
+[[move.package]]
+id = "SuiSystem"
+source = { git = "https://github.com/MystenLabs/sui.git", rev = "494fa6ede17f366f1cd850f01ccb9f42dc75c470", subdir = "crates/sui-framework/packages/sui-system" }
+
+dependencies = [
+  { id = "MoveStdlib", name = "MoveStdlib" },
+  { id = "Sui", name = "Sui" },
+]
+
 [pinned.testnet.splash_protocol]
 source = { root = true }
 use_environment = "testnet"
 manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332A87"
 deps = { std = "MoveStdlib", sui = "Sui" }
+
+[[move.package]]
+id = "deepbook"
+source = { git = "https://github.com/MystenLabs/deepbookv3.git", rev = "daa5a9514908968f11be1d0388f673e0ee1a5059", subdir = "packages/deepbook" }
+
+dependencies = [
+  { id = "Bridge", name = "Bridge" },
+  { id = "MoveStdlib", name = "MoveStdlib" },
+  { id = "Sui", name = "Sui" },
+  { id = "SuiSystem", name = "SuiSystem" },
+  { id = "token", name = "token" },
+]
+
+[[move.package]]
+id = "openzeppelin_math"
+source = { git = "https://github.com/OpenZeppelin/contracts-sui.git", rev = "a9703fe834a56990ccbcee3a1cf0802e7cd3b8d9", subdir = "math/core" }
+
+dependencies = [
+  { id = "Bridge", name = "Bridge" },
+  { id = "MoveStdlib", name = "MoveStdlib" },
+  { id = "Sui", name = "Sui" },
+  { id = "SuiSystem", name = "SuiSystem" },
+]
+
+[[move.package]]
+id = "token"
+source = { git = "https://github.com/MystenLabs/deepbookv3.git", rev = "main", subdir = "packages/token" }
+
+dependencies = [
+  { id = "Bridge", name = "Bridge" },
+  { id = "MoveStdlib", name = "MoveStdlib" },
+  { id = "Sui", name = "Sui" },
+  { id = "SuiSystem", name = "SuiSystem" },
+]
+
+[move.toolchain-version]
+compiler-version = "1.59.1"
+edition = "2024.beta"
+flavor = "sui"

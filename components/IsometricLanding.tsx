@@ -29,10 +29,10 @@ const operatingLayers = [
     number: '01',
     label: 'Liquidity',
     title: 'Keep USD productive.',
-    copy: 'Route idle capital across stablecoin liquidity while your payout inventory stays ready.',
+    copy: 'Keep payout inventory ready while treasury projections model how excess USD could remain productive.',
     image: '/isometric/liquidity-pools.svg',
     imageAlt: 'Isometric stablecoin liquidity pools',
-    meta: 'USDC · USDT · USDY',
+    meta: 'Available cash · projected treasury',
   },
   {
     number: '02',
@@ -47,10 +47,10 @@ const operatingLayers = [
     number: '03',
     label: 'Treasury',
     title: 'Make cash work harder.',
-    copy: 'Treasury automation keeps liquidity available and moves idle USD toward yield.',
+    copy: '0xWal recommends a treasury posture. Your business approves every action; execution remains gated.',
     image: '/isometric/treasury.svg',
     imageAlt: 'Isometric smart treasury card',
-    meta: '4.8% projected APY',
+    meta: 'Simulation · human approval',
   },
 ];
 
@@ -59,10 +59,10 @@ const flowSteps = [
     id: 'fund',
     number: '01',
     title: 'Fund in USD',
-    description: 'Deposit once and operate every corridor from a single USD-first treasury.',
+    description: 'Fund the operating account or get paid through a link, then keep value ready inside Splash.',
     image: '/isometric/USD.svg',
     imageAlt: 'USD and stablecoin isometric illustration',
-    stat: 'One USD treasury',
+    stat: 'Pay + get paid',
   },
   {
     id: 'settle',
@@ -77,18 +77,19 @@ const flowSteps = [
     id: 'deliver',
     number: '03',
     title: 'Deliver locally',
-    description: 'Recipients get familiar local currency while every receipt stays audit-ready.',
+    description: 'Pay out now, or sweep into a recipient account as the closed-loop network expands.',
     image: '/isometric/payments.svg',
     imageAlt: 'Isometric cross-border payment receipt',
-    stat: '0.8% fee floor',
+    stat: 'From 0.80% at the edge',
   },
 ];
 
 const marqueeItems = [
-  ['8 corridors', 'one operating layer'],
+  ['1 live-model', 'MY to PH wedge'],
+  ['8 corridors', 'implemented in code'],
   ['400ms', 'Sui settlement finality'],
-  ['3-5%', 'USDY T-bill yield'],
-  ['4 layers', 'AI treasury copilot'],
+  ['Free inside', 'paid at the edges'],
+  ['Human approved', 'AI recommendations'],
   ['7 years', 'verifiable audit proof'],
 ];
 
@@ -96,6 +97,7 @@ const partnerRail = [
   { src: '/stripe-logo.svg', name: 'Stripe', role: 'USD collection' },
   { src: '/airwallex-logo.png', name: 'Airwallex', role: 'bank rails' },
   { src: '/pyth-logo.png', name: 'Pyth', role: 'FX and peg data' },
+  { src: '/deepbook-logo-white.png', name: 'DeepBook V3', role: 'amount-sized liquidity' },
   { src: '/sumsub-logo.png', name: 'Sumsub', role: 'KYB and KYC' },
   { src: '/walrus-logo.svg', name: 'Walrus', role: 'permanent records' },
   { src: '/sui-logo-blue.svg', name: 'Sui', role: 'settlement network' },
@@ -107,14 +109,14 @@ const comparisonRows = [
     bank: '2-5 days',
     broker: '1-3 days',
     wise: '1-2 days',
-    splash: '400ms',
+    splash: '400ms Sui intent',
   },
   {
     feature: 'Starting fee',
     bank: '3-5%',
     broker: '2-4%',
     wise: '0.5-1.5%',
-    splash: '0.8%',
+    splash: 'Free inside · from 0.80% edge',
   },
   {
     feature: 'FX transparency',
@@ -142,14 +144,21 @@ const comparisonRows = [
     bank: 'No',
     broker: 'No',
     wise: 'No',
-    splash: 'Included',
+    splash: 'Recommends · you approve',
   },
   {
     feature: 'Permanent audit trail',
     bank: 'Siloed records',
     broker: 'Manual receipts',
     wise: 'Platform history',
-    splash: 'Walrus + Sui',
+    splash: 'Encrypted Walrus + Sui',
+  },
+  {
+    feature: 'Recipient account ladder',
+    bank: 'Bank account only',
+    broker: 'Cash-out only',
+    wise: 'Wise account',
+    splash: 'Payout · sweep · stored balance',
   },
 ];
 
@@ -165,7 +174,7 @@ const fallbackYieldBenchmarks: YieldBenchmarks = {
   bank: 0.38,
   broker: 3.12,
   wise: 3.14,
-  splash: 4.8,
+  splash: 0,
   asOf: '',
 };
 
@@ -188,7 +197,7 @@ const copilotLayers = [
   {
     icon: TrendingUp,
     title: 'Treasury advisor',
-    copy: 'Separate payout liquidity from productive USD and recommend yield without taking control.',
+    copy: 'Model payout liquidity and projected yield, then wait for explicit business approval.',
   },
 ];
 
@@ -243,18 +252,46 @@ const walrusSlides = [
 const readinessGates = [
   {
     icon: CircleCheckBig,
-    title: 'Protocol proof',
-    copy: 'PaymentIntent, treasury, peg guard, receipts, and audit anchors work as one governed settlement path.',
+    title: 'Payout proof',
+    copy: 'The MY-to-PH live-model proves quote, intent, settlement, receipt, and audit evidence as one path.',
   },
   {
     icon: ShieldCheck,
-    title: 'Regulatory proof',
-    copy: 'Labuan licensing and partner controls unlock yield and the full corridor footprint.',
+    title: 'Sweep-account launch',
+    copy: 'Phase 1 adds pay, get paid, sweep, and keep with corridor-by-corridor regulatory controls.',
   },
   {
     icon: TrendingUp,
-    title: 'Commercial proof',
-    copy: 'Scale follows repeat volume, healthy margins, reliable operations, and enterprise retention.',
+    title: 'Closed-loop proof',
+    copy: 'Scale follows netting ratio, counterparty pull, repeat volume, and reliable external delivery.',
+  },
+];
+
+const scaleMetrics = [
+  ['Netting ratio', 'Value kept inside the loop'],
+  ['Counterparty pull', 'Pay links that recruit accounts'],
+  ['Treasury opt-in', 'Approved use of treasury tools'],
+  ['Discount capture', 'Invoice savings realized'],
+];
+
+const recipientLadder = [
+  {
+    number: '01',
+    title: 'Payout',
+    status: 'Live-model',
+    copy: 'Deliver local currency to a verified recipient through the current payout rail.',
+  },
+  {
+    number: '02',
+    title: 'Sweep account',
+    status: 'Phase 1 launch',
+    copy: 'Let recipients sweep value into a Splash account and recruit the next counterparty.',
+  },
+  {
+    number: '03',
+    title: 'Stored balance',
+    status: 'Corridor gated',
+    copy: 'Keep value inside the network where regulation and partner controls permit it.',
   },
 ];
 
@@ -269,43 +306,43 @@ const phaseOneTools = [
     imageAlt: 'Isometric batch payout illustration',
     metric: '128 recipients',
     result: 'One approval, every payout traced',
-    facts: ['Pre-screen recipients', 'Lock one live quote', 'Track every receipt'],
+    facts: ['Pre-screen recipients', 'Label 24-72h rate holds', 'Track every receipt'],
   },
   {
     icon: ReceiptText,
     number: '02',
     title: 'Invoice desk',
-    copy: 'Turn invoices into structured payment instructions while keeping the original file encrypted.',
+    copy: 'Turn invoices and pay links into structured payment instructions that recruit the next counterparty.',
     href: '/dashboard/invoices',
     image: '/isometric/op-invoice.svg',
     imageAlt: 'Isometric encrypted invoice illustration',
-    metric: 'Invoice to intent',
-    result: 'Structured instructions, sealed source',
-    facts: ['Extract payment fields', 'Keep source encrypted', 'Approve before settlement'],
+    metric: 'Pay link to intent',
+    result: 'Get paid, then keep value in the loop',
+    facts: ['Extract payment fields', 'Invite counterparties', 'Approve before settlement'],
   },
   {
     icon: FileCheck2,
     number: '03',
-    title: 'Compliance archive',
-    copy: 'Keep KYB, payment events, and audit proofs connected without a separate records system.',
+    title: 'Reconciliation & proof',
+    copy: 'Auto-match payment activity to accounting systems while private artifacts stay encrypted and verifiable.',
     href: '/settings/kyb',
     image: '/isometric/op-compliance.svg',
     imageAlt: 'Isometric compliance archive illustration',
-    metric: '7-year proof',
-    result: 'Verified without exposing private data',
-    facts: ['Connect KYB evidence', 'Anchor audit batches', 'Permission auditor access'],
+    metric: 'Books to proof',
+    result: 'Reconciled without exposing private data',
+    facts: ['Xero + QuickBooks ready', 'Keep KYB off Walrus', 'Anchor daily audit batches'],
   },
   {
     icon: Layers3,
     number: '04',
     title: 'Treasury controls',
-    copy: 'See available USD, corridor inventory, and productive liquidity from one operating view.',
+    copy: 'Model available USD, corridor inventory, and projected productive liquidity from one operating view.',
     href: '/dashboard/treasury',
     image: '/isometric/op-treasury.svg',
     imageAlt: 'Isometric treasury controls illustration',
-    metric: '4.80% APY',
-    result: 'Keep payout liquidity productive',
-    facts: ['Watch corridor inventory', 'Separate available cash', 'Route idle USD to yield'],
+    metric: 'Projected USDY rate',
+    result: 'Approval-gated treasury simulation',
+    facts: ['Watch corridor inventory', 'Separate available cash', 'Approve every action'],
   },
 ];
 
@@ -389,7 +426,7 @@ export default function IsometricLanding() {
       bank: `${yieldBenchmarks.bank.toFixed(2)}% APY`,
       broker: `${yieldBenchmarks.broker.toFixed(2)}% APY`,
       wise: `${yieldBenchmarks.wise.toFixed(2)}% APY`,
-      splash: `${yieldBenchmarks.splash.toFixed(2)}% APY`,
+      splash: `${yieldBenchmarks.splash.toFixed(2)}% projected`,
     },
   ];
 
@@ -398,10 +435,10 @@ export default function IsometricLanding() {
       <header className="iso-header">
         <div className="iso-shell iso-header-inner">
           <Link href="/" className="iso-brand" aria-label="Splash Finance home">
-            <Image src="/splash-icon.svg" alt="" width={38} height={38} priority />
-            <span>
-              <strong>Splash Finance</strong>
-              <small>Global Settlement Engine</small>
+            <Image src="/splash-main-icon.png" alt="" width={48} height={47} className="iso-header-brand-icon" priority />
+            <span className="iso-header-wordmark">
+              <strong>Splash</strong>
+              <small>Account network for cross-border money</small>
             </span>
           </Link>
 
@@ -436,8 +473,8 @@ export default function IsometricLanding() {
               <span>Faster &amp; Wiser.</span>
             </h1>
             <p className="iso-hero-description">
-              Splash&apos;s working USD-to-SEA rail into a programmable finance desk with smart treasury,
-              AI assistance, permanent records, and an eight-corridor architecture.
+              A regulated B2B account network for cross-border money: pay, get paid, sweep, and keep value
+              with human-approved AI, private records, and Sui settlement.
             </p>
 
             <div className="iso-hero-actions">
@@ -479,7 +516,7 @@ export default function IsometricLanding() {
             <div className="iso-floating-note iso-floating-note-c">
               <span>TREASURY</span>
               <strong>USDY</strong>
-              <small>+{yieldBenchmarks.splash.toFixed(2)}% APY</small>
+              <small>+5.20% APY · simulated</small>
             </div>
           </div>
         </div>
@@ -500,13 +537,19 @@ export default function IsometricLanding() {
       <section className="iso-partner-rail" aria-label="Infrastructure partners and benchmarks">
         <div className="iso-shell">
           <div className="iso-partner-intro">
-            <span>Infastructure &amp; Partners</span>
+            <span>Infrastructure &amp; Partners</span>
             <p>Regulated rails outside. Sui-native settlement inside.</p>
           </div>
           <div className="iso-partner-grid">
             {partnerRail.map((partner) => (
               <div className="iso-partner-item" key={partner.name}>
-                <Image src={partner.src} alt={`${partner.name} logo`} width={120} height={80} />
+                <Image
+                  src={partner.src}
+                  alt={`${partner.name} logo`}
+                  width={120}
+                  height={80}
+                  className={partner.name === 'DeepBook V3' ? 'iso-deepbook-logo' : undefined}
+                />
                 <span>
                   <strong>{partner.name}</strong>
                   <small>{partner.role}</small>
@@ -528,8 +571,8 @@ export default function IsometricLanding() {
               </h2>
             </div>
             <p>
-              Splash competes with Wise on price, beats banks and brokers on speed, and adds programmable
-              treasury, atomic settlement, and permanent audit proof.
+              Splash makes internal account movement free, charges when value exits to local rails, and adds
+              programmable settlement, approval-led AI, and private audit proof.
             </p>
           </div>
 
@@ -558,9 +601,9 @@ export default function IsometricLanding() {
             </table>
             <div className="iso-yield-live">
               <i aria-hidden="true" />
-              <strong>Live yield benchmark</strong>
+              <strong>Reference yield benchmark</strong>
               <span>
-                FDIC national savings · IBKR Pro cash · Wise USD Interest · Splash treasury
+                FDIC national savings · IBKR Pro cash · Wise USD Interest · Splash treasury projection
                 {yieldBenchmarks.asOf ? ` · refreshed ${new Date(yieldBenchmarks.asOf).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
               </span>
             </div>
@@ -579,7 +622,8 @@ export default function IsometricLanding() {
               </h2>
             </div>
             <p>
-              Splash turns settlement primitives into clear operating tools. Each layer has one job, and every layer works together.
+              Splash turns settlement primitives into clear operating tools. Funds are held 1:1 in segregated
+              custody, never commingled, never lent, and reconciled daily.
             </p>
           </div>
 
@@ -613,7 +657,7 @@ export default function IsometricLanding() {
               <span>Zero limbo.</span>
             </h2>
             <p className="iso-flow-intro">
-              Select a step to follow the payment from treasury funding to local delivery.
+              Select a step to follow value from funding or receivables to Sui settlement and local delivery.
             </p>
 
             <div className="iso-flow-tabs" role="tablist" aria-label="Settlement flow">
@@ -791,21 +835,33 @@ export default function IsometricLanding() {
       <section id="corridors" className="iso-section iso-corridors">
         <div className="iso-shell iso-corridor-layout">
           <div className="iso-corridor-copy">
-            <p className="iso-kicker">Three launched. Five activating.</p>
+            <p className="iso-kicker">One live-model wedge. Eight corridors in code.</p>
             <h2 className="iso-section-title">
               USD in.
               <span>Local out.</span>
             </h2>
             <p>
-              Splash already moves USD to PHP, MYR, and IDR. The operating desk adds partner readiness for VND,
-              THB, SGD, EUR, and GBP.
+              The MY-to-PH wedge is the live-model proving ground. The broader corridor architecture is implemented
+              for partner, liquidity, and regulatory activation one market at a time.
             </p>
             <div className="iso-route-list">
-              <span className="is-live">PHP</span><span className="is-live">MYR</span><span className="is-live">IDR</span><span>VND</span>
+              <span className="is-live">PHP · live-model</span><span>MYR</span><span>IDR</span><span>VND</span>
               <span>THB</span><span>SGD</span><span>EUR</span><span>GBP</span>
             </div>
+            <div className="iso-recipient-ladder">
+              {recipientLadder.map((step) => (
+                <article key={step.number}>
+                  <span>{step.number}</span>
+                  <div>
+                    <small>{step.status}</small>
+                    <strong>{step.title}</strong>
+                    <p>{step.copy}</p>
+                  </div>
+                </article>
+              ))}
+            </div>
             <Link href="/signup" className="iso-inline-link">
-              Launch a corridor
+              Open the payout desk
               <ArrowRight aria-hidden="true" />
             </Link>
           </div>
@@ -814,7 +870,7 @@ export default function IsometricLanding() {
             <div className="iso-corridor-number" aria-hidden="true">08</div>
             <Image
               src="/isometric/corridors.svg"
-              alt="Isometric platform showing eight live currency corridors"
+              alt="Isometric platform showing the eight-corridor architecture"
               width={1448}
               height={1086}
             />
@@ -831,8 +887,8 @@ export default function IsometricLanding() {
               <span>repeatable.</span>
             </h2>
             <p>
-              Scale is earned, not announced. These are the gates that turn a strong settlement engine into
-              a repeatable fifteen-corridor network.
+              Scale is earned, not announced. These are the gates that turn a payout prototype into a repeatable
+              closed-loop account network.
             </p>
             <div className="iso-readiness-list">
               {readinessGates.map(({ icon: Icon, title, copy }) => (
@@ -845,6 +901,14 @@ export default function IsometricLanding() {
                 </article>
               ))}
             </div>
+            <div className="iso-scale-metrics" aria-label="Scale proof metrics">
+              {scaleMetrics.map(([metric, definition]) => (
+                <span key={metric}>
+                  <strong>{metric}</strong>
+                  <small>{definition}</small>
+                </span>
+              ))}
+            </div>
           </div>
           <div className="iso-readiness-stage">
             <Image src="/isometric/splash-hero.svg" alt="Splash isometric global settlement engine" width={2172} height={1629} />
@@ -852,8 +916,8 @@ export default function IsometricLanding() {
               <Sparkles aria-hidden="true" />
               <span>
                 <small>Scale unlock</small>
-                <strong>15+ corridors + enterprise API</strong>
-                <p>After licensing, reliability, volume, and retention are repeatable.</p>
+                <strong>Pay + get paid + sweep + keep</strong>
+                <p>After corridor controls, reliability, netting, counterparty pull, and retention are repeatable.</p>
               </span>
             </div>
           </div>
@@ -871,8 +935,8 @@ export default function IsometricLanding() {
               </h2>
             </div>
             <p>
-              The first Splash release connects the work around settlement, so finance teams can operate without
-              stitching together spreadsheets, storage, and compliance tools.
+              The operating desk connects payout, receivables, reconciliation, private records, and approval-led
+              recommendations so finance teams can run the full loop.
             </p>
           </div>
 
@@ -915,6 +979,10 @@ export default function IsometricLanding() {
               <X aria-hidden="true" />
             </button>
             <div className="iso-tool-modal-art">
+              <div className="iso-tool-modal-wordmark" aria-hidden="true">
+                <span>{activeTool.number}</span>
+                <strong>{activeTool.title}</strong>
+              </div>
               <Image src={activeTool.image} alt={activeTool.imageAlt} width={1448} height={1086} />
               <div className="iso-tool-modal-metric">
                 <span>{activeTool.number}</span>
@@ -972,11 +1040,7 @@ export default function IsometricLanding() {
       <footer className="iso-footer">
         <div className="iso-shell iso-footer-inner">
           <div className="iso-brand iso-brand-footer">
-            <Image src="/splash-icon.svg" alt="" width={34} height={34} />
-            <span>
-              <strong>Splash Finance</strong>
-              <small>Powered by Sui</small>
-            </span>
+            <Image src="/splash-main-logo.png" alt="Splash Finance" width={310} height={90} className="iso-main-logo iso-main-logo-footer" />
           </div>
           <p>USD-first settlement infrastructure for global finance teams.</p>
           <nav aria-label="Footer navigation">
