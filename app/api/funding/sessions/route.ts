@@ -6,13 +6,15 @@ import { FundingRegistryError, type FundingSelection } from '@/lib/funding/regis
 import { createFundingSession } from '@/lib/server/funding-sessions';
 
 const usdSelectionSchema = z.object({
-  method: z.literal('USD'),
+  source: z.literal('BANK_USD'),
+  type: z.literal('fiat'),
   provider: z.enum(['STRIPE', 'AIRWALLEX']),
   feeTier: z.literal('STANDARD'),
 });
 
 const stablecoinSelectionSchema = z.object({
-  method: z.literal('STABLECOIN'),
+  source: z.enum(['USDC', 'USDSUI', 'USDT']),
+  type: z.literal('stablecoin'),
   asset: z.enum(['USDC', 'USDSUI', 'USDT']),
   rail: z.enum(['SUI_NATIVE', 'CCTP']),
   sourceChain: z.enum(['ETHEREUM', 'SOLANA', 'BASE', 'ARBITRUM']).optional(),
@@ -22,7 +24,7 @@ const stablecoinSelectionSchema = z.object({
 const sessionSchema = z.object({
   amountUsd: z.number().positive().max(10_000_000),
   businessAccountId: z.string().trim().min(1).optional(),
-  selection: z.discriminatedUnion('method', [usdSelectionSchema, stablecoinSelectionSchema]),
+  selection: z.discriminatedUnion('type', [usdSelectionSchema, stablecoinSelectionSchema]),
 });
 
 export async function POST(request: Request) {

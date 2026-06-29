@@ -74,7 +74,7 @@ const initial: TransferState = {
   amount: { value: '', sourceCurrency: 'USD', targetCurrency: 'PHP' },
   deliveryTier: 'PAYOUT_ONLY',
   funding: {
-    selection: { method: 'USD', provider: 'STRIPE', feeTier: 'STANDARD' },
+    selection: { source: 'BANK_USD', type: 'fiat', provider: 'STRIPE', feeTier: 'STANDARD' },
   },
 };
 
@@ -84,7 +84,7 @@ const sidePanels = [
   {
     icon: ShieldCheck,
     title: 'No stored credentials',
-    body: 'Splash never holds bank login details. Deposits are confirmed through Stripe Checkout or Airwallex wire.',
+    body: 'Splash never holds bank login details. Provider deposits are confirmed through Stripe Checkout or Airwallex wire.',
   },
   {
     icon: Timer,

@@ -5,8 +5,10 @@ import { createHash, createHmac, randomUUID } from 'node:crypto';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 
 import {
+  fundingMethodForSelection,
   resolveFundingSelection,
   type FundingFeeTier,
+  type FundingSourceId,
   type FundingSelection,
   type StablecoinAssetSymbol,
   type StablecoinRail,
@@ -50,12 +52,14 @@ export type FundingSession = {
 type FundingSessionStore = {
   sessions: Map<string, FundingSession>;
   sourceTransactions: Map<string, string>;
+  lastUsedSources: Map<string, FundingSourceId>;
 };
 
 const globalStore = globalThis as typeof globalThis & { splashFundingSessions?: FundingSessionStore };
 const store = globalStore.splashFundingSessions ?? {
   sessions: new Map<string, FundingSession>(),
   sourceTransactions: new Map<string, string>(),
+  lastUsedSources: new Map<string, FundingSourceId>(),
 };
 globalStore.splashFundingSessions = store;
 
@@ -94,7 +98,7 @@ function readConfiguredCctpAddress(
 
 function stablecoinDepositAddress(
   businessAccountId: string,
-  selection: Extract<FundingSelection, { method: 'STABLECOIN' }>,
+  selection: Extract<FundingSelection, { type: 'stablecoin' }>,
   env: NodeJS.ProcessEnv,
 ) {
   if (selection.rail === 'SUI_NATIVE') return deriveSuiAddress(businessAccountId, selection, env);
@@ -103,7 +107,7 @@ function stablecoinDepositAddress(
 
 function depositUri(
   address: string,
-  selection: Extract<FundingSelection, { method: 'STABLECOIN' }>,
+  selection: Extract<FundingSelection, { type: 'stablecoin' }>,
   amountExpectedMicro: number,
 ) {
   const amount = (amountExpectedMicro / 1_000_000).toFixed(6);
@@ -121,12 +125,15 @@ export function createFundingSession(input: {
   amountExpectedMicro: number;
 }, env: NodeJS.ProcessEnv = process.env) {
   resolveFundingSelection(input.selection, env);
+  if (input.selection.type === 'held') {
+    throw new Error('Splash balance funding settles without a funding session');
+  }
   if (!Number.isSafeInteger(input.amountExpectedMicro) || input.amountExpectedMicro <= 0) {
     throw new Error('Funding amount must be a positive integer in micro units');
   }
 
   const now = new Date().toISOString();
-  const stablecoinSelection = input.selection.method === 'STABLECOIN' ? input.selection : null;
+  const stablecoinSelection = input.selection.type === 'stablecoin' ? input.selection : null;
   const address = stablecoinSelection
     ? stablecoinDepositAddress(input.businessAccountId, stablecoinSelection, env)
     : undefined;
@@ -145,6 +152,7 @@ export function createFundingSession(input: {
     updatedAt: now,
   };
   store.sessions.set(session.id, session);
+  recordLastUsedFundingSource(input.businessAccountId, input.selection.source);
   return session;
 }
 
@@ -170,12 +178,21 @@ export function registerSourceTransaction(txDigest: string, sessionId: string) {
   store.sourceTransactions.set(txDigest, sessionId);
 }
 
+export function readLastUsedFundingSource(businessAccountId: string) {
+  return store.lastUsedSources.get(businessAccountId) ?? null;
+}
+
+export function recordLastUsedFundingSource(businessAccountId: string, source: FundingSourceId) {
+  store.lastUsedSources.set(businessAccountId, source);
+}
+
 export function assetDetails(session: FundingSession): {
   asset: StablecoinAssetSymbol;
   rail: StablecoinRail;
   sourceChain?: CctpSourceChain;
 } | null {
-  if (session.selection.method !== 'STABLECOIN') return null;
+  if (fundingMethodForSelection(session.selection) !== 'STABLECOIN') return null;
+  if (session.selection.type !== 'stablecoin') return null;
   return {
     asset: session.selection.asset,
     rail: session.selection.rail,
