@@ -92,15 +92,17 @@ export default function StepStatus({ state, set, next }: { state: TransferState;
   }, [chainState, status]);
   const stages = [
     {
-      label: state.funding.selection.method === 'USD' ? 'USD received' : 'Stablecoin cleared',
-      detail: state.funding.selection.method === 'USD'
-        ? `${state.funding.selection.provider} deposit confirmed $${state.amount.value || '0.00'}`
-        : `${state.funding.selection.asset} passed KYT and normalized to native USDC`,
+      label: state.funding.selection.type === 'held' ? 'Balance debited' : state.funding.selection.type === 'fiat' ? 'Provider funds received' : 'Coin source cleared',
+      detail: state.funding.selection.type === 'held'
+        ? `Splash balance debited $${state.amount.value || '0.00'} in native USDC`
+        : state.funding.selection.type === 'fiat'
+          ? `${state.funding.selection.provider} deposit confirmed $${state.amount.value || '0.00'}`
+          : `${state.funding.selection.asset} passed KYT and normalized to native USDC`,
       icon: Banknote,
     },
     {
       label: 'Sui settlement',
-      detail: 'Routing stablecoin settlement through Sui finality',
+      detail: 'Routing native USDC settlement through Sui finality',
       icon: Network,
     },
     {
@@ -126,7 +128,7 @@ export default function StepStatus({ state, set, next }: { state: TransferState;
             </div>
             <h2 className="mt-3 text-2xl font-extrabold">{status === 'success' ? 'Recipient payment confirmed' : status === 'failed' ? 'Settlement failed' : 'Moving money now'}</h2>
             <p className="mt-1 text-sm text-white/65">
-              {status === 'success' ? 'Payment is confirmed. Redirecting to receipt…' : status === 'failed' ? 'No funds were released. Please retry this transfer.' : 'USD funding is being converted and finalized through Splash on Sui.'}
+              {status === 'success' ? 'Payment is confirmed. Redirecting to receipt...' : status === 'failed' ? 'No funds were released. Please retry this transfer.' : 'The selected source is being finalized through Splash on Sui.'}
             </p>
           </div>
           <div className="rounded-2xl bg-white/10 px-4 py-3 text-sm">

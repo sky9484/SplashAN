@@ -5,8 +5,10 @@ import { createIntercompanyTransfer } from '@/lib/server/intercompany';
 import { convertUsdToUsdc, usdCentsToUsdcMicro } from '@/lib/server/labuan-settlement';
 import { executeComposedPayment } from '@/lib/server/composed-payment';
 import {
+  createLedgerEntry,
   createRecipient,
   createTransferIntent,
+  getLedgerBalance,
   updateAuditReceipt,
   updateInvoice,
   updateTransferIntent,
@@ -15,7 +17,13 @@ import { pythAdapter } from '@/lib/server/pyth';
 import { calculateQuote } from '@/lib/server/quote';
 import { completeDeliveryForTransfer } from '@/lib/server/sweep';
 import { confirmUsdFunding } from '@/lib/server/funding-intake';
-import { readFundingSession, updateFundingSession } from '@/lib/server/funding-sessions';
+import { readFundingSession, recordLastUsedFundingSource, updateFundingSession } from '@/lib/server/funding-sessions';
+import {
+  FundingRegistryError,
+  fundingMethodForSelection,
+  resolveFundingSelection,
+  type FundingSelection,
+} from '@/lib/funding/registry';
 
 export const maxDuration = 60;
 
@@ -31,6 +39,28 @@ const authorizeSchema = z.object({
   invoiceId: z.string().optional(),
   paymentRail: z.string().optional(),
   fundingSessionId: z.string().optional(),
+  businessAccountId: z.string().trim().min(1).optional(),
+  fundingSelection: z.discriminatedUnion('type', [
+    z.object({
+      source: z.literal('SPLASH_BALANCE'),
+      type: z.literal('held'),
+      feeTier: z.literal('DISCOUNT'),
+    }),
+    z.object({
+      source: z.literal('BANK_USD'),
+      type: z.literal('fiat'),
+      provider: z.enum(['STRIPE', 'AIRWALLEX']),
+      feeTier: z.literal('STANDARD'),
+    }),
+    z.object({
+      source: z.enum(['USDC', 'USDSUI', 'USDT']),
+      type: z.literal('stablecoin'),
+      asset: z.enum(['USDC', 'USDSUI', 'USDT']),
+      rail: z.enum(['SUI_NATIVE', 'CCTP']),
+      sourceChain: z.enum(['ETHEREUM', 'SOLANA', 'BASE', 'ARBITRUM']).optional(),
+      feeTier: z.literal('DISCOUNT'),
+    }),
+  ]).optional(),
   totp: z.string().optional(),
   kycTier: z.union([z.number(), z.string()]).optional(),
 });
@@ -41,12 +71,16 @@ export async function POST(request: Request) {
   const body = parsed.data;
   const totp = String(body.totp ?? '');
   const paymentRail = String(body.paymentRail ?? 'STRIPE_CHECKOUT');
-  if (!body.fundingSessionId && paymentRail !== 'STRIPE_CHECKOUT' && paymentRail !== 'AIRWALLEX_WIRE' && !/^\d{6}$/.test(totp)) {
+  if (!body.fundingSessionId && body.fundingSelection?.type !== 'held' && paymentRail !== 'STRIPE_CHECKOUT' && paymentRail !== 'AIRWALLEX_WIRE' && !/^\d{6}$/.test(totp)) {
     return NextResponse.json({ error: 'A valid 6-digit authorization code is required' }, { status: 400 });
   }
 
   const sourceAmount = Number.parseFloat(body.amount.value);
   const sourceAmountCents = Math.round(sourceAmount * 100);
+  const sourceAmountMicro = Math.round(sourceAmount * 1_000_000);
+  const businessAccountId = body.businessAccountId
+    ?? process.env.SPLASH_BUSINESS_ACCOUNT_ID
+    ?? 'dashboard-primary';
   let fundingSession = body.fundingSessionId ? readFundingSession(body.fundingSessionId) : null;
   if (body.fundingSessionId && !fundingSession) {
     return NextResponse.json({ error: 'Funding session not found' }, { status: 404 });
@@ -57,9 +91,31 @@ export async function POST(request: Request) {
   if (fundingSession && Math.abs(fundingSession.amountExpectedMicro - Math.round(sourceAmount * 1_000_000)) > 1) {
     return NextResponse.json({ error: 'Funding session amount does not match the transfer' }, { status: 409 });
   }
-  if (fundingSession?.selection.method === 'USD') {
+  let fundingSelection: FundingSelection | null = fundingSession?.selection ?? (body.fundingSelection as FundingSelection | undefined) ?? null;
+  if (!fundingSelection) {
+    return NextResponse.json({ error: 'Payment source is required' }, { status: 400 });
+  }
+  try {
+    resolveFundingSelection(fundingSelection);
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Payment source is unavailable' },
+      { status: error instanceof FundingRegistryError ? 400 : 503 },
+    );
+  }
+  if (!Number.isSafeInteger(sourceAmountMicro) || sourceAmountMicro <= 0) {
+    return NextResponse.json({ error: 'A positive source amount is required' }, { status: 400 });
+  }
+  if (!fundingSession && fundingSelection.type !== 'held') {
+    return NextResponse.json({ error: 'Bank and coin sources require a funding session before settlement' }, { status: 409 });
+  }
+  if (fundingSelection.type === 'held' && getLedgerBalance(businessAccountId) < sourceAmountMicro) {
+    return NextResponse.json({ error: 'Splash balance is insufficient for this payment source' }, { status: 409 });
+  }
+  if (fundingSelection.type === 'fiat' && fundingSession) {
     try {
       fundingSession = confirmUsdFunding(fundingSession.id);
+      fundingSelection = fundingSession.selection;
     } catch (error) {
       return NextResponse.json(
         { error: error instanceof Error ? error.message : 'USD provider confirmation is pending' },
@@ -67,10 +123,10 @@ export async function POST(request: Request) {
       );
     }
   }
-  if (fundingSession?.selection.method === 'STABLECOIN' && fundingSession.status !== 'CREDITED') {
-    return NextResponse.json({ error: `Stablecoin funding is ${fundingSession.status}; settlement cannot start` }, { status: 409 });
+  if (fundingSelection.type === 'stablecoin' && fundingSession?.status !== 'CREDITED') {
+    return NextResponse.json({ error: `Coin source is ${fundingSession?.status ?? 'not ready'}; settlement cannot start` }, { status: 409 });
   }
-  const feeTier = fundingSession?.feeTier ?? 'STANDARD';
+  const feeTier = fundingSelection.feeTier;
   const serverQuote = sourceAmountCents > 0
     ? await calculateQuote(sourceAmountCents, undefined, body.amount.targetCurrency, feeTier)
     : null;
@@ -79,10 +135,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: `Settlement blocked: stablecoin peg deviation too high (${pegStatus.deviationPpm} ppm).` }, { status: 409 });
   }
 
-  const stablecoinAmountMicro = fundingSession?.selection.method === 'STABLECOIN'
-    ? fundingSession.normalizedAmountUsdcMicro ?? 0
+  const stablecoinAmountMicro = fundingSelection.type === 'stablecoin'
+    ? fundingSession!.normalizedAmountUsdcMicro ?? 0
+    : fundingSelection.type === 'held'
+      ? sourceAmountMicro
     : sourceAmountCents > 0 ? await usdCentsToUsdcMicro(sourceAmountCents) : 0;
-  const conversion = fundingSession?.selection.method === 'STABLECOIN'
+  const conversion = fundingSelection.type === 'stablecoin' || fundingSelection.type === 'held'
     ? null
     : sourceAmount > 0 ? await convertUsdToUsdc(sourceAmount) : null;
   const sourceStablecoin = 'USDC' as const;
@@ -108,17 +166,29 @@ export async function POST(request: Request) {
     daxTier: conversion?.tier ?? null,
     pegChecked: true,
     fundingSessionId: fundingSession?.id,
-    fundingMethod: fundingSession?.selection.method ?? 'USD',
-    fundingProvider: fundingSession?.selection.method === 'USD' ? fundingSession.selection.provider : undefined,
-    fundingAsset: fundingSession?.selection.method === 'STABLECOIN' ? fundingSession.selection.asset : undefined,
-    fundingRail: fundingSession?.selection.method === 'STABLECOIN' ? fundingSession.selection.rail : undefined,
-    fundingSourceChain: fundingSession?.selection.method === 'STABLECOIN' ? fundingSession.selection.sourceChain : undefined,
+    fundingSource: fundingSelection.source,
+    fundingMethod: fundingMethodForSelection(fundingSelection),
+    fundingProvider: fundingSelection.type === 'fiat' ? fundingSelection.provider : undefined,
+    fundingAsset: fundingSelection.type === 'stablecoin' ? fundingSelection.asset : undefined,
+    fundingRail: fundingSelection.type === 'stablecoin' ? fundingSelection.rail : undefined,
+    fundingSourceChain: fundingSelection.type === 'stablecoin' ? fundingSelection.sourceChain : undefined,
     fundingFeeTier: feeTier,
-    fundingKytStatus: fundingSession?.selection.method === 'STABLECOIN' ? fundingSession.status : undefined,
+    fundingKytStatus: fundingSelection.type === 'stablecoin' ? fundingSession?.status : undefined,
     fundingNormalizeVenue: fundingSession?.normalizeVenue,
     fundingEffectiveSlippageBps: fundingSession?.effectiveSlippageBps,
   });
   if (fundingSession) updateFundingSession(fundingSession.id, { transferIntentId: intent.id });
+  if (fundingSelection.type === 'held') {
+    createLedgerEntry({
+      accountId: businessAccountId,
+      direction: 'DEBIT',
+      amountUsdcMicro: sourceAmountMicro,
+      refType: 'TRANSFER',
+      refId: intent.id,
+      demo: process.env.NODE_ENV !== 'production' || process.env.USE_MOCK_APIS === 'true' || process.env.NEXT_PUBLIC_DEMO_MODE === 'true',
+    });
+  }
+  recordLastUsedFundingSource(fundingSession?.businessAccountId ?? businessAccountId, fundingSelection.source);
   updateAuditReceipt(intent.id, {
     approvedBy: 'dashboard-operator',
     approvedAt: new Date().toISOString(),
@@ -142,6 +212,7 @@ export async function POST(request: Request) {
         fxRate: serverQuote?.exchangeRate ?? intent.exchangeRate,
         funding: {
           sessionId: intent.fundingSessionId,
+          source: intent.fundingSource,
           method: intent.fundingMethod,
           provider: intent.fundingProvider,
           asset: intent.fundingAsset,
@@ -198,6 +269,7 @@ export async function POST(request: Request) {
     daxTier: intent.daxTier,
     deliveryTier: intent.deliveryTier,
     funding: {
+      source: intent.fundingSource,
       method: intent.fundingMethod,
       feeTier: intent.fundingFeeTier,
       sessionId: intent.fundingSessionId,

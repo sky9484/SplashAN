@@ -24,7 +24,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   const { id } = await context.params;
   const session = readFundingSession(id);
   if (!session) return NextResponse.json({ error: 'Funding session not found' }, { status: 404 });
-  if (session.selection.method !== 'STABLECOIN') {
+  if (session.selection.type !== 'stablecoin') {
     return NextResponse.json({ error: 'Only stablecoin deposits can be simulated' }, { status: 400 });
   }
 

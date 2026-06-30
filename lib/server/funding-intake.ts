@@ -40,7 +40,7 @@ export function assertFundingWebhookSecret(value: string | null) {
 function validateInboundAsset(input: InboundDeposit) {
   const session = readFundingSession(input.sessionId);
   if (!session) throw new Error('Funding session not found');
-  if (session.selection.method !== 'STABLECOIN') throw new Error('USD funding does not accept stablecoin deposits');
+  if (session.selection.type !== 'stablecoin') throw new Error('This funding source does not accept stablecoin deposits');
   const { asset } = resolveFundingSelection(session.selection);
   if (!asset) throw new Error('Funding asset is unavailable');
 
@@ -60,7 +60,7 @@ function validateInboundAsset(input: InboundDeposit) {
 
 export async function ingestStablecoinDeposit(input: InboundDeposit) {
   const { session } = validateInboundAsset(input);
-  if (session.selection.method !== 'STABLECOIN') throw new Error('Funding session is not stablecoin-funded');
+  if (session.selection.type !== 'stablecoin') throw new Error('Funding session is not stablecoin-funded');
   const selection = session.selection;
   if (!Number.isSafeInteger(input.amountMicro) || input.amountMicro <= 0) throw new Error('Deposit amount is invalid');
   if (session.status === 'QUARANTINED') throw new Error('Funding session is quarantined');
@@ -118,7 +118,7 @@ export async function ingestStablecoinDeposit(input: InboundDeposit) {
 export function confirmUsdFunding(sessionId: string) {
   const session = readFundingSession(sessionId);
   if (!session) throw new Error('Funding session not found');
-  if (session.selection.method !== 'USD') throw new Error('Funding session is not a USD funding session');
+  if (session.selection.type !== 'fiat') throw new Error('Funding session is not a Bank USD funding session');
   resolveFundingSelection(session.selection);
   if (session.status === 'CREDITED') return session;
   const demoMode = process.env.NODE_ENV !== 'production'
@@ -141,7 +141,7 @@ export function confirmUsdProviderDeposit(input: {
 }) {
   const session = readFundingSession(input.sessionId);
   if (!session) throw new Error('Funding session not found');
-  if (session.selection.method !== 'USD' || session.selection.provider !== input.provider) {
+  if (session.selection.type !== 'fiat' || session.selection.provider !== input.provider) {
     throw new Error('USD provider does not match the funding session');
   }
   if (session.amountExpectedMicro !== input.amountMicro) throw new Error('USD provider amount does not match the funding session');

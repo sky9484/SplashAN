@@ -93,11 +93,11 @@ const marqueeItems = [
   ['7 years', 'verifiable audit proof'],
 ];
 
-const partnerRail = [
+const partnerRail: Array<{ src: string; name: string; role: string; logoClass?: string }> = [
   { src: '/stripe-logo.svg', name: 'Stripe', role: 'USD collection' },
-  { src: '/airwallex-logo.png', name: 'Airwallex', role: 'bank rails' },
+  { src: '/airwallex-mark.png', name: 'Airwallex', role: 'bank rails', logoClass: 'iso-airwallex-logo' },
   { src: '/pyth-logo.png', name: 'Pyth', role: 'FX and peg data' },
-  { src: '/deepbook-logo-white.png', name: 'DeepBook V3', role: 'amount-sized liquidity' },
+  { src: '/deepbook-mark.png', name: 'DeepBook', role: 'amount-sized liquidity', logoClass: 'iso-deepbook-logo' },
   { src: '/sumsub-logo.png', name: 'Sumsub', role: 'KYB and KYC' },
   { src: '/walrus-logo.svg', name: 'Walrus', role: 'permanent records' },
   { src: '/sui-logo-blue.svg', name: 'Sui', role: 'settlement network' },
@@ -432,7 +432,7 @@ export default function IsometricLanding() {
 
   return (
     <main className="iso-landing">
-      <header className="iso-header">
+      <header className={`iso-header ${showBackToTop ? 'is-scrolled' : ''}`}>
         <div className="iso-shell iso-header-inner">
           <Link href="/" className="iso-brand" aria-label="Splash Finance home">
             <Image src="/splash-main-icon.png" alt="" width={48} height={47} className="iso-header-brand-icon" priority />
@@ -548,7 +548,7 @@ export default function IsometricLanding() {
                   alt={`${partner.name} logo`}
                   width={120}
                   height={80}
-                  className={partner.name === 'DeepBook V3' ? 'iso-deepbook-logo' : undefined}
+                  className={partner.logoClass}
                 />
                 <span>
                   <strong>{partner.name}</strong>

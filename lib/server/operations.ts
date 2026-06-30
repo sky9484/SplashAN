@@ -3,6 +3,7 @@ import { analyzeAndRemember } from '@/lib/server/memwal';
 import type {
   CctpSourceChain,
   FundingFeeTier,
+  FundingSourceId,
   PaymentMethod,
   StablecoinAssetSymbol,
   StablecoinRail,
@@ -41,6 +42,7 @@ export type TransferIntentRecord = {
   daxTier: string | null;
   pegChecked: boolean;
   fundingSessionId?: string;
+  fundingSource?: FundingSourceId;
   fundingMethod: PaymentMethod;
   fundingProvider?: UsdProviderId;
   fundingAsset?: StablecoinAssetSymbol;
@@ -198,6 +200,7 @@ export type AuditReceipt = {
   composedActions?: TransferIntentRecord['composedActions'];
   funding?: {
     sessionId?: string;
+    source?: FundingSourceId;
     method: PaymentMethod;
     provider?: UsdProviderId;
     asset?: StablecoinAssetSymbol;
@@ -285,6 +288,7 @@ export function createTransferIntent(input: {
   recipientId?: string;
   invoiceId?: string;
   fundingSessionId?: string;
+  fundingSource?: FundingSourceId;
   fundingMethod?: PaymentMethod;
   fundingProvider?: UsdProviderId;
   fundingAsset?: StablecoinAssetSymbol;
@@ -312,7 +316,8 @@ export function createTransferIntent(input: {
     daxTier: input.daxTier ?? null,
     pegChecked: input.pegChecked ?? false,
     fundingSessionId: input.fundingSessionId,
-    fundingMethod: input.fundingMethod ?? 'USD',
+    fundingSource: input.fundingSource ?? 'BANK_USD',
+    fundingMethod: input.fundingMethod ?? 'BANK_USD',
     fundingProvider: input.fundingProvider,
     fundingAsset: input.fundingAsset,
     fundingRail: input.fundingRail,
@@ -340,6 +345,7 @@ export function createTransferIntent(input: {
     demo: input.demo,
     funding: {
       sessionId: record.fundingSessionId,
+      source: record.fundingSource,
       method: record.fundingMethod,
       provider: record.fundingProvider,
       asset: record.fundingAsset,

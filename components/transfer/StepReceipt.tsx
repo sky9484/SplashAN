@@ -34,7 +34,7 @@ export default function StepReceipt({ state, reset }: { state: TransferState; re
         currency="USD"
         fee={state.quote?.fee ?? '0.00'}
         feeTier={state.funding.selection.feeTier}
-        fundingMethod={state.funding.selection.method}
+        fundingSource={selectionLabel(state.funding.selection)}
         timestamp={issuedAt}
         reference={reference}
         explorerUrl={explorerUrl}
@@ -74,4 +74,10 @@ export default function StepReceipt({ state, reset }: { state: TransferState; re
       </div>
     </div>
   );
+}
+
+function selectionLabel(selection: TransferState['funding']['selection']) {
+  if (selection.type === 'held') return 'Splash balance';
+  if (selection.type === 'fiat') return `Bank USD via ${selection.provider}`;
+  return `${selection.asset} via ${selection.rail}${selection.sourceChain ? ` / ${selection.sourceChain}` : ''}`;
 }

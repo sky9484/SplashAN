@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import { useCallback, useEffect, useState } from 'react';
-import { CheckCircle2, Clock3, Copy, Info, Loader2, ShieldCheck, TrendingUp } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Clock3, Copy, Info, Loader2, RefreshCw, Send, ShieldCheck, TrendingUp, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 import type { TransferState } from '@/app/dashboard/transfer/page';
@@ -19,6 +19,9 @@ const BASE_RATES: Record<TransferState['amount']['targetCurrency'], number> = {
   EUR: 0.924,
   GBP: 0.789,
 };
+
+const primaryActionClass = 'inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#0C3E48] px-5 py-3 text-sm font-extrabold text-white shadow-[0_14px_30px_rgba(12,62,72,0.22)] transition-all hover:-translate-y-0.5 hover:bg-[#145D6A] hover:shadow-[0_18px_34px_rgba(12,62,72,0.26)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#5C9EAD]/28 disabled:cursor-not-allowed disabled:bg-[#326273]/45 disabled:text-white/70 disabled:shadow-none disabled:hover:translate-y-0';
+const secondaryActionClass = 'inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-[#326273]/18 bg-white px-5 py-3 text-sm font-bold text-[#0C3E48] shadow-[0_10px_22px_rgba(12,62,72,0.06)] transition-all hover:-translate-y-0.5 hover:border-[#5C9EAD]/70 hover:bg-[#EAF7F8] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#5C9EAD]/20 disabled:cursor-not-allowed disabled:bg-[#F6F0ED] disabled:text-[#326273]/45 disabled:shadow-none disabled:hover:translate-y-0';
 
 export default function StepQuote({
   state,
@@ -61,7 +64,7 @@ export default function StepQuote({
             amount: source,
             targetCurrency: state.amount.targetCurrency,
             recipientId: state.recipient.bank?.account,
-            fundingMethod: state.funding.selection.method,
+            fundingFeeTier: state.funding.selection.feeTier,
           }),
         });
         if (!response.ok) throw new Error('Quote unavailable');
@@ -78,7 +81,7 @@ export default function StepQuote({
         set({ quote: { fxRate: fx, fee: (body.platformFee / 100).toFixed(2), netReceived: netReceived.toFixed(2) } });
       } catch {
         if (cancelled) return;
-        const discount = state.funding.selection.method === 'STABLECOIN' ? 0.002 : 0;
+        const discount = state.funding.selection.feeTier === 'DISCOUNT' ? 0.002 : 0;
         const fee = source * Math.max(0, 0.014 - discount) + 4.5;
         const net = source - fee;
         const fx = BASE_RATES[state.amount.targetCurrency];
@@ -99,7 +102,7 @@ export default function StepQuote({
   }, [
     state.amount.targetCurrency,
     state.amount.value,
-    state.funding.selection.method,
+    state.funding.selection.feeTier,
     state.rateHold?.corridorCurrency,
     state.rateHold?.rate,
     state.rateHold?.state,
@@ -116,9 +119,12 @@ export default function StepQuote({
         body: JSON.stringify({
           ...state,
           fundingSessionId: state.funding.sessionId,
-          paymentRail: selection.method === 'USD' && selection.provider === 'AIRWALLEX'
+          fundingSelection: selection,
+          paymentRail: selection.type === 'fiat' && selection.provider === 'AIRWALLEX'
             ? 'AIRWALLEX_WIRE'
-            : 'STRIPE_CHECKOUT',
+            : selection.type === 'held'
+              ? 'SPLASH_BALANCE'
+              : 'SOURCE_DEPOSIT',
         }),
       });
       if (!response.ok) {
@@ -128,7 +134,7 @@ export default function StepQuote({
 
       const body = (await response.json()) as { transferIntentId: string };
       set({ transferIntentId: body.transferIntentId, txStatus: 'pending' });
-      toast.success(selection.method === 'USD' ? 'USD deposit confirmed' : 'Stablecoin normalized to USDC');
+      toast.success(selection.type === 'held' ? 'Splash balance debited' : selection.type === 'fiat' ? 'Provider deposit confirmed' : 'Coin source normalized to USDC');
       setDepositOpen(false);
       setIsSending(false);
       next();
@@ -150,13 +156,21 @@ export default function StepQuote({
 
   async function startDeposit() {
     if (!agree || !state.quote) return;
+    if (state.funding.selection.type === 'held') {
+      setProgress(18);
+      setIsSending(true);
+      return;
+    }
     setCreatingSession(true);
     setProgress(18);
     try {
       const response = await fetch('/api/funding/sessions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amountUsd: Number.parseFloat(state.amount.value), selection: state.funding.selection }),
+        body: JSON.stringify({
+          amountUsd: Number.parseFloat(state.amount.value),
+          selection: state.funding.selection,
+        }),
       });
       const body = (await response.json()) as {
         error?: string;
@@ -234,13 +248,25 @@ export default function StepQuote({
     <div className="flex flex-col gap-5">
       <div>
         <h2 className="text-xl font-bold text-[#326273]">Quote, review and send</h2>
-        <p className="mt-1 text-sm text-[#326273]/60">Choose USD or stablecoin funding. Every path reaches settlement as native USDC.</p>
+        <p className="mt-1 text-sm text-[#326273]/60">Pick a payment source. Every path reaches settlement as native USDC.</p>
       </div>
 
       <FundingSelector
         selection={selection}
+        amountUsd={Number.parseFloat(state.amount.value || '0')}
         disabled={creatingSession || isSending}
-        onChange={(nextSelection) => set({ funding: { selection: nextSelection } })}
+        onChange={(nextSelection) => {
+          set({
+            funding: {
+              selection: nextSelection,
+              sessionId: undefined,
+              sessionStatus: undefined,
+              depositAddress: undefined,
+              qrDataUrl: null,
+              demoMode: undefined,
+            },
+          });
+        }}
       />
 
       <div className="flex flex-col gap-3 rounded-xl bg-[#F6F0ED] p-5 text-sm">
@@ -267,39 +293,56 @@ export default function StepQuote({
         </div>
       </div>
 
-      <button type="button" disabled={holdBusy || state.rateHold?.state === 'ACTIVE'} onClick={() => void holdRate()} className="flex w-full items-center justify-between rounded-xl border border-[#5C9EAD]/30 bg-white px-4 py-3 text-left font-bold text-[#326273] transition hover:border-[#5C9EAD] hover:bg-[#5C9EAD]/10 disabled:opacity-70">
-        <span className="flex items-center gap-3"><Clock3 />{state.rateHold?.state === 'ACTIVE' ? 'Rate hold active' : 'Hold this rate 48h'}</span>
+      <button type="button" disabled={holdBusy || state.rateHold?.state === 'ACTIVE'} onClick={() => void holdRate()} className="group flex min-h-12 w-full items-center justify-between gap-3 rounded-xl border border-[#5C9EAD]/35 bg-white px-4 py-3 text-left font-bold text-[#0C3E48] shadow-[0_10px_24px_rgba(12,62,72,0.06)] transition-all hover:-translate-y-0.5 hover:border-[#5C9EAD]/80 hover:bg-[#EAF7F8] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#5C9EAD]/20 disabled:cursor-not-allowed disabled:border-[#326273]/10 disabled:bg-[#F6F0ED] disabled:text-[#326273]/50 disabled:shadow-none disabled:hover:translate-y-0">
+        <span className="flex items-center gap-3"><Clock3 className="size-4 text-[#5C9EAD]" aria-hidden="true" />{state.rateHold?.state === 'ACTIVE' ? 'Rate hold active' : 'Hold this rate 48h'}</span>
         <span className="font-mono text-xs text-[#326273]/55">{liveRate.toLocaleString()}</span>
       </button>
 
       <div className="rounded-xl border border-[#5C9EAD]/20 bg-[#5C9EAD]/10 p-4 text-sm text-[#326273]/75">
         <div className="flex gap-3">
           <ShieldCheck />
-          <span>{selection.method === 'USD'
-            ? 'USD funding uses ACH, wire, or FPX. Cards remain disabled, and funding normalizes to USDC.'
-            : 'Stablecoin funding uses a deposit address and QR. KYT clears before credit, and only native Sui USDC reaches settlement.'}</span>
+          <span>{selection.type === 'held'
+            ? 'Splash balance is already native USDC, so no additional funding sub-flow is required.'
+            : selection.type === 'fiat'
+              ? 'Bank USD uses Stripe or Airwallex. Cards remain disabled, and funding normalizes to USDC.'
+              : 'Coin sources use a deposit address and QR. KYT clears before credit, and only native Sui USDC reaches settlement.'}</span>
         </div>
       </div>
 
       <label className="flex items-start gap-3 text-sm text-[#326273]/80">
         <input type="checkbox" checked={agree} onChange={(event) => setAgree(event.target.checked)} className="mt-1 size-4 cursor-pointer rounded border-[#326273]/30 bg-white accent-[#5C9EAD]" />
-        I confirm the recipient details are correct and I want to continue with {selection.method === 'USD' ? 'USD funding' : 'stablecoin deposit'}.
+        I confirm the recipient details are correct and I want to continue from {selectionLabel(selection)}.
       </label>
-      <div className="flex gap-3">
-        <button onClick={prev} className="flex-1 rounded-lg border border-[#326273]/20 py-3 font-semibold text-[#326273]">Back</button>
-        <button disabled={!agree || creatingSession} onClick={() => void startDeposit()} className="flex-1 rounded-lg bg-[#E39774] py-3 font-bold text-white hover:bg-[#cd825f] disabled:opacity-50">{creatingSession ? 'Preparing...' : 'Send'}</button>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <button type="button" onClick={prev} className={secondaryActionClass}>
+          <ArrowLeft className="size-4" aria-hidden="true" />
+          Back
+        </button>
+        <button type="button" disabled={!agree || creatingSession || isSending} onClick={() => void startDeposit()} className={primaryActionClass}>
+          {creatingSession || isSending ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Send className="size-4" aria-hidden="true" />}
+          {creatingSession || isSending ? 'Preparing...' : 'Send'}
+        </button>
       </div>
+
+      {isSending && !depositOpen ? (
+        <div className="flex flex-col gap-3 rounded-2xl border border-[#5C9EAD]/25 bg-[#5C9EAD]/10 p-4">
+          <div className="h-3 overflow-hidden rounded-full bg-white"><div className="h-full rounded-full bg-[#5C9EAD] transition-all" style={{ width: `${progress}%` }} /></div>
+          <div className="flex items-center gap-2 text-sm font-semibold text-[#326273]/70"><Loader2 className="animate-spin" /> Debiting source and preparing settlement...</div>
+        </div>
+      ) : null}
 
       {depositOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#326273]/50 p-4">
           <div className="w-full max-w-2xl rounded-3xl bg-white p-6 text-[#326273] shadow-2xl">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <div className="mb-2 inline-flex rounded-full bg-[#E39774]/10 px-3 py-1 text-xs font-bold uppercase tracking-wide text-[#E39774]">{selection.method === 'USD' ? 'USD deposit' : 'Stablecoin deposit'}</div>
-                <h3 className="text-2xl font-extrabold">{selection.method === 'USD' ? `Continue with ${selection.provider}` : `Deposit ${selection.asset}`}</h3>
-                <p className="mt-1 text-sm text-[#326273]/60">{selection.method === 'USD' ? 'Bank funding is confirmed before settlement.' : 'Send the exact asset over the selected rail using the push-only deposit address.'}</p>
+                <div className="mb-2 inline-flex rounded-full bg-[#E39774]/10 px-3 py-1 text-xs font-bold uppercase tracking-wide text-[#E39774]">{selection.type === 'fiat' ? 'Provider deposit' : 'Coin deposit'}</div>
+                <h3 className="text-2xl font-extrabold">{selection.type === 'fiat' ? `Continue with ${selection.provider}` : selection.type === 'stablecoin' ? `Deposit ${selection.asset}` : 'Settle from Splash balance'}</h3>
+                <p className="mt-1 text-sm text-[#326273]/60">{selection.type === 'fiat' ? 'Provider funding is confirmed before settlement.' : 'Send the exact asset over the selected rail using the push-only deposit address.'}</p>
               </div>
-              <button type="button" onClick={() => !isSending && setDepositOpen(false)} className="rounded-full px-3 py-1 text-sm font-bold text-[#326273]/50 hover:bg-[#F6F0ED]">Close</button>
+              <button type="button" aria-label="Close funding dialog" onClick={() => !isSending && setDepositOpen(false)} className="inline-flex size-9 shrink-0 items-center justify-center rounded-full text-[#326273]/55 transition hover:bg-[#F6F0ED] hover:text-[#0C3E48] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#5C9EAD]/20 disabled:cursor-not-allowed disabled:opacity-45" disabled={isSending}>
+                <X className="size-4" aria-hidden="true" />
+              </button>
             </div>
 
             <div className="mt-5 rounded-2xl bg-[#326273] p-5 text-white">
@@ -307,13 +350,13 @@ export default function StepQuote({
               <div className="mt-3 flex items-center justify-between text-sm"><span className="text-white/65">Fee tier</span><span className="font-semibold">{selection.feeTier}</span></div>
             </div>
 
-            {selection.method === 'STABLECOIN' ? (
+            {selection.type === 'stablecoin' ? (
               <div className="mt-5 grid gap-4 sm:grid-cols-[224px_1fr] sm:items-center">
                 {state.funding.qrDataUrl ? <Image unoptimized src={state.funding.qrDataUrl} alt={`QR code for ${selection.asset} deposit`} width={224} height={224} className="mx-auto size-56 rounded-2xl border border-[#326273]/10 bg-[#F6F0ED] p-2" /> : null}
                 <div className="min-w-0">
                   <div className="text-xs font-bold uppercase tracking-wide text-[#326273]/55">Deposit address</div>
                   <div className="mt-2 break-all rounded-xl bg-[#F6F0ED] p-3 font-['DejaVu_Sans_Mono',monospace] text-xs text-[#326273]">{state.funding.depositAddress}</div>
-                  <button type="button" onClick={() => { void navigator.clipboard.writeText(state.funding.depositAddress ?? ''); toast.success('Deposit address copied'); }} className="mt-2 inline-flex items-center gap-2 text-xs font-bold text-[#5C9EAD]"><Copy /> Copy address</button>
+                  <button type="button" onClick={() => { void navigator.clipboard.writeText(state.funding.depositAddress ?? ''); toast.success('Deposit address copied'); }} className="mt-2 inline-flex items-center gap-2 rounded-lg px-1 py-1 text-xs font-bold text-[#237284] transition hover:bg-[#5C9EAD]/10 hover:text-[#0C3E48] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#5C9EAD]/20"><Copy className="size-3.5" aria-hidden="true" /> Copy address</button>
                   <div className="mt-4 flex flex-wrap gap-2 text-xs font-bold">
                     <span className="rounded-full bg-[#5C9EAD]/10 px-3 py-1">{selection.rail}{selection.sourceChain ? ` / ${selection.sourceChain}` : ''}</span>
                     <span className="rounded-full bg-[#F6F0ED] px-3 py-1">{state.funding.sessionStatus}</span>
@@ -329,14 +372,28 @@ export default function StepQuote({
               </div>
             ) : null}
 
-            {selection.method === 'USD' ? (
-              <button type="button" disabled={isSending} onClick={() => { setProgress(18); setIsSending(true); }} className="mt-5 w-full rounded-xl bg-[#E39774] py-3 font-bold text-white hover:bg-[#cd825f] disabled:opacity-50">{isSending ? 'Confirming deposit...' : `Continue with ${selection.provider}`}</button>
+            {selection.type === 'fiat' ? (
+              <button type="button" disabled={isSending} onClick={() => { setProgress(18); setIsSending(true); }} className={`mt-5 w-full ${primaryActionClass}`}>
+                {isSending ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Send className="size-4" aria-hidden="true" />}
+                {isSending ? 'Confirming deposit...' : `Continue with ${selection.provider}`}
+              </button>
             ) : state.funding.sessionStatus === 'CREDITED' ? (
-              <button type="button" disabled={isSending} onClick={() => { setProgress(18); setIsSending(true); }} className="mt-5 w-full rounded-xl bg-[#E39774] py-3 font-bold text-white hover:bg-[#cd825f] disabled:opacity-50">{isSending ? 'Starting settlement...' : 'Continue to settlement'}</button>
+              <button type="button" disabled={isSending} onClick={() => { setProgress(18); setIsSending(true); }} className={`mt-5 w-full ${primaryActionClass}`}>
+                {isSending ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Send className="size-4" aria-hidden="true" />}
+                {isSending ? 'Starting settlement...' : 'Continue to settlement'}
+              </button>
             ) : (
               <div className={state.funding.demoMode ? 'mt-5 grid gap-2 sm:grid-cols-2' : 'mt-5'}>
-                <button type="button" disabled={checkingDeposit} onClick={() => void checkStablecoinDeposit(false)} className="w-full rounded-xl border border-[#326273]/20 bg-white py-3 font-bold text-[#326273] disabled:opacity-50">Check deposit status</button>
-                {state.funding.demoMode ? <button type="button" disabled={checkingDeposit} onClick={() => void checkStablecoinDeposit(true)} className="w-full rounded-xl bg-[#E39774] py-3 font-bold text-white disabled:opacity-50">{checkingDeposit ? 'Processing...' : 'Simulate test deposit'}</button> : null}
+                <button type="button" disabled={checkingDeposit} onClick={() => void checkStablecoinDeposit(false)} className={`w-full ${secondaryActionClass}`}>
+                  <RefreshCw className={checkingDeposit ? 'size-4 animate-spin' : 'size-4'} aria-hidden="true" />
+                  Check deposit status
+                </button>
+                {state.funding.demoMode ? (
+                  <button type="button" disabled={checkingDeposit} onClick={() => void checkStablecoinDeposit(true)} className={`w-full ${primaryActionClass}`}>
+                    {checkingDeposit ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <CheckCircle2 className="size-4" aria-hidden="true" />}
+                    {checkingDeposit ? 'Processing...' : 'Simulate test deposit'}
+                  </button>
+                ) : null}
               </div>
             )}
           </div>
@@ -353,4 +410,10 @@ function Row({ label, value, bold, mono }: { label: string; value: string; bold?
       <span className={`${bold ? 'text-base font-bold' : 'font-medium'} ${mono ? 'break-all font-mono text-xs' : ''} text-right text-[#326273]`}>{value}</span>
     </div>
   );
+}
+
+function selectionLabel(selection: TransferState['funding']['selection']) {
+  if (selection.type === 'held') return 'Splash balance';
+  if (selection.type === 'fiat') return `Bank USD via ${selection.provider}`;
+  return `${selection.asset} via ${selection.rail}${selection.sourceChain ? ` / ${selection.sourceChain}` : ''}`;
 }
