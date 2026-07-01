@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import { FundingRegistryError, type FundingSelection } from '@/lib/funding/registry';
 import { createFundingSession } from '@/lib/server/funding-sessions';
+import { readJsonBody } from '@/lib/server/http';
 
 const usdSelectionSchema = z.object({
   source: z.literal('BANK_USD'),
@@ -28,7 +29,7 @@ const sessionSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const parsed = sessionSchema.safeParse(await request.json());
+  const parsed = sessionSchema.safeParse(await readJsonBody(request));
   if (!parsed.success) return NextResponse.json({ error: 'Invalid funding session request' }, { status: 400 });
 
   try {

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { getAdminSession } from '@/lib/server/admin-auth';
+import { readJsonBody } from '@/lib/server/http';
 import { readSupportTicket, updateSupportTicket, type SupportTicketStatus } from '@/lib/server/support';
 
 const allowedStatuses = new Set<SupportTicketStatus>(['OPEN', 'IN_REVIEW', 'REPLIED', 'CLOSED']);
@@ -30,7 +31,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }
 
   const { id } = await params;
-  const body = await request.json();
+  const body = await readJsonBody(request);
   const status = body.status ? String(body.status) as SupportTicketStatus : undefined;
 
   if (status && !allowedStatuses.has(status)) {

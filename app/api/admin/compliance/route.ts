@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { getAdminSession } from '@/lib/server/admin-auth';
+import { readJsonBody } from '@/lib/server/http';
 import { readComplianceControls, updateComplianceControls } from '@/lib/server/sui-settlement';
 
 export const dynamic = 'force-dynamic';
@@ -21,7 +22,7 @@ export async function GET() {
 
 export async function PUT(request: Request) {
   if (!(await getAdminSession())) return NextResponse.json({ error: 'Staff authentication required' }, { status: 401 });
-  const parsed = schema.safeParse(await request.json());
+  const parsed = schema.safeParse(await readJsonBody(request));
   if (!parsed.success) return NextResponse.json({ error: 'Invalid bounded compliance thresholds' }, { status: 400 });
   try {
     const result = await updateComplianceControls(parsed.data);

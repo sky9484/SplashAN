@@ -24,6 +24,7 @@ import {
   resolveFundingSelection,
   type FundingSelection,
 } from '@/lib/funding/registry';
+import { readJsonBody } from '@/lib/server/http';
 
 export const maxDuration = 60;
 
@@ -66,7 +67,7 @@ const authorizeSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const parsed = authorizeSchema.safeParse(await request.json());
+  const parsed = authorizeSchema.safeParse(await readJsonBody(request));
   if (!parsed.success) return NextResponse.json({ error: 'Invalid transfer authorization' }, { status: 400 });
   const body = parsed.data;
   const totp = String(body.totp ?? '');
@@ -247,6 +248,7 @@ export async function POST(request: Request) {
         auditHash: result.auditHash,
         auditAnchorId: result.auditAnchorObjectId ?? undefined,
         auditAnchorDigest: result.digest,
+        evidence: result.evidence,
         smartTreasuryId: result.smartTreasuryId ?? undefined,
         composedActions: result.composedActions,
       });

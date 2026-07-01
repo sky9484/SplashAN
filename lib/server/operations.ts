@@ -1,5 +1,6 @@
 import { getContractConfig } from '@/lib/server/contract-config';
 import { analyzeAndRemember } from '@/lib/server/memwal';
+import type { StoredSettlementEvidence } from '@/lib/evidence/settlement';
 import type {
   CctpSourceChain,
   FundingFeeTier,
@@ -194,6 +195,7 @@ export type AuditReceipt = {
   auditHash?: string;
   auditAnchorId?: string;
   auditAnchorDigest?: string;
+  evidence?: StoredSettlementEvidence;
   paymentIntentId?: string;
   intentCreateDigest?: string;
   smartTreasuryId?: string;

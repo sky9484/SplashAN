@@ -94,3 +94,8 @@ public fun is_verified(account: &BusinessAccount): bool {
 public fun risk_score(account: &BusinessAccount): u8 {
     account.risk_score
 }
+
+#[test_only]
+public fun admin_cap_for_testing(ctx: &mut TxContext): AdminCap {
+    AdminCap { id: object::new(ctx) }
+}

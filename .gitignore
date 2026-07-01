@@ -20,6 +20,7 @@
 
 # local temp redirect (used when the system temp drive is full)
 /.tmp/
+/.sui-home/
 
 # production
 /build
@@ -51,6 +52,8 @@ yarn-error.log*
 /data/operating-settings.json.tmp.*
 /data/seal-policies.json
 /data/seal-policies.json.tmp.*
+/data/circuit-breakers.json
+/data/circuit-breakers.json.tmp.*
 
 # vercel
 .vercel

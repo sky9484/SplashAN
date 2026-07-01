@@ -1,5 +1,6 @@
 import { after, NextResponse } from 'next/server';
 
+import { readJsonBody } from '@/lib/server/http';
 import { createBatch, updateBatch } from '@/lib/server/operations';
 import { recordBatchSettlementOnSui } from '@/lib/server/sui-settlement';
 
@@ -12,7 +13,7 @@ type BatchRow = {
 };
 
 export async function POST(request: Request) {
-  const body = await request.json();
+  const body = await readJsonBody(request);
   const rows = Array.isArray(body.rows) ? (body.rows as BatchRow[]) : [];
   const totp = String(body.totp ?? '');
   const targetCurrency = typeof body.targetCurrency === 'string' ? body.targetCurrency : 'PHP';

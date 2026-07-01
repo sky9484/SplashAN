@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
 
 import { setAdminSessionCookie, validateAdminCredentials } from '@/lib/server/admin-auth';
+import { readJsonBody } from '@/lib/server/http';
 
 export async function POST(request: Request) {
-  const body = await request.json();
+  const body = await readJsonBody(request);
   const email = String(body.email ?? '');
   const password = String(body.password ?? '');
   const session = validateAdminCredentials(email, password);

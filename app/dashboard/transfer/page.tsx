@@ -1,7 +1,19 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Check, ShieldCheck, Sparkles, Timer } from 'lucide-react';
+import {
+  ArrowRightLeft,
+  BadgeCheck,
+  Check,
+  CircleDollarSign,
+  Clock3,
+  Landmark,
+  ShieldCheck,
+  Sparkles,
+  Timer,
+  WalletCards,
+  type LucideIcon,
+} from 'lucide-react';
 import SettlementEngineFlow from '@/components/dashboard/SettlementEngineFlow';
 
 import StepBeneficiary from '@/components/transfer/StepBeneficiary';
@@ -14,14 +26,14 @@ import type { FundingSelection } from '@/lib/funding/registry';
 
 // Target-currency display metadata for the settlement-flow corridor node.
 const CURRENCY_META: Record<string, { flag: string; country: string }> = {
-  PHP: { flag: '🇵🇭', country: 'Philippines' },
-  MYR: { flag: '🇲🇾', country: 'Malaysia' },
-  IDR: { flag: '🇮🇩', country: 'Indonesia' },
-  SGD: { flag: '🇸🇬', country: 'Singapore' },
-  VND: { flag: '🇻🇳', country: 'Vietnam' },
-  THB: { flag: '🇹🇭', country: 'Thailand' },
-  EUR: { flag: '🇪🇺', country: 'Eurozone' },
-  GBP: { flag: '🇬🇧', country: 'United Kingdom' },
+  PHP: { flag: 'PH', country: 'Philippines' },
+  MYR: { flag: 'MY', country: 'Malaysia' },
+  IDR: { flag: 'ID', country: 'Indonesia' },
+  SGD: { flag: 'SG', country: 'Singapore' },
+  VND: { flag: 'VN', country: 'Vietnam' },
+  THB: { flag: 'TH', country: 'Thailand' },
+  EUR: { flag: 'EU', country: 'Eurozone' },
+  GBP: { flag: 'GB', country: 'United Kingdom' },
 };
 
 export type TransferState = {
@@ -83,18 +95,21 @@ const stepLabels = ['Beneficiary', 'Delivery', 'Quote & Send', 'Status', 'Receip
 const sidePanels = [
   {
     icon: ShieldCheck,
-    title: 'No stored credentials',
-    body: 'Splash never holds bank login details. Provider deposits are confirmed through Stripe Checkout or Airwallex wire.',
+    title: 'Credentials',
+    metric: 'Vaultless',
+    body: 'Provider deposits confirm externally, so bank logins stay out of the Splash flow.',
   },
   {
     icon: Timer,
-    title: 'Quote valid 30s',
-    body: 'Live FX is locked at authorization. We re-quote if the rate moves before you sign.',
+    title: 'Rate control',
+    metric: '30s hold',
+    body: 'Live FX is locked at authorization and refreshed before signing if the hold expires.',
   },
   {
     icon: Sparkles,
-    title: 'Sui finality',
-    body: 'Cross-border legs settle on Sui in ~400ms with on-chain receipts you can audit.',
+    title: 'Settlement',
+    metric: '~400ms',
+    body: 'Sui finality anchors the payment trail with receipts ready for audit review.',
   },
 ];
 
@@ -136,37 +151,104 @@ export default function TransferPage() {
     }
   }, []);
 
+  const selectedCurrency = CURRENCY_META[state.amount.targetCurrency];
+  const destinationLabel = selectedCurrency?.country ?? state.recipient.country;
+  const currentStepLabel = stepLabels[state.step - 1];
+  const amountLabel = state.amount.value ? `${formatUsd(state.amount.value)} USD` : 'Amount pending';
+  const payoutLabel = state.quote?.netReceived
+    ? `${state.quote.netReceived} ${state.amount.targetCurrency}`
+    : `${state.amount.targetCurrency} pending`;
+  const recipientLabel = state.recipient.name || 'Beneficiary pending';
+  const quoteLabel = state.rateHold?.state === 'ACTIVE'
+    ? 'Rate hold active'
+    : state.quote
+    ? 'Quote ready'
+    : 'Quote pending';
+  const transferStatus = state.txStatus === 'success'
+    ? 'Settled'
+    : state.txStatus === 'failed'
+    ? 'Action needed'
+    : state.txDigest
+    ? 'Broadcast'
+    : 'Draft';
+
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-5">
-      <header className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-        <div>
-          <span className="dash-kicker">Payment intent</span>
-          <h1 className="dash-title mt-2">Send a payout</h1>
-          <p className="mt-1 text-xs font-medium text-[#326273]/60">
-            Capture a beneficiary, lock the USD quote, confirm deposit, then download the on-chain receipt.
-          </p>
+    <div className="mx-auto w-full max-w-7xl space-y-4">
+      <header className="overflow-hidden rounded-lg border border-[#1F4452]/20 bg-[#1F4452] text-white shadow-[8px_8px_0_rgba(31,68,82,0.12)]">
+        <div className="grid gap-5 p-5 md:grid-cols-[minmax(0,1fr)_300px] md:p-6">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-2 rounded-md border border-white/20 bg-white/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-white/75">
+                Payment intent
+              </span>
+              <span className="inline-flex items-center gap-2 rounded-md border border-[#8FD7C7]/30 bg-[#8FD7C7]/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-[#D9FFF6]">
+                <BadgeCheck className="h-3.5 w-3.5" />
+                {transferStatus}
+              </span>
+            </div>
+            <h1 className="mt-4 text-3xl font-black tracking-tight text-white md:text-4xl">
+              Send a payout
+            </h1>
+            <p className="mt-2 max-w-2xl text-sm font-medium leading-6 text-white/70">
+              Capture the beneficiary, choose delivery, lock the USD quote, and finish with an audit-ready receipt.
+            </p>
+            <div className="mt-5 flex flex-wrap items-center gap-2 text-xs font-bold text-white/70">
+              <span className="rounded-md border border-white/20 bg-white/10 px-3 py-2 font-mono text-white">
+                USD -&gt; {state.amount.targetCurrency}
+              </span>
+              <span className="rounded-md border border-white/20 bg-white/10 px-3 py-2">
+                {destinationLabel}
+              </span>
+              <span className="rounded-md border border-white/20 bg-white/10 px-3 py-2">
+                {quoteLabel}
+              </span>
+            </div>
+          </div>
+
+          <div className="grid content-between gap-4 border-t border-white/20 pt-4 md:border-l md:border-t-0 md:pl-5 md:pt-0">
+            <div>
+              <div className="text-[10px] font-black uppercase tracking-[0.18em] text-white/50">Current step</div>
+              <div className="mt-2 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="truncate text-xl font-black text-white">{currentStepLabel}</div>
+                  <div className="mt-1 text-xs font-semibold text-white/55">Step {state.step} of 5</div>
+                </div>
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[#E39774] text-sm font-black text-white">
+                  {state.step}/5
+                </div>
+              </div>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-white/20">
+              <div
+                className="h-full rounded-full bg-[#8FD7C7] transition-all"
+                style={{ width: `${(state.step / stepLabels.length) * 100}%` }}
+              />
+            </div>
+          </div>
         </div>
-        <div className="rounded-[11px] border border-[#326273]/15 bg-white/70 px-3 py-2 text-xs font-bold text-[#326273]">
-          Step {state.step} of 5 · {stepLabels[state.step - 1]}
+        <div className="grid border-t border-white/20 md:grid-cols-4">
+          <SummaryMetric icon={CircleDollarSign} label="Send amount" value={amountLabel} />
+          <SummaryMetric icon={ArrowRightLeft} label="Payout" value={payoutLabel} />
+          <SummaryMetric icon={Landmark} label="Rail" value={state.recipient.rail.toUpperCase()} />
+          <SummaryMetric icon={Clock3} label="Quote" value={quoteLabel} />
         </div>
       </header>
 
-      {/* Signature: this payout's settlement journey */}
       <SettlementEngineFlow
         variant="settlement"
         className="dash-reveal"
         corridors={[{
-          flag: CURRENCY_META[state.amount.targetCurrency]?.flag,
+          flag: selectedCurrency?.flag,
           label: state.amount.targetCurrency,
-          sublabel: CURRENCY_META[state.amount.targetCurrency]?.country ?? state.recipient.country,
+          sublabel: destinationLabel,
         }]}
         captions={['400ms Sui finality', 'Quote locked at signing', 'On-chain receipt']}
       />
 
       <Stepper current={state.step} />
 
-      <section className="grid gap-5 lg:grid-cols-[1.5fr_1fr]">
-        <div className="dash-surface p-6 md:p-8">
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.55fr)_360px]">
+        <div className="rounded-lg border border-[#326273]/15 bg-white/80 p-4 shadow-[0_18px_38px_-28px_rgba(50,98,115,0.45)] md:p-6">
           {state.step === 1 && <StepBeneficiary state={state} set={set} next={() => go(2)} />}
           {state.step === 2 && <StepDelivery state={state} set={set} prev={() => go(1)} next={() => go(3)} />}
           {state.step === 3 && <StepQuote state={state} set={set} prev={() => go(2)} next={() => go(4)} />}
@@ -174,33 +256,32 @@ export default function TransferPage() {
           {state.step === 5 && <StepReceipt state={state} reset={() => setState(initial)} />}
         </div>
 
-        <aside className="space-y-4">
-          <div className="rounded-2xl border border-[#0c3e48] bg-[#0c3e48] p-5 text-white shadow-[6px_7px_0_rgba(12,62,72,0.18)]">
-            <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/55">Live transfer</div>
-            <div className="mt-2 text-lg font-extrabold">
-              {state.amount.value ? `$${state.amount.value}` : 'Awaiting amount'}
-            </div>
-            <div className="mt-1 text-xs text-white/65">
-              {state.recipient.name ? `To ${state.recipient.name}` : 'No beneficiary selected'} · USD → {state.recipient.country}
-            </div>
-            <div className="mt-4 grid grid-cols-2 gap-2 text-[11px]">
-              <Pill label="Source" value="USD" />
-              <Pill label="Target" value={state.amount.targetCurrency} />
-            </div>
-          </div>
-
-          {sidePanels.map(({ icon: Icon, title, body }) => (
-            <div key={title} className="dash-block p-4">
-              <div className="flex items-start gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#5C9EAD]/10 text-[#5C9EAD]">
-                  <Icon className="h-4 w-4" />
-                </div>
+        <aside className="space-y-3">
+          <div className="overflow-hidden rounded-lg border border-[#0c3e48] bg-[#0c3e48] text-white shadow-[6px_7px_0_rgba(12,62,72,0.18)]">
+            <div className="border-b border-white/10 p-4">
+              <div className="flex items-center justify-between gap-3">
                 <div>
-                  <div className="text-sm font-bold text-[#326273]">{title}</div>
-                  <p className="mt-1 text-xs leading-5 text-[#326273]/65">{body}</p>
+                  <div className="text-[10px] font-black uppercase tracking-[0.18em] text-white/50">Live transfer</div>
+                  <div className="mt-2 text-xl font-black">{amountLabel}</div>
+                </div>
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white/10 text-[#8FD7C7]">
+                  <WalletCards className="h-5 w-5" />
                 </div>
               </div>
+              <div className="mt-3 min-w-0 text-xs font-semibold text-white/60">
+                <span className="block truncate">To {recipientLabel}</span>
+                <span className="mt-1 block font-mono text-white/80">USD -&gt; {state.amount.targetCurrency}</span>
+              </div>
             </div>
+            <div className="grid grid-cols-2 border-b border-white/10 text-[11px]">
+              <Pill label="Target" value={state.amount.targetCurrency} />
+              <Pill label="Country" value={destinationLabel} />
+            </div>
+            <RouteLine source="USD" target={state.amount.targetCurrency} />
+          </div>
+
+          {sidePanels.map((panel) => (
+            <SignalRow key={panel.title} {...panel} />
           ))}
         </aside>
       </section>
@@ -208,18 +289,85 @@ export default function TransferPage() {
   );
 }
 
+function formatUsd(value: string) {
+  const parsed = Number.parseFloat(value.replace(/,/g, ''));
+  if (!Number.isFinite(parsed)) return `$${value}`;
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(parsed);
+}
+
+function SummaryMetric({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
+  return (
+    <div className="flex min-w-0 items-center gap-3 border-b border-white/20 px-4 py-3 last:border-b-0 last:border-r-0 md:border-b-0 md:border-r">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 text-[#8FD7C7]">
+        <Icon className="h-4 w-4" />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-[10px] font-black uppercase tracking-[0.16em] text-white/45">{label}</span>
+        <span className="mt-1 block truncate text-sm font-black text-white">{value}</span>
+      </span>
+    </div>
+  );
+}
+
 function Pill({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg bg-white/10 px-3 py-2">
+    <div className="min-w-0 border-r border-white/10 px-4 py-3 last:border-r-0">
       <div className="text-[10px] uppercase tracking-wide text-white/55">{label}</div>
-      <div className="mt-0.5 font-mono text-sm font-semibold text-white">{value}</div>
+      <div className="mt-0.5 truncate font-mono text-sm font-semibold text-white">{value}</div>
+    </div>
+  );
+}
+
+function RouteLine({ source, target }: { source: string; target: string }) {
+  return (
+    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 p-4">
+      <RouteNode label="Source" value={source} />
+      <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/20 bg-white/10 text-[#8FD7C7]">
+        <ArrowRightLeft className="h-4 w-4" />
+      </div>
+      <RouteNode label="Destination" value={target} alignRight />
+    </div>
+  );
+}
+
+function RouteNode({ label, value, alignRight = false }: { label: string; value: string; alignRight?: boolean }) {
+  return (
+    <div className={alignRight ? 'min-w-0 text-right' : 'min-w-0'}>
+      <div className="text-[10px] font-black uppercase tracking-[0.15em] text-white/45">{label}</div>
+      <div className="mt-1 truncate font-mono text-sm font-black text-white">{value}</div>
+    </div>
+  );
+}
+
+function SignalRow({ icon: Icon, title, metric, body }: { icon: LucideIcon; title: string; metric: string; body: string }) {
+  return (
+    <div className="rounded-lg border border-[#326273]/15 bg-white/70 p-4 shadow-sm">
+      <div className="flex items-start gap-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#5C9EAD]/10 text-[#326273]">
+          <Icon className="h-4 w-4" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-3">
+            <div className="text-sm font-black text-[#326273]">{title}</div>
+            <div className="shrink-0 rounded-md bg-[#326273]/10 px-2 py-1 font-mono text-[10px] font-black text-[#326273]">
+              {metric}
+            </div>
+          </div>
+          <p className="mt-1 text-xs leading-5 text-[#326273]/65">{body}</p>
+        </div>
+      </div>
     </div>
   );
 }
 
 function Stepper({ current }: { current: number }) {
   return (
-    <ol className="dash-surface grid grid-cols-5 gap-0 overflow-hidden">
+    <ol className="grid overflow-hidden rounded-lg border border-[#326273]/15 bg-white/80 shadow-sm sm:grid-cols-5">
       {stepLabels.map((label, index) => {
         const step = index + 1;
         const active = step === current;
@@ -229,30 +377,31 @@ function Stepper({ current }: { current: number }) {
         return (
           <li
             key={label}
-            className={`relative flex flex-col items-center justify-center gap-1.5 px-1.5 py-3 text-center transition-colors sm:flex-row sm:items-center sm:gap-3 sm:px-4 sm:py-4 sm:text-left ${active ? 'bg-[#0c3e48]/[0.06]' : 'bg-transparent'} ${last ? '' : 'border-r border-[#326273]/10'}`}
+            aria-current={active ? 'step' : undefined}
+            className={`relative flex min-h-[74px] items-center gap-3 px-4 py-3 transition-colors ${active ? 'bg-[#0c3e48]/[0.06]' : 'bg-transparent'} ${last ? '' : 'border-b border-[#326273]/10 sm:border-b-0 sm:border-r'}`}
           >
             <span
-              className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-bold transition-all sm:h-8 sm:w-8 sm:text-xs ${done
+              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-black transition-all ${done
                 ? 'bg-[#5C9EAD] text-white shadow-md shadow-[#5C9EAD]/30'
                 : active
                 ? 'bg-[#E39774] text-white shadow-md shadow-[#E39774]/30'
-                : 'bg-[#326273]/8 text-[#326273]/55'}`}
+                : 'bg-[#326273]/10 text-[#326273]/55'}`}
             >
-              {done ? <Check className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> : step}
+              {done ? <Check className="h-4 w-4" /> : step}
             </span>
-            <div className="min-w-0 sm:flex-1">
-              <div className={`hidden text-[10px] font-bold uppercase tracking-[0.18em] sm:block ${active ? 'text-[#E39774]' : done ? 'text-[#5C9EAD]' : 'text-[#326273]/45'}`}>
+            <div className="min-w-0 flex-1">
+              <div className={`text-[10px] font-black uppercase tracking-[0.18em] ${active ? 'text-[#E39774]' : done ? 'text-[#5C9EAD]' : 'text-[#326273]/45'}`}>
                 Step {step}
               </div>
-              <div className={`truncate text-[10px] font-bold leading-tight sm:text-sm ${active || done ? 'text-[#326273]' : 'text-[#326273]/55'}`}>
+              <div className={`mt-0.5 truncate text-sm font-black leading-tight ${active || done ? 'text-[#326273]' : 'text-[#326273]/55'}`}>
                 {label}
               </div>
             </div>
             {active && (
-              <span className="absolute inset-x-0 bottom-0 h-[3px] bg-[#E39774]" aria-hidden="true" />
+              <span className="absolute inset-y-0 left-0 w-[3px] bg-[#E39774] sm:inset-x-0 sm:inset-y-auto sm:bottom-0 sm:h-[3px] sm:w-auto" aria-hidden="true" />
             )}
             {done && (
-              <span className="absolute inset-x-0 bottom-0 h-[3px] bg-[#5C9EAD]" aria-hidden="true" />
+              <span className="absolute inset-y-0 left-0 w-[3px] bg-[#5C9EAD] sm:inset-x-0 sm:inset-y-auto sm:bottom-0 sm:h-[3px] sm:w-auto" aria-hidden="true" />
             )}
           </li>
         );

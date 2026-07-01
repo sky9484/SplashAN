@@ -1,12 +1,12 @@
-import { createHash } from 'node:crypto';
-
-import { sealAdapter } from '@/lib/server/seal';
+import {
+  createTransferSettlementEvidence,
+  sealAndStoreSettlementEvidence,
+} from '@/lib/evidence/settlement';
 import { assertSealWritable } from '@/lib/server/seal-health';
 import {
   confirmComposedPaymentOnSui,
   createPaymentIntentOnSui,
 } from '@/lib/server/sui-settlement';
-import { storeEncryptedInvoice } from '@/lib/server/walrus';
 import type { AuditReceipt } from '@/lib/server/operations';
 
 function scaleFxRate(rate: string | number | null | undefined) {
@@ -42,38 +42,40 @@ export async function executeComposedPayment(input: {
     fxRateScaled: scaleFxRate(input.fxRate),
   });
 
-  const auditPayload = JSON.stringify({
-    schema: 'splash.composed-payment.v1',
+  const createdAt = new Date().toISOString();
+  const expectedAnchorId = `transfer:${input.transferId}`;
+  const evidenceBundle = createTransferSettlementEvidence({
     transferId: input.transferId,
-    paymentIntentId: intent.intentId,
-    intentCreateDigest: intent.digest,
     recipient: input.recipientLabel,
     targetCurrency: input.targetCurrency,
     paymentMist,
+    paymentIntentId: intent.intentId,
+    intentCreateDigest: intent.digest,
+    expectedAnchorId,
     funding: input.funding,
-    createdAt: new Date().toISOString(),
+    createdAt,
   });
-  const { ciphertext, policy } = await sealAdapter.encrypt(auditPayload, [
+  const evidence = await sealAndStoreSettlementEvidence(evidenceBundle, [
     'dashboard-operator',
     input.recipientLabel,
     'auditor',
   ]);
-  const blob = await storeEncryptedInvoice(ciphertext);
-  const auditHash = createHash('sha256').update(ciphertext).digest('hex');
+  const auditHash = evidence.record.ciphertextHash;
   const composed = await confirmComposedPaymentOnSui({
     intentId: intent.intentId,
     intentCreateDigest: intent.digest,
     paymentMist,
     treasuryAmountMist: treasuryAllocation(paymentMist),
     auditHash,
-    anchorId: `transfer:${input.transferId}`,
-    backingBlobId: blob.blobId,
+    anchorId: expectedAnchorId,
+    backingBlobId: evidence.walrus.blobId,
   });
 
   return {
     ...composed,
     auditHash,
-    walrus: blob,
-    sealPolicy: policy,
+    walrus: evidence.walrus,
+    sealPolicy: evidence.policy,
+    evidence: evidence.record,
   };
 }

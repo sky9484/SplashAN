@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server';
 
 import { createSumsubKybSession, getSumsubConfig } from '@/lib/compliance/sumsub';
+import { readJsonBody } from '@/lib/server/http';
 import { attachSumsubApplicant } from '@/lib/server/kyb';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
-  const body = await request.json();
+  const body = await readJsonBody(request);
   const kybCaseId = String(body.kybCaseId ?? '');
   const businessName = String(body.businessName ?? '');
   const registrationNumber = String(body.registrationNumber ?? '');

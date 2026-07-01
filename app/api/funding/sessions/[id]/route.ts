@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { resolveFundingSelection } from '@/lib/funding/registry';
 import { ingestStablecoinDeposit } from '@/lib/server/funding-intake';
 import { readFundingSession } from '@/lib/server/funding-sessions';
+import { readJsonBody } from '@/lib/server/http';
 
 const actionSchema = z.object({ action: z.literal('SIMULATE_DEPOSIT') });
 
@@ -19,7 +20,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   if (process.env.NODE_ENV === 'production' && process.env.USE_MOCK_APIS !== 'true' && process.env.NEXT_PUBLIC_DEMO_MODE !== 'true') {
     return NextResponse.json({ error: 'Deposit simulation is disabled' }, { status: 404 });
   }
-  const parsed = actionSchema.safeParse(await request.json());
+  const parsed = actionSchema.safeParse(await readJsonBody(request));
   if (!parsed.success) return NextResponse.json({ error: 'Invalid funding action' }, { status: 400 });
   const { id } = await context.params;
   const session = readFundingSession(id);

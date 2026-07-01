@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
+import { readJsonBody } from '@/lib/server/http';
 import {
   findInvoiceBySlug,
   listRecipients,
@@ -52,7 +53,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
   const { slug } = await params;
   const invoice = findInvoiceBySlug(slug);
   if (!invoice) return NextResponse.json({ error: 'Payment request not found' }, { status: 404 });
-  const parsed = paidSchema.safeParse(await request.json());
+  const parsed = paidSchema.safeParse(await readJsonBody(request));
   if (!parsed.success) return NextResponse.json({ error: 'Valid payer details are required' }, { status: 400 });
 
   const recipient = upsertRecipientFromInvoice({

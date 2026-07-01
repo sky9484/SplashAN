@@ -29,6 +29,7 @@ use sui::event;
 const E_INSUFFICIENT_BALANCE: u64 = 700;
 const E_ZERO_AMOUNT:          u64 = 701;
 const E_RECIPIENT_INVALID:    u64 = 702;
+const E_OPERATING_FLOOR:      u64 = 703;
 
 public struct SmartTreasury<phantom T> has key {
     id: UID,
@@ -151,6 +152,54 @@ public fun withdraw<T>(
     transfer::public_transfer(coin, recipient);
 }
 
+/// Allocate funds out of the treasury while preserving the committed
+/// operating minimum for the corridor.
+public fun allocate<T>(
+    treasury: &mut SmartTreasury<T>,
+    _admin: &AdminCap,
+    recipient: address,
+    amount: u64,
+    operating_minimum: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    assert!(amount > 0, E_ZERO_AMOUNT);
+    assert!(recipient != @0x0, E_RECIPIENT_INVALID);
+
+    let current_balance = balance::value(&treasury.balance);
+    assert!(current_balance >= amount, E_INSUFFICIENT_BALANCE);
+    assert!(current_balance - amount >= operating_minimum, E_OPERATING_FLOOR);
+
+    let withdrawn = balance::split(&mut treasury.balance, amount);
+    let coin = coin::from_balance(withdrawn, ctx);
+
+    treasury.lifetime_withdrawn = treasury.lifetime_withdrawn + amount;
+    treasury.last_activity_ms = clock::timestamp_ms(clock);
+
+    event::emit(TreasuryWithdrawn {
+        treasury_id: treasury.treasury_id,
+        amount,
+        new_balance: balance::value(&treasury.balance),
+        timestamp_ms: treasury.last_activity_ms,
+        to: recipient,
+        operator: tx_context::sender(ctx),
+    });
+
+    transfer::public_transfer(coin, recipient);
+}
+
+/// Redeem is the symmetric operator path for returning funds from treasury.
+public fun redeem<T>(
+    treasury: &mut SmartTreasury<T>,
+    admin: &AdminCap,
+    recipient: address,
+    amount: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    withdraw(treasury, admin, recipient, amount, clock, ctx);
+}
+
 /// Convenience wrapper that emits a rebalance-style event without creating
 /// a separate shared object per call (M-04 fix). Use this when off-chain
 /// accounting wants to tag a particular deposit/withdraw as part of a
@@ -197,4 +246,37 @@ public fun admin<T>(treasury: &SmartTreasury<T>): address {
 
 public fun treasury_id<T>(treasury: &SmartTreasury<T>): &String {
     &treasury.treasury_id
+}
+
+#[test_only]
+public fun treasury_for_testing<T>(
+    treasury_id: String,
+    amount: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): SmartTreasury<T> {
+    SmartTreasury<T> {
+        id: object::new(ctx),
+        treasury_id,
+        balance: balance::create_for_testing<T>(amount),
+        lifetime_deposited: amount,
+        lifetime_withdrawn: 0,
+        last_activity_ms: clock::timestamp_ms(clock),
+        admin: tx_context::sender(ctx),
+    }
+}
+
+#[test_only]
+public fun destroy_for_testing<T>(treasury: SmartTreasury<T>): u64 {
+    let SmartTreasury {
+        id,
+        treasury_id: _,
+        balance,
+        lifetime_deposited: _,
+        lifetime_withdrawn: _,
+        last_activity_ms: _,
+        admin: _,
+    } = treasury;
+    id.delete();
+    balance.destroy_for_testing()
 }

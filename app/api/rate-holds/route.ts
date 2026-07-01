@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { getCorridorFeeBps } from '@/lib/fx/corridors';
+import { readJsonBody } from '@/lib/server/http';
 import { createRateHold, listRateHolds, readRateHold } from '@/lib/server/operations';
 
 export const runtime = 'nodejs';
@@ -24,7 +25,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const parsed = createSchema.safeParse(await request.json());
+  const parsed = createSchema.safeParse(await readJsonBody(request));
   if (!parsed.success) {
     return NextResponse.json({ error: 'A valid corridor and rate are required' }, { status: 400 });
   }

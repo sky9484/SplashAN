@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 
+import { readJsonBody } from '@/lib/server/http';
 import { readSupportTicket, updateSupportTicket } from '@/lib/server/support';
 
 export const dynamic = 'force-dynamic';
@@ -17,7 +18,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const body = await request.json();
+  const body = await readJsonBody(request);
   const message = String(body.message ?? '').trim();
   const actor = String(body.email ?? '').trim() || 'customer';
 

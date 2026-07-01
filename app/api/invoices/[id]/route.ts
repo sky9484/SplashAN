@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
+import { readJsonBody } from '@/lib/server/http';
 import { readInvoice, updateInvoice } from '@/lib/server/operations';
 
 const patchSchema = z.object({
@@ -19,7 +20,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const parsed = patchSchema.safeParse(await request.json());
+  const parsed = patchSchema.safeParse(await readJsonBody(request));
   if (!parsed.success) return NextResponse.json({ error: 'Invalid invoice update' }, { status: 400 });
   const invoice = updateInvoice(id, parsed.data);
   return invoice

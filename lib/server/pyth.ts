@@ -1,3 +1,5 @@
+import { getDeepbookStablePrice } from '@/lib/server/deepbook';
+
 const HERMES_BASE = 'https://hermes.pyth.network';
 
 const PRICE_IDS = {
@@ -13,6 +15,14 @@ export interface PriceData {
   source: 'pyth' | 'mock';
 }
 
+export interface DeepbookPeg {
+  pair: string;
+  midPrice: number;
+  deviationBps: number;
+  pegged: boolean;
+  source: 'deepbook' | 'mock';
+}
+
 export interface PegStatus {
   usdcUsd: PriceData;
   usdtUsd: PriceData;
@@ -20,6 +30,16 @@ export interface PegStatus {
   pegged: boolean;
   usdtCheaper: boolean;
   spreadBps: number;
+  /** DeepBook V3 CLOB cross-check (second source). null when unavailable. */
+  deepbook: DeepbookPeg | null;
+  /** Per-source peg confirmation. deepbook is null when the feed is unavailable. */
+  sources: { pyth: boolean; deepbook: boolean | null };
+  /** How many independent sources currently confirm the peg. */
+  confirmedBy: number;
+  /** |DeepBook USDT/USDC mid − Pyth-implied USDT/USDC| in bps. null if unavailable. */
+  divergenceBps: number | null;
+  /** Which source gated the decision: DeepBook (primary) or Pyth (fallback). */
+  primary: 'deepbook' | 'pyth';
 }
 
 function parseHermesPrice(priceStr: string, expo: number): number {
@@ -89,7 +109,13 @@ export class PythAdapter {
   }
 
   async getPegStatus(): Promise<PegStatus> {
-    const { usdc, usdt } = await this.getStablecoinPrices();
+    // Pyth (oracle) and DeepBook (on-chain CLOB) fetched in parallel — two
+    // independent sources so peg health never rests on a single feed.
+    const [{ usdc, usdt }, dbStable] = await Promise.all([
+      this.getStablecoinPrices(),
+      getDeepbookStablePrice(),
+    ]);
+
     const maxDeviationPpm = 3_000;
     const usdcDevPpm = Math.abs(usdc.price - 1.0) * 1_000_000;
     const usdtDevPpm = Math.abs(usdt.price - 1.0) * 1_000_000;
@@ -98,9 +124,35 @@ export class PythAdapter {
     // clocks can skew far from Pyth's real publish times and produce false
     // "stale" positives that wrongly block every transfer. Staleness is still
     // enforced on-chain by peg_monitor::assert_pegged (60s) at real settlement.
-    const pegged = usdcDevPpm <= maxDeviationPpm && usdtDevPpm <= maxDeviationPpm;
+    const pythPegged = usdcDevPpm <= maxDeviationPpm && usdtDevPpm <= maxDeviationPpm;
     const spreadBps = Math.round(((usdc.price - usdt.price) / usdc.price) * 10_000);
     const deviationPpm = Math.round((Math.abs(usdc.price - usdt.price) / usdc.price) * 1_000_000);
+
+    // DeepBook V3 stable-pair mid as a second peg source.
+    const dbToleranceBps = Number(process.env.DEEPBOOK_PEG_TOLERANCE_BPS ?? 100);
+    const deepbook: DeepbookPeg | null = dbStable
+      ? {
+          pair: dbStable.pair,
+          midPrice: dbStable.midPrice,
+          deviationBps: Math.round(dbStable.deviationBps * 100) / 100,
+          pegged: dbStable.deviationBps <= dbToleranceBps,
+          source: dbStable.source,
+        }
+      : null;
+
+    // DeepBook (on-chain CLOB) is the PRIMARY peg gate — real, executable,
+    // market-driven prices. Pyth (oracle) is the secondary confirmation and the
+    // FALLBACK gate when the DeepBook feed is unavailable.
+    const pegged = deepbook ? deepbook.pegged : pythPegged;
+    const primary: PegStatus['primary'] = deepbook ? 'deepbook' : 'pyth';
+    const sources = { deepbook: deepbook ? deepbook.pegged : null, pyth: pythPegged };
+    const confirmedBy = (deepbook?.pegged ? 1 : 0) + (pythPegged ? 1 : 0);
+
+    // Cross-source divergence: DeepBook USDT/USDC mid vs Pyth-implied USDT/USDC.
+    const pythUsdtPerUsdc = usdc.price > 0 ? usdt.price / usdc.price : 1;
+    const divergenceBps = deepbook
+      ? Math.round(Math.abs(deepbook.midPrice - pythUsdtPerUsdc) * 10_000 * 100) / 100
+      : null;
 
     return {
       usdcUsd: usdc,
@@ -109,6 +161,11 @@ export class PythAdapter {
       pegged,
       usdtCheaper: spreadBps > 0,
       spreadBps,
+      deepbook,
+      sources,
+      confirmedBy,
+      divergenceBps,
+      primary,
     };
   }
 }

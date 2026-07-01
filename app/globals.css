@@ -49,24 +49,23 @@
 }
 
 :root {
-  --splash-page-bg: #eef4f5;
-  --splash-page-bg-mid: #f1f2f8;
-  --splash-page-bg-deep: #e7eef0;
+  --splash-page-bg: #ece3de;
+  --splash-page-bg-deep: #e5d8d1;
   /* Extended accent palette (see tailwind.config.ts → colors.splash) */
   --splash-gold: #d9a441;
   --splash-mint: #6fb4a0;
   --splash-indigo: #2b3a67;
   --background: var(--splash-page-bg);
   --foreground: #326273;
-  --card: #fdfeff;
+  --card: #fffaf6;
   --card-foreground: #326273;
-  --popover: #fdfeff;
+  --popover: #fffaf6;
   --popover-foreground: #326273;
   --primary: #5c9ead;
   --primary-foreground: #fffaf6;
-  --secondary: #dfe9ec;
+  --secondary: #e2d3ca;
   --secondary-foreground: #326273;
-  --muted: #dbe5e9;
+  --muted: #d9cbc4;
   --muted-foreground: #6d7f86;
   --accent: #e39774;
   --accent-foreground: #fffaf6;
@@ -80,7 +79,7 @@
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
   --radius: 0.625rem;
-  --sidebar: #fdfeff;
+  --sidebar: #fffaf6;
   --sidebar-foreground: #326273;
   --sidebar-primary: #5c9ead;
   --sidebar-primary-foreground: #fffaf6;
@@ -161,14 +160,12 @@
    because many of those are cards, inputs, badges, and table rows. */
 body {
   background:
-    linear-gradient(rgba(31, 67, 80, .035), rgba(31, 67, 80, .035)),
-    linear-gradient(180deg, var(--splash-page-bg) 0%, var(--splash-page-bg-mid) 46%, var(--splash-page-bg-deep) 100%);
+    linear-gradient(180deg, var(--splash-page-bg) 0%, #efe6e1 42%, var(--splash-page-bg-deep) 100%);
 }
 
 .splash-page-bg {
   background:
-    linear-gradient(rgba(31, 67, 80, .035), rgba(31, 67, 80, .035)),
-    linear-gradient(180deg, var(--splash-page-bg) 0%, var(--splash-page-bg-mid) 46%, var(--splash-page-bg-deep) 100%);
+    linear-gradient(180deg, var(--splash-page-bg) 0%, #efe6e1 42%, var(--splash-page-bg-deep) 100%);
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -318,8 +315,8 @@ body {
 }
 
 .iso-landing {
-  --iso-paper: #eef4f5;
-  --iso-paper-deep: #e7eef0;
+  --iso-paper: #fffaf4;
+  --iso-paper-deep: #f8f0e5;
   --iso-ink: #0c3e48;
   --iso-teal: #0d6370;
   --iso-teal-dark: #083640;
@@ -329,9 +326,7 @@ body {
   min-height: 100svh;
   overflow: hidden;
   color: var(--iso-ink);
-  background:
-    linear-gradient(rgba(31, 67, 80, .025), rgba(31, 67, 80, .025)),
-    var(--iso-paper);
+  background: var(--iso-paper);
   font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
 }
 
@@ -361,7 +356,7 @@ body {
 
 .iso-header.is-scrolled {
   border-bottom-color: rgba(12, 62, 72, .1);
-  background: rgba(238, 244, 245, .88);
+  background: rgba(255, 250, 244, .82);
   box-shadow: 0 12px 35px rgba(9, 45, 54, .06);
   backdrop-filter: blur(18px);
 }
@@ -492,9 +487,9 @@ body {
   min-height: 820px;
   padding-top: 76px;
   background:
-    radial-gradient(circle at 70% 23%, rgba(159, 207, 199, .2), transparent 24%),
-    radial-gradient(circle at 18% 20%, rgba(111, 121, 164, .13), transparent 20%),
-    linear-gradient(180deg, var(--splash-page-bg) 0%, var(--splash-page-bg-deep) 100%);
+    radial-gradient(circle at 70% 23%, rgba(159, 207, 199, .28), transparent 24%),
+    radial-gradient(circle at 18% 20%, rgba(239, 196, 111, .18), transparent 20%),
+    linear-gradient(180deg, #ede5dc 0%, var(--splash-page-bg-deep) 100%);
 }
 
 .iso-grid-plane {
@@ -842,7 +837,7 @@ body {
 .iso-partner-rail {
   position: relative;
   border-bottom: 1px solid var(--iso-line);
-  background: rgba(238, 244, 245, .76);
+  background: rgba(255, 252, 247, .82);
 }
 
 .iso-partner-rail > .iso-shell {
@@ -3367,7 +3362,7 @@ body {
 
 /* Isometric authentication */
 .iso-auth {
-  --iso-paper: #eef4f5;
+  --iso-paper: #f4ecdf;
   --iso-ink: #0c3e48;
   --iso-teal: #0d6370;
   --iso-teal-dark: #083640;
@@ -3379,9 +3374,9 @@ body {
   padding: 102px 24px 32px;
   color: var(--iso-ink);
   background:
-    radial-gradient(circle at 80% 15%, rgba(159, 207, 199, .34), transparent 25%),
-    radial-gradient(circle at 12% 78%, rgba(111, 121, 164, .13), transparent 24%),
-    linear-gradient(180deg, #f7fafb, var(--iso-paper));
+    radial-gradient(circle at 80% 15%, rgba(159, 207, 199, .52), transparent 25%),
+    radial-gradient(circle at 12% 78%, rgba(239, 196, 111, .2), transparent 24%),
+    linear-gradient(180deg, #f8f1e7, var(--iso-paper));
   font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
 }
 
@@ -3418,7 +3413,7 @@ body {
   gap: 20px;
   border-bottom: 1px solid rgba(12, 62, 72, .1);
   padding-inline: max(24px, calc((100vw - 1320px) / 2));
-  background: rgba(231, 238, 240, .82);
+  background: rgba(244, 236, 223, .75);
   backdrop-filter: blur(18px);
 }
 
@@ -3467,7 +3462,7 @@ body {
   grid-template-columns: 1.04fr .96fr;
   border: 1px solid rgba(12, 62, 72, .22);
   border-radius: 16px;
-  background: rgba(253, 254, 255, .78);
+  background: rgba(255, 251, 245, .76);
   box-shadow:
     14px 16px 0 rgba(12, 62, 72, .12),
     0 35px 80px rgba(8, 54, 64, .15);
@@ -3599,7 +3594,7 @@ body {
   background:
     linear-gradient(rgba(12, 62, 72, .035) 1px, transparent 1px),
     linear-gradient(90deg, rgba(12, 62, 72, .035) 1px, transparent 1px),
-    rgba(253, 254, 255, .94);
+    rgba(255, 251, 245, .94);
   background-size: 58px 58px;
   flex-direction: column;
 }
@@ -4092,13 +4087,29 @@ body {
   --fintech-teal: #2b6f7c;
   --fintech-mint: #9fcfc7;
   --fintech-gold: #efc46f;
-  --fintech-paper: #fdfeff;
   --fintech-line: rgba(12, 62, 72, .16);
   position: relative;
   isolation: isolate;
 }
 
-.fintech-dashboard-shell::before,
+.fintech-dashboard-shell { --fintech-paper: #fffaf2; }
+.fintech-admin-shell { --fintech-paper: #fdfeff; }
+
+.fintech-dashboard-shell::before {
+  position: fixed;
+  z-index: -1;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 76% 6%, rgba(92, 158, 173, .2), transparent 24%),
+    radial-gradient(circle at 28% 82%, rgba(227, 151, 116, .15), transparent 27%),
+    linear-gradient(rgba(18, 63, 73, .035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(18, 63, 73, .035) 1px, transparent 1px);
+  background-size: auto, auto, 28px 28px, 28px 28px;
+  content: "";
+  mask-image: linear-gradient(to bottom, black, transparent 82%);
+}
+
 .fintech-admin-shell::before {
   position: fixed;
   z-index: -1;
@@ -4148,7 +4159,7 @@ body {
 
 .fintech-dashboard-header {
   border-color: rgba(18, 63, 73, .1) !important;
-  background: rgba(231, 238, 240, .9) !important;
+  background: rgba(255, 250, 242, .84) !important;
   box-shadow: 0 12px 35px rgba(9, 45, 54, .06) !important;
   backdrop-filter: blur(20px);
 }
@@ -4164,7 +4175,13 @@ body {
   margin-inline: auto;
 }
 
-.fintech-dashboard-main [class~="bg-white"],
+.fintech-dashboard-main [class~="bg-white"] {
+  border-color: rgba(18, 63, 73, .1);
+  background-color: rgba(255, 253, 249, .93) !important;
+  box-shadow: 0 15px 42px rgba(9, 45, 54, .055);
+  backdrop-filter: blur(14px);
+}
+
 .fintech-admin-main [class~="bg-white"] {
   border-color: rgba(18, 63, 73, .1);
   background-color: rgba(253, 254, 255, .93) !important;
@@ -4177,11 +4194,6 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-.fintech-dashboard-main [class~="bg-[#F6F0ED]"],
-.fintech-dashboard-header [class~="bg-[#F6F0ED]"],
-.iso-auth [class~="bg-[#F6F0ED]"] {
-  background-color: rgba(232, 239, 242, .78) !important;
-}
 
 /* ═══════════════════════════════════════════════════════════════════
    Calibrated dashboard card system (landing-aligned)
@@ -4196,7 +4208,7 @@ body {
   position: relative;
   border: 1px solid var(--fintech-line);
   border-radius: 16px;
-  background-color: rgba(253, 254, 255, .93);
+  background-color: rgba(255, 253, 249, .93);
   box-shadow: 0 15px 42px rgba(9, 45, 54, .055);
   backdrop-filter: blur(14px);
 }
@@ -4207,7 +4219,7 @@ body {
   overflow: hidden;
   border: 1px solid var(--fintech-line);
   border-radius: 16px;
-  background-color: rgba(253, 254, 255, .93);
+  background-color: rgba(255, 253, 249, .93);
   box-shadow:
     6px 7px 0 rgba(12, 62, 72, .10),
     0 22px 44px rgba(8, 54, 64, .07);
@@ -5181,7 +5193,7 @@ button.iso-product-row {
 .fintech-dashboard-main .dash-card-raised {
   border-color: rgba(16, 63, 72, .13);
   border-radius: 18px;
-  background: linear-gradient(145deg, rgba(255, 255, 255, .86), rgba(232, 239, 242, .72)), #fdfeff;
+  background: linear-gradient(145deg, rgba(255, 255, 255, .82), rgba(248, 237, 218, .68)), #fffaf0;
   box-shadow: 0 1px 0 rgba(255, 255, 255, .9) inset, 0 14px 34px rgba(15, 63, 72, .08);
 }
 

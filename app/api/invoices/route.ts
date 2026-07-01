@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
+import { readJsonBody } from '@/lib/server/http';
 import { createInvoice, listInvoices } from '@/lib/server/operations';
 import { sealAdapter } from '@/lib/server/seal';
 import { storeEncryptedInvoice, WalrusAdapterError } from '@/lib/server/walrus';
@@ -22,7 +23,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const parsed = createInvoiceSchema.safeParse(await request.json());
+  const parsed = createInvoiceSchema.safeParse(await readJsonBody(request));
   if (!parsed.success) {
     return NextResponse.json({ error: 'Invalid invoice', details: parsed.error.flatten() }, { status: 400 });
   }

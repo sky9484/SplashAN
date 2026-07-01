@@ -229,10 +229,14 @@ const ABORT_CODES: Record<number, string> = {
   406: 'E_INVALID_RECIPIENT — payment_intent recipient is the zero address.',
   407: 'E_EMPTY_TARGET_CURRENCY — payment_intent target currency is empty.',
   408: 'E_INVALID_FX_RATE — payment_intent FX rate must be greater than zero.',
+  409: 'E_EMPTY_BENEFICIARY_REF — payment_intent::create called without a verified counterparty reference hash.',
+  410: 'E_EMPTY_CURRENCY — payment_intent::create called without a currency tag.',
+  411: 'E_EMPTY_CORRIDOR — payment_intent::create called without a corridor tag.',
 
   // ── audit_anchor ─────────────────────────────────────────────────────────
   500: 'E_EMPTY_HASH — audit_anchor::anchor_audit_hash called with an empty audit_hash string.',
   501: 'E_EMPTY_ANCHOR — audit_anchor::anchor_audit_hash called with an empty anchor_id.',
+  502: 'E_EMPTY_BLOB — audit_anchor::anchor called with an empty Walrus blob id.',
 
   // ── dual_treasury ────────────────────────────────────────────────────────
   600: 'E_USDT_TTL_EXCEEDED — USDT settlement attempted past USDT_MAX_HOLD_MS (30 minutes). Sweep expected.',
@@ -248,6 +252,7 @@ const ABORT_CODES: Record<number, string> = {
   700: 'E_INSUFFICIENT_BALANCE — smart_treasury::withdraw requested more than the treasury holds.',
   701: 'E_ZERO_AMOUNT — smart_treasury deposit/withdraw called with amount = 0.',
   702: 'E_RECIPIENT_INVALID — smart_treasury::withdraw recipient is the zero address.',
+  703: 'E_OPERATING_FLOOR — smart_treasury::allocate would breach the corridor operating minimum.',
 
   // ── receipt_v2 ───────────────────────────────────────────────────────────
   800: 'E_EMPTY_RECEIPT_ID — receipt_v2::create_receipt called with empty receipt_id.',
@@ -435,11 +440,21 @@ export async function confirmComposedPaymentOnSui(input: {
   const tx = new Transaction();
   tx.setGasBudget(process.env.SUI_COMPOSED_GAS_BUDGET ?? '30000000');
   const [paymentCoin] = tx.splitCoins(tx.gas, [paymentMist]);
-  tx.moveCall({
+  const settlementReceipt = tx.moveCall({
     target: `${packageId}::payment_intent::confirm_payment_intent`,
     arguments: [
       tx.object(input.intentId),
       paymentCoin,
+      tx.object('0x6'),
+    ],
+  });
+
+  tx.moveCall({
+    target: `${packageId}::audit_anchor::anchor`,
+    arguments: [
+      settlementReceipt,
+      tx.pure.vector('u8', utf8Bytes(input.auditHash)),
+      tx.pure.vector('u8', utf8Bytes(input.backingBlobId)),
       tx.object('0x6'),
     ],
   });
@@ -473,11 +488,12 @@ export async function confirmComposedPaymentOnSui(input: {
   const events = resultEvents(result);
   const paid = eventBySuffix(events, '::payment_intent::IntentConfirmed');
   const allocated = eventBySuffix(events, '::smart_treasury::TreasuryDeposited');
+  const settlementAnchored = eventBySuffix(events, '::audit_anchor::SettlementAnchored');
   const anchored = eventBySuffix(events, '::audit_anchor::AuditAnchored');
   const auditAnchorObjectId =
     typeof anchored?.data.anchor_object === 'string' ? anchored.data.anchor_object : null;
 
-  if (!paid || !anchored || (treasuryAmountMist > 0 && !allocated)) {
+  if (!paid || !settlementAnchored || !anchored || (treasuryAmountMist > 0 && !allocated)) {
     throw new Error(`Composed transaction succeeded but required proof events were missing. Digest: ${result.digest}`);
   }
 
@@ -731,6 +747,10 @@ type SuiCliCallOutput = {
 
 function moneyToMicro(value: number) {
   return Math.max(0, Math.round(value * 1_000_000));
+}
+
+function utf8Bytes(value: string) {
+  return Array.from(new TextEncoder().encode(value));
 }
 
 function requireSuiAddress(value: string, label: string) {

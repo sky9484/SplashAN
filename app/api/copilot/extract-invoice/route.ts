@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { parseInvoice, type CopilotSuggestion } from '@/lib/server/copilot';
+import { readJsonBody } from '@/lib/server/http';
 import { readInvoice, updateAuditReceipt } from '@/lib/server/operations';
 import { sealAdapter } from '@/lib/server/seal';
 import { retrieveBlob } from '@/lib/server/walrus';
@@ -9,7 +10,7 @@ import { retrieveBlob } from '@/lib/server/walrus';
 const schema = z.object({ invoiceId: z.string().min(1) });
 
 export async function POST(request: Request) {
-  const parsed = schema.safeParse(await request.json());
+  const parsed = schema.safeParse(await readJsonBody(request));
   if (!parsed.success) return NextResponse.json({ error: 'invoiceId is required' }, { status: 400 });
   const invoice = readInvoice(parsed.data.invoiceId);
   if (!invoice) return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });

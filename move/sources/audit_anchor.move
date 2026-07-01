@@ -16,6 +16,7 @@
 module splash_protocol::audit_anchor;
 
 use splash_protocol::business_account::AdminCap;
+use splash_protocol::payment_intent::{Self, SettleReceipt};
 use std::string::String;
 use sui::clock::{Self, Clock};
 use sui::event;
@@ -23,6 +24,7 @@ use sui::event;
 // ─── Abort codes ───────────────────────────────────────────────────────────
 const E_EMPTY_HASH:    u64 = 500;
 const E_EMPTY_ANCHOR:  u64 = 501;
+const E_EMPTY_BLOB:    u64 = 502;
 
 public struct AuditAnchor has key {
     id: UID,
@@ -57,6 +59,23 @@ public struct VerificationChecked has copy, drop {
 }
 
 // ─── Entry / public functions ──────────────────────────────────────────────
+
+/// Settlement receipt anchor event emitted by the hot-potato anchor path.
+public struct SettlementAnchored has copy, drop {
+    intent_id: ID,
+    sender: address,
+    recipient: address,
+    beneficiary_ref: vector<u8>,
+    amount: u64,
+    currency: vector<u8>,
+    corridor: vector<u8>,
+    content_hash: vector<u8>,
+    walrus_blob_id: vector<u8>,
+    created_epoch: u64,
+    settled_at: u64,
+    anchored_at: u64,
+    anchorer: address,
+}
 
 /// Anchor an audit hash. AdminCap-gated (M-01 fix).
 public fun anchor_audit_hash(
@@ -117,6 +136,46 @@ public fun verify_anchor(
     });
 
     matched
+}
+
+/// Consume the settlement receipt produced by payment_intent.
+public fun anchor(
+    receipt: SettleReceipt,
+    content_hash: vector<u8>,
+    walrus_blob_id: vector<u8>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    assert!(content_hash.length() > 0, E_EMPTY_HASH);
+    assert!(walrus_blob_id.length() > 0, E_EMPTY_BLOB);
+
+    let (
+        intent_id,
+        sender,
+        recipient,
+        beneficiary_ref,
+        amount,
+        currency,
+        corridor,
+        created_epoch,
+        settled_at,
+    ) = payment_intent::unpack_settle_receipt(receipt);
+
+    event::emit(SettlementAnchored {
+        intent_id,
+        sender,
+        recipient,
+        beneficiary_ref,
+        amount,
+        currency,
+        corridor,
+        content_hash,
+        walrus_blob_id,
+        created_epoch,
+        settled_at,
+        anchored_at: clock::timestamp_ms(clock),
+        anchorer: tx_context::sender(ctx),
+    });
 }
 
 // ─── Views ─────────────────────────────────────────────────────────────────

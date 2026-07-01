@@ -31,6 +31,9 @@ const E_INVALID_AMOUNT:        u64 = 405;
 const E_INVALID_RECIPIENT:     u64 = 406;
 const E_EMPTY_TARGET_CURRENCY: u64 = 407;
 const E_INVALID_FX_RATE:       u64 = 408;
+const E_EMPTY_BENEFICIARY_REF: u64 = 409;
+const E_EMPTY_CURRENCY:        u64 = 410;
+const E_EMPTY_CORRIDOR:        u64 = 411;
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 /// 5-minute expiration window.
@@ -46,13 +49,31 @@ public struct PaymentIntent has key {
     id: UID,
     sender: address,
     recipient: address,
+    /// Hash/reference of the verified counterparty record. Never raw PII.
+    beneficiary_ref: vector<u8>,
     amount_usd: u64,
+    currency: vector<u8>,
+    corridor: vector<u8>,
     target_currency: String,
     /// USD→local FX rate scaled by 1e6.
     fx_rate_usd_local: u64,
     created_at: u64,
+    created_epoch: u64,
     expires_at: u64,
     status: u8,
+}
+
+/// Non-droppable receipt that must be consumed by audit_anchor::anchor.
+public struct SettleReceipt {
+    intent_id: ID,
+    sender: address,
+    recipient: address,
+    beneficiary_ref: vector<u8>,
+    amount: u64,
+    currency: vector<u8>,
+    corridor: vector<u8>,
+    created_epoch: u64,
+    settled_at: u64,
 }
 
 // ─── Events ────────────────────────────────────────────────────────────────
@@ -109,10 +130,14 @@ public fun create_payment_intent(
         id: object::new(ctx),
         sender,
         recipient,
+        beneficiary_ref: vector[],
         amount_usd,
+        currency: b"SUI",
+        corridor: vector[],
         target_currency,
         fx_rate_usd_local,
         created_at: now,
+        created_epoch: ctx.epoch(),
         expires_at,
         status: STATUS_PENDING,
     };
@@ -131,6 +156,80 @@ public fun create_payment_intent(
     transfer::share_object(intent);
 }
 
+/// Create an owned intent plus a non-droppable receipt that must be anchored
+/// in the same PTB. The caller can share the returned intent with share_intent.
+public fun create(
+    recipient: address,
+    beneficiary_ref: vector<u8>,
+    amount: u64,
+    currency: vector<u8>,
+    corridor: vector<u8>,
+    target_currency: String,
+    fx_rate_usd_local: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): (PaymentIntent, SettleReceipt) {
+    assert!(amount > 0, E_INVALID_AMOUNT);
+    assert!(recipient != @0x0, E_INVALID_RECIPIENT);
+    assert!(beneficiary_ref.length() > 0, E_EMPTY_BENEFICIARY_REF);
+    assert!(currency.length() > 0, E_EMPTY_CURRENCY);
+    assert!(corridor.length() > 0, E_EMPTY_CORRIDOR);
+    assert!(std::string::length(&target_currency) > 0, E_EMPTY_TARGET_CURRENCY);
+    assert!(fx_rate_usd_local > 0, E_INVALID_FX_RATE);
+
+    let sender = tx_context::sender(ctx);
+    let now = clock::timestamp_ms(clock);
+    let created_epoch = ctx.epoch();
+    let expires_at = now + EXPIRATION_WINDOW_MS;
+
+    let intent = PaymentIntent {
+        id: object::new(ctx),
+        sender,
+        recipient,
+        beneficiary_ref,
+        amount_usd: amount,
+        currency,
+        corridor,
+        target_currency,
+        fx_rate_usd_local,
+        created_at: now,
+        created_epoch,
+        expires_at,
+        status: STATUS_PENDING,
+    };
+    let intent_id = object::id(&intent);
+
+    event::emit(IntentCreated {
+        intent_id: object::uid_to_address(&intent.id),
+        sender,
+        recipient,
+        amount_usd: amount,
+        target_currency: intent.target_currency,
+        fx_rate_usd_local,
+        created_at: now,
+        expires_at,
+    });
+
+    let receipt = SettleReceipt {
+        intent_id,
+        sender,
+        recipient,
+        beneficiary_ref: intent.beneficiary_ref,
+        amount,
+        currency: intent.currency,
+        corridor: intent.corridor,
+        created_epoch,
+        settled_at: now,
+    };
+
+    (intent, receipt)
+}
+
+/// Share an owned intent returned by create.
+public fun share_intent(intent: PaymentIntent) {
+    transfer::share_object(intent);
+}
+
 /// Confirm an intent and execute payment. Only the original sender can call
 /// (H-02 fix). Excess payment is split off and returned to the sender so the
 /// recipient receives exactly `intent.amount_usd` (H-03 fix).
@@ -139,7 +238,7 @@ public fun confirm_payment_intent(
     mut payment: Coin<SUI>,
     clock: &Clock,
     ctx: &mut TxContext,
-) {
+): SettleReceipt {
     let caller = tx_context::sender(ctx);
     assert!(caller == intent.sender, E_UNAUTHORIZED);
     assert!(intent.status == STATUS_PENDING, E_NOT_PENDING);
@@ -162,6 +261,7 @@ public fun confirm_payment_intent(
     };
 
     intent.status = STATUS_CONFIRMED;
+    let confirmed_at = clock::timestamp_ms(clock);
 
     event::emit(IntentConfirmed {
         intent_id: object::uid_to_address(&intent.id),
@@ -169,12 +269,53 @@ public fun confirm_payment_intent(
         recipient: intent.recipient,
         amount_paid: intent.amount_usd,
         overpay_refunded: overpay,
-        confirmed_at: clock::timestamp_ms(clock),
+        confirmed_at,
     });
+
+    SettleReceipt {
+        intent_id: object::id(intent),
+        sender: intent.sender,
+        recipient: intent.recipient,
+        beneficiary_ref: intent.beneficiary_ref,
+        amount: intent.amount_usd,
+        currency: intent.currency,
+        corridor: intent.corridor,
+        created_epoch: intent.created_epoch,
+        settled_at: confirmed_at,
+    }
 }
 
-/// Cancel an expired intent. Anyone can call after the deadline — the
-/// state transition is idempotent and only flips the status to EXPIRED.
+/// Consume an owned pending intent without settlement.
+public fun cancel(intent: PaymentIntent, ctx: &mut TxContext) {
+    assert!(tx_context::sender(ctx) == intent.sender, E_UNAUTHORIZED);
+    assert!(intent.status == STATUS_PENDING, E_NOT_PENDING);
+
+    event::emit(IntentCanceled {
+        intent_id: object::uid_to_address(&intent.id),
+        sender: intent.sender,
+        canceled_at: ctx.epoch_timestamp_ms(),
+        reason: STATUS_CANCELED,
+    });
+
+    let PaymentIntent {
+        id,
+        sender: _,
+        recipient: _,
+        beneficiary_ref: _,
+        amount_usd: _,
+        currency: _,
+        corridor: _,
+        target_currency: _,
+        fx_rate_usd_local: _,
+        created_at: _,
+        created_epoch: _,
+        expires_at: _,
+        status: _,
+    } = intent;
+    id.delete();
+}
+
+/// Cancel an expired intent. Anyone can call after the deadline.
 public fun cancel_payment_intent(
     intent: &mut PaymentIntent,
     clock: &Clock,
@@ -224,4 +365,32 @@ public fun target_currency(intent: &PaymentIntent): &String { &intent.target_cur
 
 public fun is_expired(intent: &PaymentIntent, clock: &Clock): bool {
     clock::timestamp_ms(clock) >= intent.expires_at
+}
+
+public(package) fun unpack_settle_receipt(
+    receipt: SettleReceipt,
+): (ID, address, address, vector<u8>, u64, vector<u8>, vector<u8>, u64, u64) {
+    let SettleReceipt {
+        intent_id,
+        sender,
+        recipient,
+        beneficiary_ref,
+        amount,
+        currency,
+        corridor,
+        created_epoch,
+        settled_at,
+    } = receipt;
+
+    (
+        intent_id,
+        sender,
+        recipient,
+        beneficiary_ref,
+        amount,
+        currency,
+        corridor,
+        created_epoch,
+        settled_at,
+    )
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 
+import { readJsonBody } from '@/lib/server/http';
 import { createSupportTicket, type SupportTicketType } from '@/lib/server/support';
 
 export const dynamic = 'force-dynamic';
@@ -7,7 +8,7 @@ export const dynamic = 'force-dynamic';
 const allowedTypes = new Set<SupportTicketType>(['bug', 'feature', 'complaint', 'other']);
 
 export async function POST(request: Request) {
-  const body = await request.json();
+  const body = await readJsonBody(request);
   const type = String(body.type ?? 'other') as SupportTicketType;
   const subject = String(body.subject ?? '').trim();
   const message = String(body.message ?? '').trim();

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { getAdminSession } from '@/lib/server/admin-auth';
+import { readJsonBody } from '@/lib/server/http';
 import { readKybCase, reviewKybCase, type KybReviewState } from '@/lib/server/kyb';
 
 const allowedStates = new Set<KybReviewState>(['SUBMITTED', 'IN_REVIEW', 'NEEDS_INFORMATION', 'APPROVED', 'REJECTED']);
@@ -30,7 +31,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }
 
   const { id } = await params;
-  const body = await request.json();
+  const body = await readJsonBody(request);
   const state = String(body.state ?? '') as KybReviewState;
 
   if (!allowedStates.has(state)) {

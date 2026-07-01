@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
 
+import { readJsonBody } from '@/lib/server/http';
 import { calculateQuote } from '@/lib/server/quote';
 
 export async function POST(request: Request) {
-  const body = await request.json();
+  const body = await readJsonBody(request);
   const fromAmountSen = body.fromAmount === undefined
     ? Math.round(Number(body.amount ?? 0) * 100)
     : Math.round(Number(body.fromAmount ?? 0));

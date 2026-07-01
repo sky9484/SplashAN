@@ -5,6 +5,7 @@ import { useReactToPrint } from 'react-to-print';
 import { ExternalLink } from 'lucide-react';
 
 import Receipt from '@/components/Receipt';
+import SettlementProofDrawer from '@/components/SettlementProofDrawer';
 import type { TransferState } from '@/app/dashboard/transfer/page';
 
 export default function StepReceipt({ state, reset }: { state: TransferState; reset: () => void }) {
@@ -38,6 +39,14 @@ export default function StepReceipt({ state, reset }: { state: TransferState; re
         timestamp={issuedAt}
         reference={reference}
         explorerUrl={explorerUrl}
+      />
+      <SettlementProofDrawer
+        transferIntentId={state.transferIntentId}
+        fallback={{
+          digest,
+          walrusBlobId: state.walrusBlobId,
+          auditAnchorId: state.auditAnchorId,
+        }}
       />
       {state.composedActions?.length ? (
         <section className="rounded-2xl border border-[#5C9EAD]/30 bg-[#5C9EAD]/10 p-5">
