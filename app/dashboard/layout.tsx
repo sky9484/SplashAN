@@ -33,7 +33,7 @@ const navGroups: NavGroup[] = [
   {
     title: 'Payments',
     items: [
-      { label: 'Overview',     href: '/dashboard',          icon: LayoutDashboard },
+      { label: '0xWal',        href: '/dashboard',          icon: Bot, badge: 'AI' },
       { label: 'Transfer',     href: '/dashboard/transfer', icon: Send },
       { label: 'Rate holds',   href: '/dashboard/transfers', icon: Timer },
       { label: 'Batch Payout', href: '/dashboard/batch',    icon: Layers },
@@ -42,9 +42,10 @@ const navGroups: NavGroup[] = [
   {
     title: 'Finance',
     items: [
-      { label: 'Treasury',   href: '/dashboard/treasury', icon: TrendingUp },
-      { label: 'Invoices',   href: '/dashboard/invoices', icon: FileText },
-      { label: '0xWal', href: '/dashboard/0xwal',  icon: Bot,        badge: 'AI' },
+      { label: 'Overview', href: '/dashboard/overview', icon: LayoutDashboard },
+      { label: 'Treasury', href: '/dashboard/treasury', icon: TrendingUp },
+      { label: 'Invoices', href: '/dashboard/invoices', icon: FileText },
+      { label: 'Invoice loop', href: '/dashboard/0xwal', icon: FileText },
     ],
   },
   {

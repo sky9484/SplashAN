@@ -1,601 +1,358 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
+import Link from 'next/link';
 import {
   AlertTriangle,
-  ArrowUpRight,
   Bot,
-  FileText,
-  Globe,
-  Layers,
+  BrainCircuit,
+  CheckCircle2,
+  Clock3,
+  Loader2,
+  MessageSquareText,
   Send,
   ShieldCheck,
-  TrendingUp,
-  Upload,
-  Zap,
+  Sparkles,
+  type LucideIcon,
 } from 'lucide-react';
-import Link from 'next/link';
 
-import HoverPopup from '@/components/HoverPopup';
-import LiveExchangeTicker from '@/components/LiveExchangeTicker';
-import SettlementEngineFlow from '@/components/dashboard/SettlementEngineFlow';
-import StatusBadge, { type Status } from '@/components/StatusBadge';
+import ActionCard from '@/components/oxwal/ActionCard';
 import MemWalBehaviorCard from '@/components/MemWalBehaviorCard';
-import { cn } from '../../lib/utils';
-import { getCorridorFeeBps } from '@/lib/fx/corridors';
+import type { ActionCardProposal } from '@/lib/agent/action-card';
 
-/** Convert bps to display percentage (e.g. 80 -> "0.80%"). */
-function bpsToPct(bps: number) {
-  return `${(bps / 100).toFixed(2)}%`;
+type ChatTurn = {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+};
+
+type DeskEvent = {
+  id: string;
+  label: string;
+  tone: 'read' | 'propose' | 'warning' | 'meta';
+};
+
+type OxwalStreamEvent =
+  | { type: 'meta'; source: 'claude' | 'local'; readTools: string[]; proposeTools: string[] }
+  | { type: 'delta'; text: string }
+  | { type: 'tool'; name: string; category: 'READ' | 'PROPOSE' }
+  | { type: 'warning'; warning: { code: string; message: string; ref?: string } }
+  | { type: 'proposal'; proposal: ActionCardProposal }
+  | { type: 'done' };
+
+const quickPrompts = [
+  'Pay invoice inv_demo_acme_5000 to cp_acme_ph',
+  'Allocate idle treasury for MY_PH',
+  'What can you read and prepare?',
+];
+
+function newId(prefix: string) {
+  return `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
-// ─── Data ────────────────────────────────────────────────────────────────────
-
-const TOP_STATS = [
-  { label: '0xWal operating scan', value: null, icon: Bot, accent: 'text-[#E39774]', bg: 'bg-[#E39774]/10', id: '0xwal' },
-  { label: 'Volume (30d)', value: '$39,120', delta: '+12.4%', icon: ArrowUpRight, accent: 'text-[#326273]', bg: 'bg-[#326273]/10', id: 'volume' },
-  { label: 'Treasury Projection', value: null, icon: TrendingUp, accent: 'text-amber-600', bg: 'bg-amber-100', id: 'yield' },
-  { label: 'Corridor Coverage', value: '1 live-model', delta: '8 implemented in code', icon: Globe, accent: 'text-[#5C9EAD]', bg: 'bg-[#5C9EAD]/10', id: 'corridors' },
-  { label: 'Settlement SLA', value: '400ms', delta: 'On target', icon: Zap, accent: 'text-[#E39774]', bg: 'bg-[#E39774]/10', id: 'sla' },
-] as const;
-
-// Corridor display rows — fee comes from lib/fx/corridors.ts (single source of
-// truth that the contract also uses), so dashboard, quote engine, and
-// settlement.move can never drift apart again.
-const INITIAL_CORRIDORS = [
-  { pair: 'USD → PHP', flag: '🇵🇭', rate: 56.42, volume: '$4.2M', sla: '4.2m', success: 99.8, currency: 'PHP', dec: 2, fee: bpsToPct(getCorridorFeeBps('PHP')) },
-  { pair: 'USD → MYR', flag: '🇲🇾', rate: 4.71,  volume: '$1.8M', sla: '5.1m', success: 98.9, currency: 'MYR', dec: 2, fee: bpsToPct(getCorridorFeeBps('MYR')) },
-  { pair: 'USD → IDR', flag: '🇮🇩', rate: 16284,  volume: '$2.1M', sla: '3.0m', success: 99.5, currency: 'IDR', dec: 0, fee: bpsToPct(getCorridorFeeBps('IDR')) },
-  { pair: 'USD → VND', flag: '🇻🇳', rate: 25385,  volume: '$0.9M', sla: '4.8m', success: 98.2, currency: 'VND', dec: 0, fee: bpsToPct(getCorridorFeeBps('VND')) },
-  { pair: 'USD → THB', flag: '🇹🇭', rate: 35.82,  volume: '$0.7M', sla: '5.5m', success: 97.8, currency: 'THB', dec: 2, fee: bpsToPct(getCorridorFeeBps('THB')) },
-  { pair: 'USD → SGD', flag: '🇸🇬', rate: 1.345,  volume: '$0.4M', sla: '6.1m', success: 99.1, currency: 'SGD', dec: 3, fee: bpsToPct(getCorridorFeeBps('SGD')) },
-  { pair: 'USD → EUR', flag: '🇪🇺', rate: 0.924,  volume: '$0.3M', sla: '6.4m', success: 97.6, currency: 'EUR', dec: 3, fee: bpsToPct(getCorridorFeeBps('EUR')) },
-  { pair: 'USD → GBP', flag: '🇬🇧', rate: 0.789,  volume: '$0.2M', sla: '7.2m', success: 97.1, currency: 'GBP', dec: 3, fee: bpsToPct(getCorridorFeeBps('GBP')) },
-];
-
-const PIPELINE = [
-  { label: 'Authorized',   count: 8,  amount: '$4,540', dot: 'bg-[#E39774]' },
-  { label: 'On the way',   count: 5,  amount: '$2,960', dot: 'bg-[#5C9EAD]' },
-  { label: 'Settled today',count: 19, amount: '$14,640', dot: 'bg-emerald-500' },
-];
-
-type TxStatus = 'settled' | 'pending' | 'failed';
-const ACTIVITIES: Array<{
-  id: string; desc: string; corridor: string; usd: string; local: string; status: TxStatus; time: string;
-}> = [
-  { id: 'ti_m8q4_9b21fa',      desc: 'Vendor payout · Coins.ph',         corridor: 'USD→PHP', usd: '$748.00',    local: 'PHP 42,180',  status: 'settled', time: '14:32' },
-  { id: 'batch_m8q2_12ac08',   desc: 'BPO payroll batch · 12 recipients', corridor: 'USD→PHP', usd: '$6,670.00',  local: 'PHP 376,377', status: 'pending', time: '13:51' },
-  { id: 'dep_m8pr_77a932',     desc: 'Stripe deposit received',            corridor: '—',        usd: '$3,820.00',  local: '—',           status: 'settled', time: '12:04' },
-  { id: 'ti_m8pa_3c44f1',      desc: 'Textile supplier · Jakarta',         corridor: 'USD→IDR', usd: '$1,200.00',  local: 'IDR 19.5M',  status: 'settled', time: '11:20' },
-  { id: 'ti_m8p9_7e88b2',      desc: 'SG marketplace payout',             corridor: 'USD→SGD', usd: '$890.00',    local: 'SGD 1,197',  status: 'settled', time: '10:55' },
-  { id: 'ti_m8p7_2b11a4',      desc: 'EUR freelancer payment',             corridor: 'USD→EUR', usd: '$260.00',    local: 'EUR 240',    status: 'failed',  time: '09:18' },
-];
-
-const COMPLIANCE: Array<{ label: string; value: string; status: Status }> = [
-  { label: 'KYB status',   value: 'Approved · Sumsub verified',       status: 'verified' },
-  { label: 'Risk tier',    value: 'Tier 1 · Low risk',                 status: 'verified' },
-  { label: 'Daily limit',  value: '43% used · $12,100 remaining',      status: 'pending'  },
-  { label: 'Walrus audit', value: 'Active · 7-year retention',         status: 'verified' },
-];
-
-const NETWORK_STATUS = [
-  { label: 'Pay', status: 'Live-model', copy: 'MY-to-PH payout path' },
-  { label: 'Get paid', status: 'Built', copy: 'Invoice and pay links' },
-  { label: 'Sweep', status: 'Launch product', copy: 'Recipient account loop' },
-  { label: 'Keep', status: 'Corridor gated', copy: 'Stored balance by approval' },
-] as const;
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function fmt(n: number) {
-  return n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+function eventToneClass(tone: DeskEvent['tone']) {
+  if (tone === 'warning') return 'border-[#E39774]/55 bg-[#E39774]/15 text-[#9A4A2D]';
+  if (tone === 'propose') return 'border-[#5C9EAD]/35 bg-[#5C9EAD]/10 text-[#326273]';
+  if (tone === 'read') return 'border-[#326273]/18 bg-white text-[#326273]';
+  return 'border-[#326273]/14 bg-[#F6F0ED] text-[#326273]/70';
 }
 
-function TxPill({ status }: { status: TxStatus }) {
-  const styles = {
-    settled: 'bg-emerald-50 text-emerald-700',
-    pending:  'bg-amber-50  text-amber-700',
-    failed:   'bg-red-50    text-red-600',
-  };
-  const dots = {
-    settled: 'bg-emerald-500',
-    pending:  'bg-amber-500',
-    failed:   'bg-red-500',
-  };
-  const labels = { settled: 'Settled', pending: 'Pending', failed: 'Failed' };
+export default function OxwalDeskPage() {
+  const [input, setInput] = useState('');
+  const [messages, setMessages] = useState<ChatTurn[]>([
+    {
+      id: 'assistant_welcome',
+      role: 'assistant',
+      content: '0xWal is standing by. Every money movement becomes an unsigned proposal for human approval.',
+    },
+  ]);
+  const [streamingText, setStreamingText] = useState('');
+  const [proposals, setProposals] = useState<ActionCardProposal[]>([]);
+  const [events, setEvents] = useState<DeskEvent[]>([]);
+  const [source, setSource] = useState<'claude' | 'local' | null>(null);
+  const [isSending, setIsSending] = useState(false);
+
+  const proposalStats = useMemo(() => {
+    const needsApproval = proposals.filter((proposal) => proposal.explain.requiredApprovers > proposal.approvals.length).length;
+    const warnings = events.filter((event) => event.tone === 'warning').length;
+    return { total: proposals.length, needsApproval, warnings };
+  }, [events, proposals]);
+
+  async function submitPrompt(rawPrompt: string) {
+    const prompt = rawPrompt.trim();
+    if (!prompt || isSending) return;
+
+    const history = messages.slice(-8).map(({ role, content }) => ({ role, content }));
+    setInput('');
+    setStreamingText('');
+    setIsSending(true);
+    setMessages((current) => [...current, { id: newId('user'), role: 'user', content: prompt }]);
+
+    let assistantText = '';
+    try {
+      const response = await fetch('/api/oxwal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: prompt,
+          orgId: 'demo-business',
+          actorId: 'operator-1',
+          history,
+        }),
+      });
+      if (!response.ok || !response.body) {
+        throw new Error('0xWal stream failed to open');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const frames = buffer.split('\n\n');
+        buffer = frames.pop() ?? '';
+
+        for (const frame of frames) {
+          const line = frame.split('\n').find((item) => item.startsWith('data: '));
+          if (!line) continue;
+          const event = JSON.parse(line.slice(6)) as OxwalStreamEvent;
+
+          if (event.type === 'meta') {
+            setSource(event.source);
+            setEvents((current) => [
+              { id: newId('meta'), label: `${event.source} - ${event.readTools.length} read tools - ${event.proposeTools.length} propose tools`, tone: 'meta' as const },
+              ...current,
+            ].slice(0, 10));
+          }
+
+          if (event.type === 'tool') {
+            setEvents((current) => [
+              { id: newId('tool'), label: `${event.category}: ${event.name}`, tone: (event.category === 'PROPOSE' ? 'propose' : 'read') as DeskEvent['tone'] },
+              ...current,
+            ].slice(0, 10));
+          }
+
+          if (event.type === 'warning') {
+            setEvents((current) => [
+              { id: newId('warning'), label: `${event.warning.code}: ${event.warning.message}`, tone: 'warning' as const },
+              ...current,
+            ].slice(0, 10));
+          }
+
+          if (event.type === 'proposal') {
+            setProposals((current) => [event.proposal, ...current]);
+          }
+
+          if (event.type === 'delta') {
+            assistantText += event.text;
+            setStreamingText(assistantText);
+          }
+        }
+      }
+
+      if (assistantText.trim()) {
+        setMessages((current) => [...current, { id: newId('assistant'), role: 'assistant', content: assistantText.trim() }]);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '0xWal request failed';
+      setEvents((current) => [{ id: newId('warning'), label: message, tone: 'warning' as const }, ...current].slice(0, 10));
+    } finally {
+      setStreamingText('');
+      setIsSending(false);
+    }
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void submitPrompt(input);
+  }
+
   return (
-    <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold', styles[status])}>
-      <span className={cn('h-1.5 w-1.5 rounded-full', dots[status])} />
-      {labels[status]}
-    </span>
+    <div className="mx-auto grid w-full max-w-7xl gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+      <main className="min-w-0 space-y-4">
+        <header className="rounded-lg border border-[#326273]/16 bg-[#F6F0ED] p-5 shadow-sm">
+          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-2 rounded-md bg-[#1F4452] px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-white">
+                  <Bot className="h-3.5 w-3.5" />
+                  0xWal
+                </span>
+                <span className="rounded-md border border-[#5C9EAD]/35 bg-[#5C9EAD]/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-[#326273]">
+                  {source ?? 'local'} mode
+                </span>
+              </div>
+              <h1 className="mt-3 text-3xl font-black tracking-normal text-[#1F4452] md:text-4xl">
+                Finance command desk
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-[#326273]/62">
+                Read financial state, prepare unsigned proposals, and route approvals from one operating surface.
+              </p>
+            </div>
+            <div className="grid grid-cols-3 overflow-hidden rounded-lg border border-[#326273]/14 bg-white text-center">
+              <DeskStat label="Proposals" value={proposalStats.total} />
+              <DeskStat label="Approval" value={proposalStats.needsApproval} caution={proposalStats.needsApproval > 0} />
+              <DeskStat label="Warnings" value={proposalStats.warnings} caution={proposalStats.warnings > 0} />
+            </div>
+          </div>
+        </header>
+
+        <section className="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+          <div className="rounded-lg border border-[#326273]/16 bg-white/82">
+            <div className="flex items-center gap-2 border-b border-[#326273]/10 px-4 py-3">
+              <MessageSquareText className="h-4 w-4 text-[#5C9EAD]" />
+              <h2 className="text-sm font-black text-[#1F4452]">Conversation</h2>
+            </div>
+            <div className="max-h-[520px] min-h-[360px] space-y-3 overflow-y-auto p-4">
+              {messages.map((message) => (
+                <div
+                  key={message.id}
+                  className={message.role === 'user'
+                    ? 'ml-auto max-w-[86%] rounded-lg bg-[#1F4452] px-3 py-2 text-sm font-semibold leading-6 text-white'
+                    : 'max-w-[92%] rounded-lg border border-[#326273]/12 bg-[#F6F0ED] px-3 py-2 text-sm font-semibold leading-6 text-[#326273]'}
+                >
+                  {message.content}
+                </div>
+              ))}
+              {streamingText && (
+                <div className="max-w-[92%] rounded-lg border border-[#5C9EAD]/30 bg-[#5C9EAD]/10 px-3 py-2 text-sm font-semibold leading-6 text-[#326273]">
+                  {streamingText}
+                </div>
+              )}
+            </div>
+            <form onSubmit={handleSubmit} className="border-t border-[#326273]/10 p-3">
+              <label className="sr-only" htmlFor="oxwal-command">0xWal command</label>
+              <textarea
+                id="oxwal-command"
+                value={input}
+                onChange={(event) => setInput(event.target.value)}
+                rows={3}
+                className="min-h-[92px] w-full resize-none rounded-lg border border-[#326273]/18 bg-[#F6F0ED] px-3 py-2 text-sm font-semibold text-[#1F4452] outline-none ring-[#5C9EAD]/35 transition focus:ring-4"
+                placeholder="Prepare a proposal..."
+              />
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap gap-2">
+                  {quickPrompts.map((prompt) => (
+                    <button
+                      key={prompt}
+                      type="button"
+                      onClick={() => void submitPrompt(prompt)}
+                      className="rounded-md border border-[#326273]/16 bg-white px-2.5 py-1.5 text-xs font-black text-[#326273]"
+                    >
+                      {prompt}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="submit"
+                  disabled={isSending || !input.trim()}
+                  className="inline-flex items-center gap-2 rounded-md bg-[#1F4452] px-4 py-2 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  Send
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <div className="rounded-lg border border-[#326273]/16 bg-white/82">
+            <div className="flex items-center justify-between gap-3 border-b border-[#326273]/10 px-4 py-3">
+              <div className="flex items-center gap-2">
+                <BrainCircuit className="h-4 w-4 text-[#5C9EAD]" />
+                <h2 className="text-sm font-black text-[#1F4452]">Agent events</h2>
+              </div>
+              <Link href="/queue" className="text-xs font-black text-[#326273]">Queue</Link>
+            </div>
+            <div className="grid max-h-[520px] min-h-[360px] content-start gap-2 overflow-y-auto p-4">
+              {events.length === 0 && (
+                <div className="rounded-lg border border-dashed border-[#326273]/18 p-6 text-center text-sm font-semibold text-[#326273]/55">
+                  No events yet
+                </div>
+              )}
+              {events.map((event) => (
+                <div key={event.id} className={`rounded-md border px-3 py-2 text-xs font-black leading-5 ${eventToneClass(event.tone)}`}>
+                  {event.label}
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-[#5C9EAD]">Unsigned proposals</p>
+              <h2 className="text-2xl font-black tracking-normal text-[#1F4452]">Action cards</h2>
+            </div>
+            <Link href="/dashboard/overview" className="rounded-md border border-[#326273]/18 bg-white/70 px-3 py-2 text-sm font-black text-[#326273]">
+              Overview
+            </Link>
+          </div>
+          {proposals.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-[#326273]/20 bg-white/64 p-8 text-center">
+              <Sparkles className="mx-auto h-8 w-8 text-[#5C9EAD]" />
+              <p className="mt-3 text-sm font-black text-[#1F4452]">No active proposals</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {proposals.map((proposal) => (
+                <ActionCard key={proposal.id} proposal={proposal} />
+              ))}
+            </div>
+          )}
+        </section>
+      </main>
+
+      <aside className="space-y-4">
+        <MemWalBehaviorCard />
+        <div className="rounded-lg border border-[#326273]/16 bg-white/78 p-4">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-[#5C9EAD]" />
+            <h2 className="text-sm font-black text-[#1F4452]">Control state</h2>
+          </div>
+          <div className="mt-3 divide-y divide-[#326273]/10 text-sm">
+            <ControlRow icon={CheckCircle2} label="Tool boundary" value="Read + propose" />
+            <ControlRow icon={Clock3} label="Submit guard" value="Policy re-check" />
+            <ControlRow icon={AlertTriangle} label="Circuit breaker" value="Armed" caution={false} />
+          </div>
+        </div>
+        <div className="rounded-lg border border-[#326273]/16 bg-[#1F4452] p-4 text-white">
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/48">Approval surface</p>
+          <div className="mt-2 text-2xl font-black">Maker-checker</div>
+          <p className="mt-2 text-xs font-semibold leading-5 text-white/62">
+            Pending proposals, compliance holds, expiring quotes, failed settlements, and anomaly halts live in the queue.
+          </p>
+          <Link href="/queue" className="mt-4 inline-flex items-center gap-2 rounded-md bg-white px-3 py-2 text-sm font-black text-[#1F4452]">
+            Open queue
+          </Link>
+        </div>
+      </aside>
+    </div>
   );
 }
 
-// ─── Page ────────────────────────────────────────────────────────────────────
-
-export default function DashboardOverview() {
-  const [corridors] = useState(INITIAL_CORRIDORS);
-  const [yieldEarned, setYield]   = useState(98.72);
-  const [copilotDismissed, setCopilotDismissed] = useState(false);
-  const [treasuryPrincipal, setTreasuryPrincipal] = useState(24500);
-  const [walSummary, setWalSummary] = useState({ detected: 0, batchable: 0, needsApproval: 0 });
-  const [treasuryRateLabel, setTreasuryRateLabel] = useState('USDY · variable');
-
-  // Real two-bucket balances from the treasury ledger.
-  useEffect(() => {
-    let active = true;
-    fetch('/api/treasury')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (!active || !d) return;
-        if (typeof d.treasuryPrincipal === 'number') setTreasuryPrincipal(d.treasuryPrincipal);
-        if (typeof d.treasuryYield === 'number') setYield(d.treasuryYield);
-        if (d.rate?.label) setTreasuryRateLabel(d.rate.label);
-      })
-      .catch(() => {});
-    return () => { active = false; };
-  }, []);
-
-  useEffect(() => {
-    void fetch('/api/copilot/summary')
-      .then((response) => response.json())
-      .then((summary: { detected?: number; batchable?: number; needsApproval?: number }) => {
-        setWalSummary({
-          detected: summary.detected ?? 0,
-          batchable: summary.batchable ?? 0,
-          needsApproval: summary.needsApproval ?? 0,
-        });
-      })
-      .catch(() => {});
-  }, []);
-
+function DeskStat({ label, value, caution = false }: { label: string; value: number; caution?: boolean }) {
   return (
-    <div className="space-y-5">
-      {/* Live FX ticker */}
-      <LiveExchangeTicker />
-
-      {/* Page header */}
-      <header className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <span className="dash-kicker">Operating desk</span>
-          <h1 className="dash-title mt-2">Overview</h1>
-          <p className="mt-1 text-xs font-medium text-[#326273]/55">Acme Trading Sdn Bhd · Updated just now</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <StatusBadge status="verified" />
-          <Link
-            href="/dashboard/transfer"
-            className="flex items-center gap-2 rounded-lg bg-[#0d6370] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[#0b5560]"
-          >
-            <Send size={14} />
-            New Transfer
-          </Link>
-          <Link
-            href="/dashboard/batch"
-            className="flex items-center gap-2 rounded-[11px] border border-[#326273]/20 bg-white/70 px-4 py-2.5 text-sm font-bold text-[#326273] transition-colors hover:border-[#5C9EAD] hover:bg-white"
-          >
-            <Layers size={14} />
-            Batch Payout
-          </Link>
-        </div>
-      </header>
-
-      {/* Signature: animated settlement-engine flow */}
-      <SettlementEngineFlow variant="settlement" className="dash-reveal" />
-
-      <section className="grid gap-3 dash-reveal-stagger sm:grid-cols-2 xl:grid-cols-4" aria-label="Network build status">
-        {NETWORK_STATUS.map((item, index) => (
-          <div key={item.label} className="dash-block dash-block-interactive p-4">
-            <div className="flex items-center justify-between gap-3">
-              <span className="dash-kicker">0{index + 1} · {item.status}</span>
-              <span className={cn('h-2 w-2 rounded-full', index === 0 ? 'bg-emerald-500' : 'bg-[#E39774]')} />
-            </div>
-            <strong className="mt-2 block text-lg font-extrabold text-[#0c3e48]">{item.label}</strong>
-            <small className="mt-1 block text-[11px] font-semibold text-[#326273]/55">{item.copy}</small>
-          </div>
-        ))}
-      </section>
-
-      <MemWalBehaviorCard />
-
-      {/* Top stats row */}
-      <section className="grid grid-cols-2 gap-3 dash-reveal-stagger md:grid-cols-3 xl:grid-cols-5">
-        {TOP_STATS.map(({ label, value, icon: Icon, accent, bg, id }) => {
-          if (id === '0xwal') {
-            return (
-              <Link key={label} href="/dashboard/0xwal" className="dash-block dash-block-interactive p-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#326273]/55">{label}</span>
-                  <div className={cn('rounded-lg p-1.5', bg)}>
-                    <Icon size={14} className={accent} />
-                  </div>
-                </div>
-                <div className="mt-2 text-sm font-extrabold leading-5 text-[#0c3e48]">
-                  {walSummary.detected} invoices detected · {walSummary.batchable} batchable · {walSummary.needsApproval} needs approval
-                </div>
-                <div className="mt-1 text-[11px] font-semibold text-[#E39774]">Open 0xWal →</div>
-              </Link>
-            );
-          }
-          const displayValue =
-            id === 'yield'   ? `$${yieldEarned.toFixed(2)} modeled` :
-            value ?? '—';
-          const delta =
-            id === 'yield'   ? 'USDY · approval gated' :
-            (TOP_STATS.find((s) => s.id === id) as { delta?: string })?.delta ?? '';
-          const deltaGreen = id === 'yield' || id === 'corridors' || id === 'sla' || id === 'volume';
-
-          return (
-            <div key={label} className="dash-block dash-block-interactive p-4">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#326273]/55">{label}</span>
-                <div className={cn('rounded-lg p-1.5', bg)}>
-                  <Icon size={14} className={accent} />
-                </div>
-              </div>
-              <div className="dash-num mt-2 text-xl font-extrabold text-[#0c3e48]">{displayValue}</div>
-              <div className={cn('mt-0.5 text-[11px] font-semibold', deltaGreen ? 'text-emerald-600' : 'text-[#E39774]')}>
-                {delta}
-              </div>
-            </div>
-          );
-        })}
-      </section>
-
-      {/* Main 2-col layout */}
-      <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_300px]">
-
-        {/* ── LEFT COLUMN ── */}
-        <div className="min-w-0 space-y-5">
-
-          {/* AI Copilot suggestion panel */}
-          {!copilotDismissed && (
-            <div className="dash-surface p-4" style={{ borderLeft: '4px solid #E39774' }}>
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-start gap-3">
-                  <div className="mt-0.5 rounded-lg bg-[#E39774]/15 p-2">
-                    <Bot size={16} className="text-[#C97A56]" />
-                  </div>
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-bold text-[#1F4452]">0xWal</span>
-                      <span className="rounded-full bg-[#E39774]/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#C97A56]">
-                        MemWal · Claude
-                      </span>
-                    </div>
-                    <p className="mt-0.5 text-[11px] text-[#326273]/55">
-                      Payroll pattern detected from 8 weeks of activity
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setCopilotDismissed(true)}
-                  className="shrink-0 text-[11px] text-[#326273]/35 transition-colors hover:text-[#326273]"
-                >
-                  Dismiss
-                </button>
-              </div>
-
-              <div className="mt-3 rounded-lg bg-[#F6F0ED] p-3">
-                <p className="text-sm font-semibold text-[#1F4452]">
-                  Manila BPO payroll · Friday batch window
-                </p>
-                <p className="mt-1 text-xs leading-5 text-[#326273]/65">
-                  PHP rate 56.42 is within 0.3% of your 30-day best. Typical batch runs 52 recipients
-                  (~$12,400 USD). Suggested window: 09:00 MYT — historically pre-market stable.
-                </p>
-                <div className="mt-2.5 flex items-center gap-3">
-                  <span className="text-[10px] font-semibold text-[#326273]/50">Confidence</span>
-                  <div className="flex-1 overflow-hidden rounded-full bg-white h-1.5">
-                    <div className="h-full w-[94%] rounded-full bg-[#E39774]" />
-                  </div>
-                  <span className="text-[10px] font-bold text-[#C97A56]">94%</span>
-                </div>
-              </div>
-
-              <div className="mt-3 flex flex-wrap items-center gap-3">
-                <Link
-                  href="/dashboard/batch"
-                  className="rounded-lg bg-[#326273] px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-[#264e5b]"
-                >
-                  Pre-stage batch →
-                </Link>
-                <span className="text-[11px] text-[#326273]/50">
-                  52 recipients · $12,400 USD → PHP 699,608
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* Settlement pipeline */}
-          <div className="dash-surface p-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-sm font-bold text-[#1F4452]">Settlement Pipeline</h2>
-              <span className="rounded-full bg-[#326273]/8 px-2.5 py-1 text-[11px] font-semibold text-[#326273]/60">
-                Next window: 16:30 MYT · 13 transfers · $7,510
-              </span>
-            </div>
-            <div className="mt-3 grid grid-cols-3 gap-3">
-              {PIPELINE.map((item) => (
-                <div key={item.label} className="rounded-xl bg-[#F6F0ED] p-3">
-                  <div className="flex items-center gap-1.5">
-                    <span className={cn('h-2 w-2 rounded-full', item.dot)} />
-                    <span className="text-[11px] text-[#326273]/60">{item.label}</span>
-                  </div>
-                  <div className="mt-2 text-2xl font-extrabold text-[#1F4452]">{item.count}</div>
-                  <div className="mt-0.5 text-xs font-semibold text-[#5C9EAD]">{item.amount}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Live corridors table */}
-          <div className="dash-surface overflow-hidden">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#326273]/8 px-4 py-3">
-              <h2 className="text-sm font-bold text-[#1F4452]">Corridor Readiness</h2>
-              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[#326273]/50">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
-                1 live-model · 8 implemented in code
-              </div>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-[#326273]/8 bg-[#F6F0ED]/60">
-                    <th className="px-4 py-2 text-left font-semibold text-[#326273]/50">Corridor</th>
-                    <th className="px-4 py-2 text-right font-semibold text-[#326273]/50">Reference rate</th>
-                    <th className="hidden px-4 py-2 text-right font-semibold text-[#326273]/50 sm:table-cell">Model volume</th>
-                    <th className="hidden px-4 py-2 text-right font-semibold text-[#326273]/50 md:table-cell">Splash fee</th>
-                    <th className="px-4 py-2 text-right font-semibold text-[#326273]/50">Test success</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {corridors.map((c, i) => (
-                    <tr
-                      key={c.pair}
-                      className={cn(
-                        'border-b border-[#326273]/5 transition-colors hover:bg-[#F6F0ED]/50',
-                        i === corridors.length - 1 && 'border-b-0'
-                      )}
-                    >
-                      <td className="px-4 py-2.5">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm leading-none">{c.flag}</span>
-                          <span className="font-semibold text-[#1F4452]">{c.pair}</span>
-                          <span className={cn(
-                            'hidden rounded-full px-1.5 py-0.5 text-[10px] font-bold sm:inline',
-                            i === 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-[#5C9EAD]/10 text-[#326273]',
-                          )}>
-                            {i === 0 ? 'Live-model' : 'In code'}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-2.5 text-right font-mono font-bold text-[#1F4452]">
-                        {c.rate.toLocaleString(undefined, {
-                          maximumFractionDigits: c.dec,
-                          minimumFractionDigits: c.dec,
-                        })}
-                      </td>
-                      <td className="hidden px-4 py-2.5 text-right text-[#326273]/55 sm:table-cell">{c.volume}</td>
-                      <td className="hidden px-4 py-2.5 text-right md:table-cell">
-                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">{c.fee}</span>
-                      </td>
-                      <td className="px-4 py-2.5 text-right">
-                        <span
-                          className={cn(
-                            'font-semibold',
-                            c.success >= 99
-                              ? 'text-emerald-600'
-                              : c.success >= 98
-                              ? 'text-[#5C9EAD]'
-                              : 'text-amber-600'
-                          )}
-                        >
-                          {c.success.toFixed(1)}%
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Recent transactions table */}
-          <div className="dash-surface overflow-hidden">
-            <div className="flex items-center justify-between border-b border-[#326273]/8 px-4 py-3">
-              <h2 className="text-sm font-bold text-[#1F4452]">Recent Transactions</h2>
-              <Link
-                href="/dashboard/history"
-                className="text-[11px] font-semibold text-[#5C9EAD] transition-colors hover:text-[#326273]"
-              >
-                View all →
-              </Link>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-[#326273]/8 bg-[#F6F0ED]/60">
-                    <th className="px-4 py-2 text-left font-semibold text-[#326273]/50">Description</th>
-                    <th className="hidden px-4 py-2 text-left font-semibold text-[#326273]/50 sm:table-cell">Corridor</th>
-                    <th className="px-4 py-2 text-right font-semibold text-[#326273]/50">USD</th>
-                    <th className="hidden px-4 py-2 text-right font-semibold text-[#326273]/50 md:table-cell">Local</th>
-                    <th className="px-4 py-2 text-right font-semibold text-[#326273]/50">Status</th>
-                    <th className="hidden px-4 py-2 text-right font-semibold text-[#326273]/50 sm:table-cell">Time</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {ACTIVITIES.map((a, i) => (
-                    <tr
-                      key={a.id}
-                      className={cn(
-                        'border-b border-[#326273]/5 transition-colors hover:bg-[#F6F0ED]/50',
-                        i === ACTIVITIES.length - 1 && 'border-b-0'
-                      )}
-                    >
-                      <td className="px-4 py-2.5">
-                        <div className="font-semibold text-[#1F4452]">{a.desc}</div>
-                        <div className="mt-0.5 text-[10px] text-[#326273]/35">{a.id}</div>
-                      </td>
-                      <td className="hidden px-4 py-2.5 text-[#326273]/55 sm:table-cell">{a.corridor}</td>
-                      <td className="px-4 py-2.5 text-right font-semibold text-[#1F4452]">{a.usd}</td>
-                      <td className="hidden px-4 py-2.5 text-right text-[#326273]/55 md:table-cell">{a.local}</td>
-                      <td className="px-4 py-2.5 text-right">
-                        <TxPill status={a.status} />
-                      </td>
-                      <td className="hidden px-4 py-2.5 text-right text-[#326273]/45 sm:table-cell">{a.time}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        {/* ── RIGHT COLUMN ── */}
-        <aside className="space-y-4">
-
-          {/* Approval-gated treasury projection */}
-          <div className="dash-block dash-block-accent dash-block-interactive p-4">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="rounded-lg bg-emerald-100 p-2">
-                  <TrendingUp size={16} className="text-emerald-600" />
-                </div>
-                <div>
-                  <h2 className="text-sm font-bold text-[#1F4452]">Treasury Projection</h2>
-                  <p className="text-[11px] text-[#326273]/50">Ondo USDY · simulation only</p>
-                </div>
-              </div>
-              <span className="rounded-full bg-[#D9A441]/15 px-2 py-0.5 text-[10px] font-bold text-[#9a6f15]">
-                {treasuryRateLabel}
-              </span>
-            </div>
-
-            <div className="mt-3">
-              <p className="text-[11px] uppercase tracking-wide text-[#326273]/45">Modeled allocation</p>
-              <p className="mt-0.5 text-2xl font-extrabold text-[#1F4452]">${fmt(treasuryPrincipal)}</p>
-              <p className="mt-1 flex items-center gap-1 text-[11px] font-semibold text-emerald-600">
-                <TrendingUp size={11} />
-                +${yieldEarned.toFixed(2)} modeled this month
-              </p>
-            </div>
-
-            <div className="mt-3 space-y-1 rounded-lg bg-white/70 p-3 text-[11px]">
-              <div className="flex items-center justify-between">
-                <span className="text-[#326273]/55">Modeled daily yield</span>
-                <span className="font-semibold text-emerald-600">+$3.22</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-[#326273]/55">Status</span>
-                <span className="flex items-center gap-1 font-semibold text-emerald-600">
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
-                  Approval gated
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-[#326273]/55">Protocol</span>
-                <span className="font-semibold text-[#326273]">Ondo USDY · T-bill</span>
-              </div>
-            </div>
-
-            <div className="mt-3 flex gap-2">
-              <Link
-                href="/dashboard/treasury"
-                className="flex-1 rounded-lg bg-emerald-600 py-1.5 text-center text-xs font-bold text-white transition-colors hover:bg-emerald-700"
-              >
-                View projection
-              </Link>
-              <Link
-                href="/dashboard/treasury"
-                className="flex-1 rounded-lg border border-emerald-200 py-1.5 text-center text-xs font-bold text-emerald-700 transition-colors hover:bg-emerald-50"
-              >
-                Review controls
-              </Link>
-            </div>
-          </div>
-
-          {/* Compliance posture */}
-          <div className="dash-block p-4">
-            <div className="flex items-center gap-2">
-              <ShieldCheck size={16} className="text-[#5C9EAD]" />
-              <h2 className="text-sm font-bold text-[#1F4452]">Compliance</h2>
-            </div>
-            <div className="mt-3 space-y-2">
-              {COMPLIANCE.map((item) => (
-                <HoverPopup key={item.label} title={item.label} content={item.value}>
-                  <div className="flex cursor-pointer items-center justify-between rounded-lg bg-[#F6F0ED] px-3 py-2 transition-colors hover:bg-[#ede8e4]">
-                    <div>
-                      <div className="text-xs font-semibold text-[#1F4452]">{item.label}</div>
-                      <div className="text-[11px] text-[#326273]/55">{item.value}</div>
-                    </div>
-                    <StatusBadge status={item.status} />
-                  </div>
-                </HoverPopup>
-              ))}
-            </div>
-          </div>
-
-          {/* Pending actions */}
-          <div className="dash-block p-4">
-            <div className="flex items-center gap-2">
-              <AlertTriangle size={16} className="text-[#E39774]" />
-              <h2 className="text-sm font-bold text-[#1F4452]">Pending Actions</h2>
-            </div>
-            <div className="mt-3 space-y-2">
-              <div className="flex items-center justify-between rounded-lg bg-amber-50 px-3 py-2.5">
-                <div>
-                  <div className="text-xs font-semibold text-amber-800">Batch TOTP authorization</div>
-                  <div className="text-[11px] text-amber-600/70">12 transfers · $6,670</div>
-                </div>
-                <Link
-                  href="/dashboard/batch"
-                  className="shrink-0 rounded-md bg-amber-500 px-2.5 py-1 text-[11px] font-bold text-white transition-colors hover:bg-amber-600"
-                >
-                  Authorize
-                </Link>
-              </div>
-              <div className="flex items-center justify-between rounded-lg bg-[#F6F0ED] px-3 py-2.5">
-                <div>
-                  <div className="text-xs font-semibold text-[#1F4452]">KYB document review</div>
-                  <div className="text-[11px] text-[#326273]/55">Sumsub · in progress</div>
-                </div>
-                <Link
-                  href="/dashboard/settings"
-                  className="shrink-0 rounded-md bg-[#5C9EAD] px-2.5 py-1 text-[11px] font-bold text-white transition-colors hover:bg-[#4a8a99]"
-                >
-                  Review
-                </Link>
-              </div>
-            </div>
-          </div>
-
-          {/* Invoice upload (Walrus) */}
-          <div className="dash-block dash-block-interactive p-4">
-            <div className="flex items-center gap-2">
-              <FileText size={16} className="text-[#5C9EAD]" />
-              <h2 className="text-sm font-bold text-[#1F4452]">Upload Invoice</h2>
-            </div>
-            <Link
-              href="/dashboard/invoices"
-              className="mt-3 flex flex-col items-center rounded-lg border-2 border-dashed border-[#326273]/15 bg-[#F6F0ED] p-4 text-center transition-colors hover:border-[#5C9EAD]/40 hover:bg-[#5C9EAD]/5"
-            >
-              <Upload size={22} className="text-[#326273]/25" />
-              <p className="mt-2 text-xs font-semibold text-[#326273]/50">Go to Invoice Vault</p>
-              <p className="mt-1 text-[10px] text-[#326273]/35">
-                Seal-encrypted · stored on Walrus · 7-yr retention
-              </p>
-            </Link>
-            <Link
-              href="/dashboard/invoices"
-              className="mt-2 block text-center text-[11px] font-semibold text-[#5C9EAD] transition-colors hover:text-[#326273]"
-            >
-              View invoice vault →
-            </Link>
-          </div>
-        </aside>
+    <div className="min-w-[92px] border-r border-[#326273]/10 px-3 py-2 last:border-r-0">
+      <div className={caution ? 'text-2xl font-black text-[#E39774]' : 'text-2xl font-black text-[#1F4452]'}>
+        {value}
       </div>
+      <div className="mt-0.5 text-[10px] font-black uppercase tracking-[0.14em] text-[#326273]/50">{label}</div>
+    </div>
+  );
+}
+
+function ControlRow({ icon: Icon, label, value, caution = false }: { icon: LucideIcon; label: string; value: string; caution?: boolean }) {
+  return (
+    <div className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
+      <div className="flex items-center gap-2">
+        <Icon className={caution ? 'h-4 w-4 text-[#E39774]' : 'h-4 w-4 text-[#5C9EAD]'} />
+        <span className="font-black text-[#326273]">{label}</span>
+      </div>
+      <span className="font-mono text-xs font-black text-[#1F4452]">{value}</span>
     </div>
   );
 }

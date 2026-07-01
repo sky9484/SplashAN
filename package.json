@@ -12,7 +12,7 @@
     "bootstrap:testnet": "node --use-system-ca --experimental-strip-types --env-file=.env.local scripts/bootstrap-testnet.ts",
     "test:seal:integration": "node --use-system-ca --experimental-strip-types --env-file=.env.local tests/seal-decentralized.integration.mjs",
     "test:funding": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test tests/funding-registry.test.mjs tests/funding-policy.test.mjs",
-    "test:oxwal": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test tests/oxwal-state-machine.test.mjs tests/oxwal-agent.test.mjs tests/oxwal-policy.test.mjs tests/oxwal-compose.test.mjs tests/oxwal-approval-queue.test.mjs tests/oxwal-evidence.test.mjs tests/oxwal-safety.test.mjs"
+    "test:oxwal": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test tests/oxwal-state-machine.test.mjs tests/oxwal-agent.test.mjs tests/oxwal-policy.test.mjs tests/oxwal-compose.test.mjs tests/oxwal-approval-queue.test.mjs tests/oxwal-evidence.test.mjs tests/oxwal-safety.test.mjs tests/oxwal-frontend.test.mjs tests/oxwal-e2e.test.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.99.0",
