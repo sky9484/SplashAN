@@ -126,14 +126,17 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                       key={href}
                       href={href}
                       title={collapsed ? label : undefined}
-                      className={`flex items-center rounded-lg px-2 py-2 text-sm transition-colors ${
+                      className={`relative flex items-center rounded-lg px-2 py-2 text-sm transition-colors ${
                         collapsed ? 'justify-center' : 'gap-3'
                       } ${
                         active
-                          ? 'bg-white/15 text-white'
+                          ? collapsed
+                            ? 'bg-white text-[#1F4452] shadow-sm'
+                            : 'bg-white pl-3 text-[#1F4452] shadow-sm'
                           : 'text-white/55 hover:bg-white/10 hover:text-white'
                       }`}
                     >
+                      {active && !collapsed && <span aria-hidden="true" className="absolute left-0 top-1/2 h-6 w-1 -translate-y-1/2 rounded-full bg-[#5C9EAD]" />}
                       <Icon size={18} className={active ? 'text-[#5C9EAD]' : ''} />
                       {!collapsed && (
                         <>
@@ -165,7 +168,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             <Image src="/isometric/sui-logo-clean.svg" alt="" width={32} height={42} />
             <span>
               <small>Settlement rail</small>
-              <strong><i /> Sui network live</strong>
+              <strong><i /> Sui testnet ready</strong>
             </span>
           </div>
         )}

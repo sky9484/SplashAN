@@ -31,7 +31,7 @@ const COMPACT_RESPONSES: { keywords: string[]; reply: string }[] = [
   {
     keywords: ['cheapest', 'corridor', 'rate', 'compare', 'best'],
     reply:
-      'This week by Splash fee:\n• PHP 0.80% · MYR/SGD 0.85% · IDR 0.90%\n• VND/THB 0.95% · EUR/GBP 1.10%\n\nPHP is your lowest-cost corridor. Batch transfers beat single-payment spreads on all corridors.',
+      'This week by Splash fee:\n• PHP 0.80% · MYR/SGD 0.85% · IDR 0.90%\n• VND/THB 0.95% · EUR/GBP 1.10%\n\nPHP is your lowest-cost live-model corridor. Batch transfers beat single-payment spreads on modeled routes.',
   },
   {
     keywords: ['compliance', 'kyb', 'aml', 'limit', 'flag'],
@@ -46,12 +46,12 @@ const COMPACT_RESPONSES: { keywords: string[]; reply: string }[] = [
   {
     keywords: ['sgd', 'singapore'],
     reply:
-      'USD→SGD: 1.345 · Fee: 0.85% · Settles in 6.1 min · MAS-regulated ✓\n\nSGD is stable this week. No urgent rate action needed.',
+      'USD→SGD: 1.345 · Fee: 0.85% · Modeled rail · 6.1 min estimate\n\nSGD is stable this week. No urgent rate action needed.',
   },
 ];
 
 const FALLBACK_REPLIES = [
-  "I'm monitoring all 8 corridors — everything looks healthy today. What would you like to focus on?",
+  "I'm monitoring the live PHP testnet corridor and modeled expansion routes. What would you like to focus on?",
   'Your blended fee this month is 0.89%, saving you 41% vs. traditional wires. Anything to optimise?',
   'Smart Treasury models a variable Ondo USDY return; execution stays approval-gated. Want a projection?',
   'All systems clear — no AML flags, no compliance issues. What can I help with?',

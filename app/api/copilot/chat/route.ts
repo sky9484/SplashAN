@@ -44,13 +44,13 @@ const DOMAIN_RESPONSES: { keywords: string[]; reply: string }[] = [
   { keywords: ['batch', 'payout', 'bulk'],
     reply: 'Batch tip: your optimal window is Friday 09:00 MYT (~52 recipients, $11,800 avg).\nLocking Thursday 08:45 MYT saves ~$18 vs. Friday open on the current PHP rate.' },
   { keywords: ['sgd', 'singapore'],
-    reply: 'USD→SGD: 1.345 · fee 0.85% · ~6.1 min · MAS-regulated ✓. Stable this week — no urgent rate action needed.' },
+    reply: 'USD→SGD: 1.345 · fee 0.85% · ~6.1 min modeled rail. Stable this week — no urgent rate action needed.' },
   { keywords: ['who are you', 'your name', '0xwal', 'what are you'],
     reply: "I'm 0xWal — your Splash copilot. I watch corridors, FX timing, batch payouts, treasury yield, and compliance, and I remember your patterns via MemWal so my suggestions get sharper over time." },
 ];
 
 const FALLBACKS = [
-  "I'm 0xWal — monitoring all 8 corridors, everything looks healthy today. What would you like to focus on?",
+  "I'm 0xWal — monitoring the live PHP testnet corridor and modeled expansion routes. What would you like to focus on?",
   'Your blended fee this month is 0.89%, saving ~41% vs. traditional wires. Anything to optimise?',
   'Smart Treasury earns variable Ondo USDY (T-bill) yield; your Available balance stays instant at 0%. Want to move idle USDC in?',
   'All clear — no AML flags, no compliance issues. What can I help with?',

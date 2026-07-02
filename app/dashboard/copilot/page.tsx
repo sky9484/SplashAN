@@ -114,7 +114,7 @@ const CONTEXT_RESPONSES: { keywords: string[]; reply: string }[] = [
     reply: [
       '**Compliance Snapshot — Your Account**',
       '• KYB status: ✓ Approved (Tier 1)',
-      '• AML flags: None across all corridors',
+      '• AML flags: None on modeled sandbox routes',
       '• Daily limit utilisation: 43% ($12,100 remaining today)',
       '• Transaction monitoring: All clear',
       '• Jurisdictions active: PH, MY, ID, SG, VN, TH, NL, UK',
@@ -138,9 +138,9 @@ const CONTEXT_RESPONSES: { keywords: string[]; reply: string }[] = [
     ].join('\n'),
   },
   {
-    keywords: ['cheapest', 'corridor', 'compare', 'rates', 'all corridors', 'best rate'],
+    keywords: ['cheapest', 'corridor', 'compare', 'rates', 'modeled routes', 'best rate'],
     reply: [
-      '**This Week — All Corridors by Splash Fee**',
+      '**This Week — Live and Modeled Routes by Splash Fee**',
       '• USD→PHP: 0.80% · 56.42 · 4.2m settle · 99.8% success',
       '• USD→MYR: 0.85% · 4.71  · 5.1m settle · 98.9% success',
       '• USD→SGD: 0.85% · 1.345 · 6.1m settle · 99.1% success',
@@ -157,7 +157,7 @@ const CONTEXT_RESPONSES: { keywords: string[]; reply: string }[] = [
     keywords: ['saving', 'save', 'cost analysis', 'last month', 'fee breakdown'],
     reply: [
       '**Your Last 30-Day Savings Summary**',
-      '• Total transferred: $9.4M across 8 corridors',
+      '• Modeled transfer volume: $9.4M across sandbox routes',
       '• Splash fees paid: $83,600 (blended 0.89%)',
       '• Estimated via traditional wire: $141,000 (avg 1.5%)',
       '• Net savings vs. traditional bank: **$57,400 this month**',
@@ -172,7 +172,7 @@ const CONTEXT_RESPONSES: { keywords: string[]; reply: string }[] = [
     reply: [
       '**USD→SGD Corridor**',
       '• Current rate: 1.345 · Splash fee: 0.85% · Settlement: 6.1 minutes',
-      '• 30-day success rate: 99.1% · MAS-regulated ✓',
+      '• 30-day modeled success rate: 99.1%',
       '',
       'SGD is stable — typically moves ±0.2% per week vs USD. Your SGD volume is $400K/month, well within your Tier 1 limits.',
       '',
@@ -221,11 +221,11 @@ const CONTEXT_RESPONSES: { keywords: string[]; reply: string }[] = [
 const FALLBACK_REPLIES: string[] = [
   [
     '**Account Health — All Clear**',
-    '• Blended fee this month: 0.89% across all corridors',
+    '• Modeled blended fee this month: 0.89%',
     '• vs. industry average of 1.5% — you\'re saving 41% on fees',
     '• PHP live-model path healthy · seven additional corridors implemented in code',
     '',
-    'Your MemWal patterns show consistent Friday PHP batches and growing IDR volume. I\'m monitoring rates across all corridors and will surface opportunities proactively.',
+    'Your MemWal patterns show consistent Friday PHP batches and growing IDR volume. I\'m monitoring the live PHP testnet corridor plus modeled expansion routes and will surface opportunities proactively.',
     '',
     'Anything specific you\'d like me to check or optimise?',
   ].join('\n'),

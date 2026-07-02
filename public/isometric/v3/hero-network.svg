@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 640" role="img" aria-labelledby="title desc">
+  <title id="title">Isometric Southeast Asia settlement network</title>
+  <desc id="desc">Dimetric city nodes connected by settlement routes with animated pulses.</desc>
+  <style>
+    :root{--bg:#F6F0ED;--ink:#1F4452;--slate:#326273;--teal:#5C9EAD;--gold:#D9A441;--surface:#FFFFFF;--surface2:#FBF7F5;--shadow:rgb(31 68 82 / .12)}
+    .line{fill:none;stroke:var(--slate);stroke-width:3;stroke-linecap:round;stroke-linejoin:round;opacity:.34}
+    .pulse{fill:none;stroke:var(--teal);stroke-width:4;stroke-linecap:round;stroke-dasharray:34 260;animation:pulse 6s linear infinite}
+    .pulse.gold{stroke:var(--gold);animation-delay:-2.5s}
+    .label{font:700 12px system-ui,sans-serif;letter-spacing:.08em;fill:var(--ink)}
+    .shadow{fill:var(--shadow)}
+    @keyframes pulse{to{stroke-dashoffset:-294}}
+    @media (prefers-reduced-motion:reduce){.pulse{animation:none;stroke-dasharray:none;opacity:.55}}
+  </style>
+  <rect width="960" height="640" fill="var(--bg)"/>
+  <path d="M120 412 480 214 840 412 480 594Z" fill="var(--surface2)" stroke="#E5DCD6" stroke-width="2"/>
+  <path d="M220 410 480 270 740 410 480 548Z" fill="none" stroke="#E5DCD6" stroke-width="2"/>
+  <path d="M300 360 480 264 660 360 480 456Z" fill="none" stroke="#E5DCD6" stroke-width="2"/>
+  <path class="line" d="M266 404 C346 326 428 294 510 308 S668 374 724 318"/>
+  <path class="line" d="M366 464 C438 402 512 384 588 404 S700 430 758 410"/>
+  <path class="line" d="M236 454 C322 472 390 456 444 418 S546 312 624 270"/>
+  <path class="line" d="M412 298 C484 246 560 218 646 232"/>
+  <path class="pulse" d="M266 404 C346 326 428 294 510 308 S668 374 724 318"/>
+  <path class="pulse gold" d="M236 454 C322 472 390 456 444 418 S546 312 624 270"/>
+  <g transform="translate(226 392)">
+    <ellipse class="shadow" cx="44" cy="80" rx="70" ry="26"/>
+    <path d="M0 46 44 22 88 46 44 70Z" fill="var(--teal)" stroke="var(--ink)" stroke-width="2"/>
+    <path d="M0 46v30l44 24V70Z" fill="#E7EEF1" stroke="var(--ink)" stroke-width="2"/>
+    <path d="M88 46v30l-44 24V70Z" fill="var(--surface)" stroke="var(--ink)" stroke-width="2"/>
+    <path d="M28 36 44 28 60 36 44 44Z" fill="var(--gold)"/>
+    <text class="label" x="-2" y="120">KUALA LUMPUR</text>
+  </g>
+  <g transform="translate(472 284)">
+    <ellipse class="shadow" cx="44" cy="80" rx="70" ry="26"/>
+    <path d="M0 42 44 18 88 42 44 66Z" fill="var(--slate)" stroke="var(--ink)" stroke-width="2"/>
+    <path d="M0 42v40l44 24V66Z" fill="#E7EEF1" stroke="var(--ink)" stroke-width="2"/>
+    <path d="M88 42v40l-44 24V66Z" fill="var(--surface)" stroke="var(--ink)" stroke-width="2"/>
+    <text class="label" x="12" y="126">SINGAPORE</text>
+  </g>
+  <g transform="translate(682 298)">
+    <ellipse class="shadow" cx="44" cy="80" rx="70" ry="26"/>
+    <path d="M0 48 44 24 88 48 44 72Z" fill="var(--teal)" stroke="var(--ink)" stroke-width="2"/>
+    <path d="M0 48v34l44 24V72Z" fill="#E7EEF1" stroke="var(--ink)" stroke-width="2"/>
+    <path d="M88 48v34l-44 24V72Z" fill="var(--surface)" stroke="var(--ink)" stroke-width="2"/>
+    <text class="label" x="14" y="126">MANILA</text>
+  </g>
+  <g transform="translate(590 210)">
+    <ellipse class="shadow" cx="34" cy="64" rx="54" ry="20"/>
+    <path d="M0 36 34 18 68 36 34 54Z" fill="var(--surface)" stroke="var(--ink)" stroke-width="2"/>
+    <path d="M0 36v28l34 18V54Z" fill="#E7EEF1" stroke="var(--ink)" stroke-width="2"/>
+    <path d="M68 36v28L34 82V54Z" fill="var(--surface2)" stroke="var(--ink)" stroke-width="2"/>
+    <text class="label" x="-2" y="102">BANGKOK</text>
+  </g>
+  <g transform="translate(734 388)">
+    <ellipse class="shadow" cx="34" cy="64" rx="54" ry="20"/>
+    <path d="M0 36 34 18 68 36 34 54Z" fill="var(--surface)" stroke="var(--ink)" stroke-width="2"/>
+    <path d="M0 36v28l34 18V54Z" fill="#E7EEF1" stroke="var(--ink)" stroke-width="2"/>
+    <path d="M68 36v28L34 82V54Z" fill="var(--surface2)" stroke="var(--ink)" stroke-width="2"/>
+    <text class="label" x="-2" y="102">JAKARTA</text>
+  </g>
+</svg>

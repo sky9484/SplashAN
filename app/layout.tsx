@@ -15,8 +15,18 @@ const fontMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Splash - An Engine For Cross Border Payment",
-  description: "The Stripe of SEA. Cross-border settlement on Sui.",
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"),
+  title: "Splash - Working-capital network for SEA payouts",
+  description: "Collect USD, pay Southeast Asia, and keep cash working in a labeled sandbox environment.",
+  openGraph: {
+    title: "Splash - Working-capital network for SEA payouts",
+    description: "Collect USD. Pay Southeast Asia. Keep cash working.",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Splash - Working-capital network for SEA payouts",
+    description: "Collect USD. Pay Southeast Asia. Keep cash working.",
+  },
 };
 
 export default function RootLayout({

@@ -101,3 +101,29 @@ test('ActionCard component names release-gate sections and warning accent', asyn
   }
   assert.match(source, /#E39774/);
 });
+
+test('landing upgrade uses truth badges and v3 vector system', async () => {
+  const landing = await readFile(new URL('../components/IsometricLanding.tsx', import.meta.url), 'utf8');
+  const claims = await readFile(new URL('../content/claims.ts', import.meta.url), 'utf8');
+  const copyCheck = await readFile(new URL('../scripts/check-copy.mjs', import.meta.url), 'utf8');
+  const ogImage = await readFile(new URL('../app/opengraph-image.tsx', import.meta.url), 'utf8');
+
+  assert.match(claims, /headline: 'Collect USD\. Pay Southeast Asia\. Keep cash working\.'/);
+  assert.match(landing, /Collect USD\. Pay/);
+  assert.match(landing, /Southeast Asia\./);
+  assert.match(landing, /Keep cash <span>working\.<\/span>/);
+  assert.match(landing, /EnvironmentRibbon/);
+  assert.match(landing, /SourceBadge/);
+  assert.match(landing, /DashboardPreview/);
+  assert.match(landing, /hero-network\.svg/);
+  assert.match(landing, /corridors-map\.svg/);
+  assert.match(landing, /receivable-flow\.svg/);
+  assert.match(landing, /security-vault\.svg/);
+  assert.match(claims, /footerLegal/);
+  assert.match(copyCheck, /8 corridors/);
+  assert.match(copyCheck, /Sui network live/);
+  assert.match(ogImage, /ImageResponse/);
+  assert.match(ogImage, /Kuala Lumpur/);
+  assert.match(ogImage, /No customer funds/);
+  assert.doesNotMatch(landing, /hero-bg|walrus-receipt-v2|memwal-agent-v2|seal-vaults|toFixed\(/);
+});

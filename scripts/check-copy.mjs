@@ -10,11 +10,15 @@ const banned = [
   /200\+ countries/i,
   /guaranteed rate/i,
   /Regulated in Singapore/i,
+  /regulated account network/i,
   /5\.20%/i,
+  /4\.8% APY/i,
   /4\.8%/i,
   /1\.4%/i,
   /0\.48s/i,
   /2:34/i,
+  /8 corridors/i,
+  /Sui network live/i,
 ];
 
 async function filesUnder(directory) {
