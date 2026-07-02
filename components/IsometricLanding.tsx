@@ -401,6 +401,15 @@ const phaseOneTools = [
   },
 ];
 
+const headerNavItems = [
+  { href: '#operating-layer', label: 'Platform', detail: 'Pay + treasury' },
+  { href: '#how-it-works', label: 'Workflow', detail: '5 steps' },
+  { href: '#comparison', label: 'Compare', detail: 'Fees + proof' },
+  { href: '#walrus', label: 'Proof', detail: 'Walrus + Sui' },
+  { href: '#corridors', label: 'Routes', detail: 'MY-PH testnet' },
+  { href: '#readiness', label: 'Scale', detail: 'Controls' },
+];
+
 export default function IsometricLanding() {
   const [activeFlow, setActiveFlow] = useState(flowSteps[0]);
   const [activeWalrus, setActiveWalrus] = useState(0);
@@ -440,14 +449,17 @@ export default function IsometricLanding() {
   }, []);
 
   useEffect(() => {
-    const hero = document.querySelector('#hero');
-    if (!hero) return;
+    function updateHeaderState() {
+      setShowBackToTop(window.scrollY > Math.max(20, window.innerHeight * 0.05));
+    }
 
-    const observer = new IntersectionObserver(([entry]) => {
-      setShowBackToTop(!entry.isIntersecting);
-    }, { threshold: 0.12 });
-    observer.observe(hero);
-    return () => observer.disconnect();
+    updateHeaderState();
+    window.addEventListener('scroll', updateHeaderState, { passive: true });
+    window.addEventListener('resize', updateHeaderState);
+    return () => {
+      window.removeEventListener('scroll', updateHeaderState);
+      window.removeEventListener('resize', updateHeaderState);
+    };
   }, []);
 
   useEffect(() => {
@@ -498,15 +510,19 @@ export default function IsometricLanding() {
           </Link>
 
           <nav className="iso-nav" aria-label="Primary navigation">
-            <a href="#operating-layer">Platform</a>
-            <a href="#comparison">Compare</a>
-            <a href="#how-it-works">How it works</a>
-            <a href="#walrus">Walrus</a>
-            <a href="#corridors">Corridors</a>
-            <a href="#readiness">Readiness</a>
+            {headerNavItems.map((item) => (
+              <a href={item.href} key={item.href}>
+                <span>{item.label}</span>
+                <small>{item.detail}</small>
+              </a>
+            ))}
           </nav>
 
           <div className="iso-header-actions">
+            <span className="iso-header-status">
+              <small>Sandbox</small>
+              <strong>MY-PH testnet</strong>
+            </span>
             <Link href="/signup" className="iso-button iso-button-small">
               Start sending
               <ArrowDownRight aria-hidden="true" />

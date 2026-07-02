@@ -367,7 +367,7 @@ body {
   height: 100%;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  gap: 36px;
+  gap: 18px;
 }
 
 .iso-brand {
@@ -405,15 +405,47 @@ body {
 .iso-header-actions {
   display: flex;
   align-items: center;
-  gap: 21px;
+  gap: 10px;
+}
+
+.iso-nav {
+  gap: 4px;
+  border: 1px solid rgba(12, 62, 72, .11);
+  border-radius: 999px;
+  padding: 5px;
+  background: rgba(255, 250, 244, .54);
+  box-shadow: 0 10px 30px rgba(8, 54, 64, .05);
+  backdrop-filter: blur(12px);
 }
 
 .iso-nav a,
 .iso-text-link {
   color: rgba(12, 62, 72, .72);
-  font-size: 12px;
   font-weight: 720;
-  transition: color .2s ease;
+  transition: color .2s ease, background .2s ease, transform .2s ease;
+}
+
+.iso-nav a {
+  display: grid;
+  min-width: 78px;
+  gap: 1px;
+  border-radius: 999px;
+  padding: 6px 10px;
+  text-align: center;
+}
+
+.iso-nav a span {
+  color: var(--iso-ink);
+  font-size: 11px;
+  font-weight: 860;
+  line-height: 1.1;
+}
+
+.iso-nav a small {
+  color: rgba(12, 62, 72, .48);
+  font-size: 8px;
+  font-weight: 720;
+  line-height: 1.15;
 }
 
 .iso-nav a:hover,
@@ -421,9 +453,37 @@ body {
   color: var(--iso-teal);
 }
 
+.iso-nav a:hover {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, .82);
+}
+
 .iso-header-actions {
   justify-content: flex-end;
   gap: 16px;
+}
+
+.iso-header-status {
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+  color: var(--iso-ink);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.iso-header-status small {
+  color: rgba(12, 62, 72, .48);
+  font-size: 8px;
+  font-weight: 850;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.iso-header-status strong {
+  color: var(--iso-teal-dark);
+  font-size: 11px;
+  font-weight: 900;
 }
 
 .iso-button {
@@ -2732,6 +2792,12 @@ body {
   color: rgba(12, 62, 72, .62);
   font-size: 9px;
   font-weight: 760;
+}
+
+@media (max-width: 1180px) {
+  .iso-header-status {
+    display: none;
+  }
 }
 
 @media (max-width: 1100px) {
@@ -6011,9 +6077,44 @@ button.iso-product-row {
 
 /* Responsive composition guardrails. These final rules intentionally own the
    hero artwork and the shared dashboard engine across viewport sizes. */
+.iso-hero {
+  --iso-marquee-height: 48px;
+  height: 100svh;
+  min-height: 0;
+  overflow: hidden;
+  padding-top: 76px;
+  padding-bottom: var(--iso-marquee-height);
+}
+
+@supports (height: 100dvh) {
+  .iso-hero {
+    height: 100dvh;
+  }
+}
+
+.iso-hero-layout {
+  height: 100%;
+  min-height: 0;
+  align-items: start;
+  padding-block: clamp(30px, 5.5vh, 62px) clamp(14px, 2.5vh, 28px);
+}
+
+.iso-hero-copy {
+  align-self: start;
+  padding-top: clamp(0px, 1.5vh, 14px);
+}
+
+.iso-marquee {
+  min-height: var(--iso-marquee-height);
+}
+
+.iso-marquee-item {
+  padding-block: 14px;
+}
+
 .iso-hero-stage {
   width: min(100%, 780px);
-  min-height: clamp(430px, 34vw, 610px);
+  min-height: clamp(350px, 32vw, 520px);
   justify-self: center;
 }
 
@@ -6080,9 +6181,13 @@ button.iso-product-row {
 }
 
 @media (max-width: 1100px) {
+  .iso-hero-layout {
+    padding-block: clamp(24px, 4.5vh, 46px) 20px;
+  }
+
   .iso-hero-stage {
     width: min(100%, 840px);
-    min-height: clamp(430px, 64vw, 590px);
+    min-height: clamp(330px, 56vw, 500px);
   }
 
   .iso-hero-main-art {
@@ -6161,10 +6266,39 @@ button.iso-product-row {
 }
 
 @media (max-width: 700px) {
+  .iso-hero {
+    --iso-marquee-height: 42px;
+    padding-top: 66px;
+  }
+
+  .iso-hero-layout {
+    gap: clamp(4px, 1.2vh, 12px);
+    padding-block: clamp(14px, 3.5vh, 30px) 8px;
+  }
+
+  .iso-display {
+    margin-top: 14px;
+    font-size: clamp(38px, 12vw, 50px);
+  }
+
+  .iso-hero-description {
+    margin-top: 18px;
+    line-height: 1.55;
+  }
+
+  .iso-hero-actions {
+    gap: 10px;
+    margin-top: 18px;
+  }
+
+  .iso-proof-line {
+    margin-top: 14px;
+  }
+
   .iso-hero-stage {
     width: 100%;
-    min-height: clamp(300px, 78vw, 380px);
-    margin-top: 0;
+    min-height: clamp(195px, 52vw, 270px);
+    margin-top: -2px;
   }
 
   .iso-hero-main-art {
@@ -6208,9 +6342,49 @@ button.iso-product-row {
   }
 }
 
+@media (max-width: 700px) and (max-height: 720px) {
+  .iso-hero-layout {
+    gap: 2px;
+    padding-block: 10px 4px;
+  }
+
+  .iso-display {
+    margin-top: 10px;
+    font-size: clamp(34px, 11vw, 44px);
+  }
+
+  .iso-hero-description {
+    margin-top: 12px;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .iso-hero-actions {
+    gap: 8px;
+    margin-top: 14px;
+  }
+
+  .iso-button {
+    min-height: 46px;
+  }
+
+  .iso-proof-line {
+    margin-top: 10px;
+  }
+
+  .iso-hero-stage {
+    min-height: 150px;
+    margin-top: -8px;
+  }
+
+  .iso-hero-main-art {
+    transform: translate(4%, -50%) scale(.88);
+  }
+}
+
 @media (max-width: 420px) {
   .iso-hero-stage {
-    min-height: 285px;
+    min-height: 190px;
   }
 
   .iso-floating-note {
@@ -6221,5 +6395,22 @@ button.iso-product-row {
   .iso-floating-note-b,
   .iso-floating-note-c {
     --note-scale: .42;
+  }
+}
+
+@media (max-width: 420px) and (max-height: 720px) {
+  .iso-hero-stage {
+    min-height: 150px;
+    margin-top: -8px;
+  }
+
+  .iso-hero-main-art {
+    transform: translate(4%, -50%) scale(.88);
+  }
+
+  .iso-floating-note-a,
+  .iso-floating-note-b,
+  .iso-floating-note-c {
+    --note-scale: .36;
   }
 }
