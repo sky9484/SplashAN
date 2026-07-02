@@ -2,6 +2,7 @@ import {
   createTransferSettlementEvidence,
   sealAndStoreSettlementEvidence,
 } from '@/lib/evidence/settlement';
+import { shouldUseMockSeal } from '@/lib/server/seal';
 import { assertSealWritable } from '@/lib/server/seal-health';
 import {
   confirmComposedPaymentOnSui,
@@ -33,7 +34,7 @@ export async function executeComposedPayment(input: {
 }) {
   // Fail before creating an on-chain intent if the audit encryption boundary
   // cannot accept the receipt payload.
-  if (process.env.USE_MOCK_APIS !== 'true') await assertSealWritable();
+  if (!shouldUseMockSeal()) await assertSealWritable();
   const paymentMist = Math.max(1, Math.floor(input.amountMist));
   const intent = await createPaymentIntentOnSui({
     recipient: input.recipientAddress,

@@ -433,7 +433,7 @@ export default function HistoryPage() {
               Daily audit batches
             </div>
             <p className="mt-1 text-xs text-[#326273]/60">
-              Completed payments are Merkle-batched, Seal-encrypted, stored on Walrus, then anchored on Sui.
+              Completed payments are Merkle-batched, access-controlled, stored on Walrus, then anchored on Sui.
             </p>
           </div>
           <span className="rounded-full bg-[#5C9EAD]/10 px-3 py-1 text-[11px] font-black text-[#326273]">

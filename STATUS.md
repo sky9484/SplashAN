@@ -9,7 +9,7 @@ Network: Sui testnet
 The Phase 1 hero path is now real on testnet:
 
 - One server-signed composed payment path creates a payment intent, confirms it, allocates to SmartTreasury, Seal-encrypts the proof payload, stores ciphertext on Walrus, and anchors the ciphertext hash on Sui.
-- Daily audit batching is implemented and verified: completed settlements are Merkle-batched, Seal-encrypted, stored on Walrus, anchored on Sui, and exposed in History with a working "Verify inclusion" action.
+- Daily audit batching is implemented and verified: completed settlements are Merkle-batched, access-controlled, stored on Walrus, anchored on Sui, and exposed in History with a working "Verify inclusion" action.
 - Settings is now a persisted operating-control console reflecting the v7.1 business module.
 - Dashboard/admin routes render cleanly in Chrome with no browser console errors.
 - `move/sources` was not modified.

@@ -16,7 +16,7 @@ type IsometricAuthShellProps = {
 
 const proofPoints = [
   'Atomic settlement on Sui',
-  'Seal-encrypted records on Walrus',
+  'Access-controlled records on Walrus',
   'Built-in KYB and audit trail',
 ];
 

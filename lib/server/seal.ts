@@ -8,6 +8,7 @@ import { fromHex, toHex } from '@mysten/sui/utils';
 
 import { getSealConfig } from '@/lib/server/seal-config';
 import { assertSealWritable } from '@/lib/server/seal-health';
+import { canUseDemoCrypto } from '@/lib/server/runtime-mode';
 import { getOperatorKeypair } from '@/lib/server/sui-settlement';
 import { suiClient } from '@/lib/sui';
 
@@ -30,6 +31,10 @@ export class NotConfiguredError extends Error {
     super(message);
     this.name = 'NotConfiguredError';
   }
+}
+
+export function shouldUseMockSeal(env: NodeJS.ProcessEnv = process.env) {
+  return canUseDemoCrypto(env);
 }
 
 const DATA_DIR = process.env.SPLASH_DATA_DIR ?? path.join(process.cwd(), 'data');
@@ -180,19 +185,21 @@ export const liveSealAdapter: SealAdapter = {
 
 export const sealAdapter: SealAdapter = {
   encrypt(data, allowlist) {
-    return process.env.USE_MOCK_APIS === 'true'
+    return shouldUseMockSeal()
       ? mockSealAdapter.encrypt(data, allowlist)
       : liveSealAdapter.encrypt(data, allowlist);
   },
-  canDecrypt(policyId, identity) {
-    return policyId.startsWith('DEMO_SEAL_')
-      ? mockSealAdapter.canDecrypt(policyId, identity)
-      : liveSealAdapter.canDecrypt(policyId, identity);
+  async canDecrypt(policyId, identity) {
+    if (policyId.startsWith('DEMO_SEAL_')) {
+      return shouldUseMockSeal() ? mockSealAdapter.canDecrypt(policyId, identity) : false;
+    }
+    return liveSealAdapter.canDecrypt(policyId, identity);
   },
-  decrypt(ciphertext, policyId, identity) {
-    return policyId.startsWith('DEMO_SEAL_')
-      ? mockSealAdapter.decrypt(ciphertext, policyId, identity)
-      : liveSealAdapter.decrypt(ciphertext, policyId, identity);
+  async decrypt(ciphertext, policyId, identity) {
+    if (policyId.startsWith('DEMO_SEAL_')) {
+      return shouldUseMockSeal() ? mockSealAdapter.decrypt(ciphertext, policyId, identity) : null;
+    }
+    return liveSealAdapter.decrypt(ciphertext, policyId, identity);
   },
 };
 

@@ -1,5 +1,5 @@
 // lib/server/labuan-settlement.ts
-// Routes settlement through Splash Labuan (Labuan FSA-licensed Money Broker + DFS)
+// Routes settlement through the planned Splash Labuan operating perimeter.
 
 const LABUAN_API_BASE = process.env.LABUAN_API_BASE_URL ?? 'https://settlement.splash-labuan.internal';
 const LABUAN_API_KEY = process.env.LABUAN_API_KEY ?? '';

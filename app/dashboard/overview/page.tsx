@@ -584,7 +584,7 @@ export default function DashboardOverview() {
               <Upload size={22} className="text-[#326273]/25" />
               <p className="mt-2 text-xs font-semibold text-[#326273]/50">Go to Invoice Vault</p>
               <p className="mt-1 text-[10px] text-[#326273]/35">
-                Seal-encrypted · stored on Walrus · 7-yr retention
+                Access-controlled · stored on Walrus · 7-yr retention
               </p>
             </Link>
             <Link

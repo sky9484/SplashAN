@@ -9,6 +9,12 @@ const banned = [
   /non-custodial/i,
   /200\+ countries/i,
   /guaranteed rate/i,
+  /Regulated in Singapore/i,
+  /5\.20%/i,
+  /4\.8%/i,
+  /1\.4%/i,
+  /0\.48s/i,
+  /2:34/i,
 ];
 
 async function filesUnder(directory) {
@@ -26,6 +32,9 @@ const violations = [];
 for (const root of roots) {
   for (const file of await filesUnder(root)) {
     const text = await readFile(file, 'utf8');
+    if (/(?:from|import)\s*\(?['"].*experiments[\\/]/.test(text)) {
+      violations.push(`${relative('.', file)}: imports experiments into production code`);
+    }
     for (const pattern of banned) {
       if (pattern.test(text)) violations.push(`${relative('.', file)}: ${pattern.source}`);
     }

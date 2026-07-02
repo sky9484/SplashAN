@@ -21,9 +21,20 @@ test('composed payment anchors the stored evidence hash and Walrus blob', async 
 
   assert.match(composedPayment, /createTransferSettlementEvidence/);
   assert.match(composedPayment, /sealAndStoreSettlementEvidence/);
+  assert.match(composedPayment, /shouldUseMockSeal/);
+  assert.match(composedPayment, /if \(!shouldUseMockSeal\(\)\) await assertSealWritable\(\)/);
   assert.match(composedPayment, /const auditHash = evidence\.record\.ciphertextHash/);
   assert.match(composedPayment, /backingBlobId: evidence\.walrus\.blobId/);
   assert.match(composedPayment, /evidence: evidence\.record/);
+});
+
+test('Seal demo crypto is unavailable in production transfer runtime', async () => {
+  const seal = await source('lib/server/seal.ts');
+  const runtimeMode = await source('lib/server/runtime-mode.ts');
+
+  assert.match(seal, /canUseDemoCrypto/);
+  assert.match(runtimeMode, /env\.NODE_ENV === 'production'/);
+  assert.match(runtimeMode, /return !isProductionRuntime\(env\);/);
 });
 
 test('audit receipt persists evidence and audit route verifies it', async () => {

@@ -204,8 +204,8 @@ const copilotLayers = [
 const walrusProofs = [
   {
     icon: KeyRound,
-    title: 'Seal-encrypted ownership',
-    copy: 'Invoice files are encrypted to your identity before permanent storage.',
+    title: 'Seal-ready ownership',
+    copy: 'Invoice files are access-controlled before permanent storage.',
     meta: 'Only approved keys can decrypt',
   },
   {
@@ -473,8 +473,8 @@ export default function IsometricLanding() {
               <span>Faster &amp; Wiser.</span>
             </h1>
             <p className="iso-hero-description">
-              A regulated B2B account network for cross-border money: pay, get paid, sweep, and keep value
-              with human-approved AI, private records, and Sui settlement.
+              A compliance-gated B2B account network for cross-border money: pay, get paid, sweep, and keep value
+              with human-approved AI, access-controlled records, and Sui settlement.
             </p>
 
             <div className="iso-hero-actions">
@@ -488,7 +488,7 @@ export default function IsometricLanding() {
             </div>
 
             <div className="iso-proof-line">
-              <span><Check aria-hidden="true" /> Regulated</span>
+              <span><Check aria-hidden="true" /> Compliance-gated</span>
               <span><Check aria-hidden="true" /> Verifiable</span>
             </div>
           </div>
@@ -516,7 +516,7 @@ export default function IsometricLanding() {
             <div className="iso-floating-note iso-floating-note-c">
               <span>TREASURY</span>
               <strong>USDY</strong>
-              <small>+5.20% APY · simulated</small>
+              <small>Modeled APY shown at quote time</small>
             </div>
           </div>
         </div>
@@ -538,7 +538,7 @@ export default function IsometricLanding() {
         <div className="iso-shell">
           <div className="iso-partner-intro">
             <span>Infrastructure &amp; Partners</span>
-            <p>Regulated rails outside. Sui-native settlement inside.</p>
+            <p>Licensed-partner rails outside. Sui-native settlement inside.</p>
           </div>
           <div className="iso-partner-grid">
             {partnerRail.map((partner) => (
@@ -935,7 +935,7 @@ export default function IsometricLanding() {
               </h2>
             </div>
             <p>
-              The operating desk connects payout, receivables, reconciliation, private records, and approval-led
+              The operating desk connects payout, receivables, reconciliation, access-controlled records, and approval-led
               recommendations so finance teams can run the full loop.
             </p>
           </div>

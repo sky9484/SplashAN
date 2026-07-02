@@ -7,7 +7,9 @@ Internal documentation for the Splash protocol app.
 | Doc | Purpose |
 |---|---|
 | [`contract-config.md`](./contract-config.md) | Operator guide for the admin **Contract config** page (no-restart deploys). |
+| [`KEY-POLICY.md`](./KEY-POLICY.md) | Custody roles, signer split, and current key gaps. |
 | [`openapi.yaml`](./openapi.yaml) | OpenAPI 3.1 spec for admin endpoints. |
+| [`UPGRADE-POLICY.md`](./UPGRADE-POLICY.md) | Upgrade authority, gates, rollback, and pause rules. |
 
 ## Viewing the OpenAPI spec
 

@@ -10,23 +10,19 @@
 
 ## Executive Summary
 
-| Severity      | Count | Status (updated 2026-05-29 post-fix sweep) |
-| ------------- | ----- | -------------------------------------------- |
-| Critical      | 3     | **3 Fixed** ✅                                |
-| High          | 6     | **5 Fixed** ✅ · 1 Open (H-04 rate limit)    |
-| Medium        | 8     | **5 Fixed** ✅ · 3 Open (M-06/M-07/M-08)     |
-| Low           | 6     | 1 Fixed · 5 Open / advisory                  |
-| Informational | 4     | Convention / housekeeping                    |
+| Severity      | Count | Status (truth pass 2026-07-02) |
+| ------------- | ----- | -------------------------------- |
+| Critical      | 3     | **3 Open**                       |
+| High          | 6     | 1 Fixed (H-06) / **5 Open**      |
+| Medium        | 8     | **8 Open**                       |
+| Low           | 6     | **6 Open / advisory**            |
+| Informational | 4     | Convention / housekeeping        |
 
-**Fixes shipped this revision:**
-- C-01, C-02: `smart_treasury` rewritten with real `Balance<T>` field, AdminCap-gated withdraw, events instead of per-call shared objects.
-- C-03, H-01, H-02, H-03: `payment_intent` rewritten — sender from `tx_context`, `Clock` for expiration, sender-only confirm, overpay refund via `coin::split`.
-- H-05: `peg_monitor::init_peg_state` now initializes deviations above `MAX_DEVIATION_PPM` so `assert_pegged` fails until first real `update_peg`.
-- H-06: fee gouging (already fixed in prior revision).
-- M-01, M-02, M-03: `audit_anchor` AdminCap-gated, tautological `verify_anchor` replaced with event-emitting verifier; `receipt_v2::link_audit_anchor` removed (truly immutable now).
-- M-04, M-05: named abort codes throughout, no more shared-object-per-rebalance.
-- L-06: `peg_monitor::update_peg` enforces monotonic timestamps (new code 303).
-- Off-chain `lib/server/sui-settlement.ts::ABORT_CODES` registry expanded to cover all 25 codes across all 8 modules.
+**Truth-pass correction:** the prior summary overstated scaffold remediation.
+No Phase A Move rewrites have shipped in this branch. The detailed findings
+below are the source of truth until the named Move modules are rewritten and
+their tests pass. The only previously verified fixed item retained here is
+H-06 fee-bps parameterization.
 
 The protocol cleanly separates settlement, peg monitoring, business identity, and dual-stablecoin TTL handling — those four modules (`settlement`, `peg_monitor`, `business_account`, `dual_treasury`) are well-structured and resource-safe.
 

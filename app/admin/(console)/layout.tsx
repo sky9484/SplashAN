@@ -51,7 +51,7 @@ export default async function AdminConsoleLayout({ children }: { children: React
           <Image src="/isometric/secure-icon.svg" alt="" width={1448} height={1086} />
           <span>
             <small>Control posture</small>
-            <strong>Regulated &amp; verifiable</strong>
+            <strong>Compliance &amp; proof</strong>
           </span>
         </div>
 

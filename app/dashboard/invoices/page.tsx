@@ -178,7 +178,7 @@ function CreateInvoiceModal({ close, onCreated }: { close: () => void; onCreated
         </div>
         <Field label="Memo"><textarea value={form.memo} onChange={(e) => setForm({ ...form, memo: e.target.value })} /></Field>
         <label className="mt-4 flex cursor-pointer items-center gap-3 rounded-2xl border border-dashed border-primary/35 bg-primary/5 p-4">
-          <Lock className="h-5 w-5 text-primary" /><span><strong className="block">Optional PDF</strong><small className="text-foreground/55">Seal encrypts before Walrus storage</small></span>
+          <Lock className="h-5 w-5 text-primary" /><span><strong className="block">Optional PDF</strong><small className="text-foreground/55">Encrypted before Walrus storage</small></span>
           <input type="file" accept=".pdf,image/*" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) void fileToBase64(file); }} />
           {documentBase64 && <CheckCircle2 className="ml-auto h-5 w-5 text-primary" />}
         </label>
