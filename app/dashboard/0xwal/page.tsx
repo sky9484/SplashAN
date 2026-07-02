@@ -2,24 +2,34 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ArrowRight, Bot, CheckCircle2, Copy, Database, FileUp, Lock, ShieldCheck, Sparkles, XCircle, type LucideIcon } from 'lucide-react';
 import { toast } from 'sonner';
 
 import StatusBadge from '@/components/StatusBadge';
 import MemWalBehaviorCard from '@/components/MemWalBehaviorCard';
+import OxWalComposer, { type OxWalComposerChip } from '@/components/oxwal/OxWalComposer';
 import type { CopilotSuggestion } from '@/lib/server/copilot';
 import type { InvoiceRecord } from '@/lib/server/operations';
 
 type Extraction = { amount: number; currency: string; recipient: string; confidence: number };
 type WalrusProof = { blobId: string; sizeBytes: number; epochs: number; mode: 'demo' | 'live'; createdAt: string };
 
+const invoicePromptChips: OxWalComposerChip[] = [
+  { label: 'Extract invoice', prompt: 'Extract and recommend route for the selected invoice', icon: 'file' },
+  { label: 'Check Seal', prompt: 'Check Seal access for Splash Demo Ltd', icon: 'search' },
+  { label: 'Open action desk', prompt: 'Open action desk', icon: 'write' },
+];
+
 export default function OxWalPage() {
+  const router = useRouter();
   const [invoices, setInvoices] = useState<InvoiceRecord[]>([]);
   const [selected, setSelected] = useState<InvoiceRecord | null>(null);
   const [extraction, setExtraction] = useState<Extraction | null>(null);
   const [suggestion, setSuggestion] = useState<CopilotSuggestion | null>(null);
   const [access, setAccess] = useState<Record<string, boolean>>({});
   const [proof, setProof] = useState<WalrusProof | null>(null);
+  const [prompt, setPrompt] = useState('');
   const [uploading, setUploading] = useState(false);
 
   async function load() {
@@ -95,12 +105,52 @@ export default function OxWalPage() {
     setSuggestion(result.suggestion);
   }
 
+  function runPrompt(rawPrompt = prompt) {
+    const text = rawPrompt.trim();
+    if (!text) return;
+    setPrompt('');
+
+    const lower = text.toLowerCase();
+    if (lower.includes('open action') || lower.includes('chat')) {
+      router.push('/dashboard');
+      return;
+    }
+
+    if (lower.includes('seal') || lower.includes('access')) {
+      if (!selected?.sealPolicyId) {
+        toast.error('Select an invoice with a Seal policy first');
+        return;
+      }
+      void checkAccess('Splash Demo Ltd');
+      toast.success('Seal access check started');
+      return;
+    }
+
+    if (!selected) {
+      toast.error('Upload or select an invoice first');
+      return;
+    }
+    void extract();
+  }
+
   return (
     <div className="mx-auto max-w-5xl space-y-5">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div><span className="dash-kicker">Sui Overflow · Walrus track</span><h1 className="dash-title mt-2">0xWal invoice-to-payment loop</h1><p className="mt-1 text-sm text-foreground/55">Private documents become verifiable, approval-ready payment intents.</p></div>
         <Link href="/dashboard" className="inline-flex items-center gap-2 rounded-xl border border-primary/20 bg-card px-4 py-2 text-sm font-black text-primary"><Bot className="h-4 w-4" /> Chat with 0xWal</Link>
       </header>
+      <section className="dash-surface bg-[#FBFAF7] p-5 md:p-7">
+        <OxWalComposer
+          title="What should 0xWal inspect?"
+          value={prompt}
+          onChange={setPrompt}
+          onSubmit={() => runPrompt()}
+          onChipSubmit={runPrompt}
+          chips={invoicePromptChips}
+          disabled={uploading}
+          placeholder="Ask about extraction, Seal access, or the action desk"
+        />
+      </section>
       <MemWalBehaviorCard />
 
       <Panel number="01" icon={FileUp} title="Upload invoice" subtitle="The original document is encrypted before it leaves the app.">

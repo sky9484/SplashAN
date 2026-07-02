@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { Bot, ChevronDown, Send, Sparkles, X } from 'lucide-react';
+import { Bot, ChevronDown, Sparkles, X } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { streamCopilot } from '../lib/copilot-client';
+import OxWalComposer, { type OxWalComposerChip } from './oxwal/OxWalComposer';
 
 // ─── Compact AI responses ─────────────────────────────────────────────────────
 
@@ -11,17 +12,17 @@ const COMPACT_RESPONSES: { keywords: string[]; reply: string }[] = [
   {
     keywords: ['php', 'philippines', 'peso', 'payroll', 'friday'],
     reply:
-      'USD→PHP: 56.42 · Fee: 0.80% · Settles in ~4.2 min\n\nRate is within 0.3% of your 30-day best. Optimal lock: tomorrow 08:45 MYT before the pre-open liquidity window closes.\n\nWant me to draft the Friday batch?',
+      'USD to PHP is the current testnet corridor. Starting edge fee is 0.80%; local delivery timing depends on the payout rail.\n\n0xWal can prepare a Friday batch, label the quote evidence, and leave approval with your team.',
   },
   {
     keywords: ['myr', 'malaysia', 'ringgit', 'bnm'],
     reply:
-      'USD→MYR: 4.71 · Fee: 0.85% · BNM policy meeting Thursday ⚠\n\nRecommend locking before Wednesday close. Waiting until Thursday risks a ±0.8% move. Lock now to save ~$42 on a $5,000 transfer.',
+      'USD to MYR is modeled until partner activation. 0xWal can still prepare the route review: recipient, fee label, evidence, and approval steps.',
   },
   {
     keywords: ['idr', 'indonesia', 'rupiah', 'jakarta'],
     reply:
-      'USD→IDR: 16,284 · Fee: 0.90% · Fastest corridor at 3.0 min\n\nYour IDR volume is up 18% over 6 weeks. A weekly Wednesday batch would save ~$32/month. Want me to set that up?',
+      'USD to IDR is a modeled expansion route. I can group candidate payouts, show the control checklist, and prepare an unsigned proposal when the rail is active.',
   },
   {
     keywords: ['treasury', 'yield', 'apy', 'earn', 'deposit', 'compound'],
@@ -31,7 +32,7 @@ const COMPACT_RESPONSES: { keywords: string[]; reply: string }[] = [
   {
     keywords: ['cheapest', 'corridor', 'rate', 'compare', 'best'],
     reply:
-      'This week by Splash fee:\n• PHP 0.80% · MYR/SGD 0.85% · IDR 0.90%\n• VND/THB 0.95% · EUR/GBP 1.10%\n\nPHP is your lowest-cost live-model corridor. Batch transfers beat single-payment spreads on modeled routes.',
+      'Current fee labels: PHP starts at 0.80% on the testnet path. MYR, SGD, IDR, VND, THB, EUR, and GBP stay modeled until partner and regulatory controls are active.',
   },
   {
     keywords: ['compliance', 'kyb', 'aml', 'limit', 'flag'],
@@ -46,7 +47,7 @@ const COMPACT_RESPONSES: { keywords: string[]; reply: string }[] = [
   {
     keywords: ['sgd', 'singapore'],
     reply:
-      'USD→SGD: 1.345 · Fee: 0.85% · Modeled rail · 6.1 min estimate\n\nSGD is stable this week. No urgent rate action needed.',
+      'USD to SGD is modeled. I can prepare a route review, but execution should stay blocked until the partner rail and compliance controls are active.',
   },
 ];
 
@@ -74,11 +75,11 @@ function matchCompactResponse(
 
 type Message = { id: number; role: 'user' | 'assistant'; text: string; time: string };
 
-const QUICK_CHIPS = [
-  'PHP rate today?',
-  'Draft Friday batch',
-  'My treasury yield',
-  'Compliance status',
+const QUICK_CHIPS: OxWalComposerChip[] = [
+  { label: 'PHP rate', prompt: 'PHP rate today?', icon: 'search' },
+  { label: 'Draft batch', prompt: 'Draft Friday batch', icon: 'write' },
+  { label: 'Treasury yield', prompt: 'My treasury yield', icon: 'file' },
+  { label: 'Compliance', prompt: 'Compliance status', icon: 'search' },
 ];
 
 const NUDGES = ['Hi!', 'Can I help?', 'Ready to splash it?'];
@@ -368,49 +369,19 @@ export default function FloatingCopilot() {
           )}
         </div>
 
-        {/* Quick chips */}
-        <div className="shrink-0 border-t border-[#326273]/8 px-3 py-2">
-          <div className="flex gap-1.5 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
-            {QUICK_CHIPS.map((chip) => (
-              <button
-                key={chip}
-                type="button"
-                disabled={busy}
-                onClick={() => sendMessage(chip)}
-                className="shrink-0 rounded-full border border-[#326273]/10 bg-[#F6F0ED] px-2 py-1 text-[10px] font-medium text-[#326273]/70 transition-colors hover:border-[#5C9EAD]/40 hover:text-[#326273] disabled:opacity-40"
-              >
-                {chip}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Input */}
-        <div className="shrink-0 border-t border-[#326273]/8 p-2.5">
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              sendMessage(input);
-            }}
-            className="flex items-center gap-2 rounded-xl bg-[#F6F0ED] px-3 py-2"
-          >
-            <input
-              ref={inputRef}
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask about rates, batches, treasury…"
-              disabled={busy}
-              className="flex-1 bg-transparent text-xs text-[#1F4452] placeholder-[#326273]/35 outline-none disabled:opacity-60"
-            />
-            <button
-              type="submit"
-              disabled={!input.trim() || busy}
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#326273] text-white transition-colors hover:bg-[#264e5b] disabled:opacity-40"
-            >
-              <Send size={12} />
-            </button>
-          </form>
+        <div className="shrink-0 border-t border-[#326273]/8 bg-[#fffdf9] p-3">
+          <OxWalComposer
+            compact
+            value={input}
+            onChange={setInput}
+            onSubmit={() => sendMessage(input)}
+            onChipSubmit={(prompt) => sendMessage(prompt)}
+            chips={QUICK_CHIPS}
+            disabled={busy}
+            placeholder="Ask 0xWal anything"
+            priorityLabel="High"
+            inputRef={inputRef}
+          />
         </div>
       </div>
 

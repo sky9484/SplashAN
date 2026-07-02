@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, type FormEvent } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   AlertTriangle,
@@ -8,15 +8,14 @@ import {
   BrainCircuit,
   CheckCircle2,
   Clock3,
-  Loader2,
   MessageSquareText,
-  Send,
   ShieldCheck,
   Sparkles,
   type LucideIcon,
 } from 'lucide-react';
 
 import ActionCard from '@/components/oxwal/ActionCard';
+import OxWalComposer, { type OxWalComposerChip } from '@/components/oxwal/OxWalComposer';
 import MemWalBehaviorCard from '@/components/MemWalBehaviorCard';
 import type { ActionCardProposal } from '@/lib/agent/action-card';
 
@@ -40,10 +39,10 @@ type OxwalStreamEvent =
   | { type: 'proposal'; proposal: ActionCardProposal }
   | { type: 'done' };
 
-const quickPrompts = [
-  'Pay invoice inv_demo_acme_5000 to cp_acme_ph',
-  'Allocate idle treasury for MY_PH',
-  'What can you read and prepare?',
+const quickPrompts: OxWalComposerChip[] = [
+  { label: 'Review invoice', prompt: 'Pay invoice inv_demo_acme_5000 to cp_acme_ph', icon: 'file' },
+  { label: 'Allocate treasury', prompt: 'Allocate idle treasury for MY_PH', icon: 'write' },
+  { label: 'Look up tools', prompt: 'What can you read and prepare?', icon: 'search' },
 ];
 
 function newId(prefix: string) {
@@ -165,8 +164,7 @@ export default function OxwalDeskPage() {
     }
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  function handleSubmit() {
     void submitPrompt(input);
   }
 
@@ -192,13 +190,26 @@ export default function OxwalDeskPage() {
                 Read financial state, prepare unsigned proposals, and route approvals from one operating surface.
               </p>
             </div>
-            <div className="grid grid-cols-3 overflow-hidden rounded-lg border border-[#326273]/14 bg-white text-center">
+            <div className="grid w-full grid-cols-3 overflow-hidden rounded-lg border border-[#326273]/14 bg-white text-center md:w-auto md:min-w-[300px]">
               <DeskStat label="Proposals" value={proposalStats.total} />
               <DeskStat label="Approval" value={proposalStats.needsApproval} caution={proposalStats.needsApproval > 0} />
               <DeskStat label="Warnings" value={proposalStats.warnings} caution={proposalStats.warnings > 0} />
             </div>
           </div>
         </header>
+
+        <section className="rounded-lg border border-[#326273]/12 bg-[#FBFAF7] px-4 py-8 shadow-sm md:px-8 md:py-10">
+          <OxWalComposer
+            title="What's on the agenda today?"
+            value={input}
+            onChange={setInput}
+            onSubmit={handleSubmit}
+            onChipSubmit={(prompt) => void submitPrompt(prompt)}
+            chips={quickPrompts}
+            disabled={isSending}
+            placeholder="Ask 0xWal to read, prepare, or explain..."
+          />
+        </section>
 
         <section className="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
           <div className="rounded-lg border border-[#326273]/16 bg-white/82">
@@ -223,39 +234,6 @@ export default function OxwalDeskPage() {
                 </div>
               )}
             </div>
-            <form onSubmit={handleSubmit} className="border-t border-[#326273]/10 p-3">
-              <label className="sr-only" htmlFor="oxwal-command">0xWal command</label>
-              <textarea
-                id="oxwal-command"
-                value={input}
-                onChange={(event) => setInput(event.target.value)}
-                rows={3}
-                className="min-h-[92px] w-full resize-none rounded-lg border border-[#326273]/18 bg-[#F6F0ED] px-3 py-2 text-sm font-semibold text-[#1F4452] outline-none ring-[#5C9EAD]/35 transition focus:ring-4"
-                placeholder="Prepare a proposal..."
-              />
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                <div className="flex flex-wrap gap-2">
-                  {quickPrompts.map((prompt) => (
-                    <button
-                      key={prompt}
-                      type="button"
-                      onClick={() => void submitPrompt(prompt)}
-                      className="rounded-md border border-[#326273]/16 bg-white px-2.5 py-1.5 text-xs font-black text-[#326273]"
-                    >
-                      {prompt}
-                    </button>
-                  ))}
-                </div>
-                <button
-                  type="submit"
-                  disabled={isSending || !input.trim()}
-                  className="inline-flex items-center gap-2 rounded-md bg-[#1F4452] px-4 py-2 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                  Send
-                </button>
-              </div>
-            </form>
           </div>
 
           <div className="rounded-lg border border-[#326273]/16 bg-white/82">
@@ -336,11 +314,11 @@ export default function OxwalDeskPage() {
 
 function DeskStat({ label, value, caution = false }: { label: string; value: number; caution?: boolean }) {
   return (
-    <div className="min-w-[92px] border-r border-[#326273]/10 px-3 py-2 last:border-r-0">
+    <div className="min-w-0 border-r border-[#326273]/10 px-3 py-2 last:border-r-0">
       <div className={caution ? 'text-2xl font-black text-[#E39774]' : 'text-2xl font-black text-[#1F4452]'}>
         {value}
       </div>
-      <div className="mt-0.5 text-[10px] font-black uppercase tracking-[0.14em] text-[#326273]/50">{label}</div>
+      <div className="mt-0.5 text-[10px] font-black uppercase tracking-normal text-[#326273]/50">{label}</div>
     </div>
   );
 }

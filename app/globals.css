@@ -1419,6 +1419,31 @@ body {
   width: 15px;
 }
 
+.iso-flow-branch {
+  display: grid;
+  gap: 5px;
+  margin-top: 16px;
+  border: 1px solid rgba(255, 250, 241, .14);
+  border-radius: 8px;
+  padding: 14px 16px;
+  background: rgba(255, 250, 241, .065);
+  box-shadow: 5px 6px 0 rgba(0, 0, 0, .14);
+}
+
+.iso-flow-branch strong {
+  color: var(--iso-gold);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+}
+
+.iso-flow-branch span {
+  color: rgba(255, 250, 241, .62);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
 .iso-flow-visual {
   position: relative;
   min-height: 620px;

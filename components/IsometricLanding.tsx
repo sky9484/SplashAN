@@ -1,411 +1,1127 @@
+'use client';
+
 import Image from 'next/image';
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import {
+  ArrowDownRight,
   ArrowRight,
-  BanknoteArrowDown,
+  ArrowUp,
+  BrainCircuit,
   Check,
-  CircleDollarSign,
-  ClockArrowUp,
+  ChevronRight,
+  CircleCheckBig,
+  Database,
   FileCheck2,
-  Landmark,
-  LockKeyhole,
+  Gauge,
+  KeyRound,
+  Layers3,
   ReceiptText,
   ShieldCheck,
+  Sparkles,
   TrendingUp,
-  WalletCards,
+  Workflow,
+  X,
 } from 'lucide-react';
 
-import { EnvironmentRibbon } from '@/components/EnvironmentRibbon';
-import { SourceBadge } from '@/components/SourceBadge';
-import { DashboardPreview } from '@/components/landing/DashboardPreview';
 import { claims, lockedCopy } from '@/content/claims';
-import { formatMoney } from '@/lib/formatMoney';
 
-import styles from './IsometricLanding.module.css';
-
-const navItems = [
-  ['Product', '#product'],
-  ['How it works', '#how-it-works'],
-  ['Security', '#security'],
-  ['Corridors', '#corridors'],
-  ['Pricing', '#pricing'],
-] as const;
-
-const trustTiers = [
+const operatingLayers = [
   {
-    title: 'Compliance and custody',
-    items: [
-      ['Labuan FSA', 'licence application in progress', claims.labuanApplication.status],
-      ['Sumsub', 'KYB workflow', claims.sumsub.status],
-      ['Elliptic', 'KYT and sanctions gate', claims.elliptic.status],
-      ['BitGo', 'qualified custody option', claims.custody.status],
-      ['CoKeeps / Gambit', 'Malaysia local custody options', claims.custody.status],
-    ],
+    number: '01',
+    label: 'Liquidity',
+    title: 'Keep USD productive.',
+    copy: 'Keep payout inventory ready while treasury projections model how excess USD could remain productive.',
+    image: '/isometric/liquidity-pools.svg',
+    imageAlt: 'Isometric stablecoin liquidity pools',
+    meta: 'Available cash - projected treasury',
   },
   {
-    title: 'Infrastructure',
-    items: [
-      ['Sui', 'settlement network', 'testnet-verified'],
-      ['Circle USDC', 'settlement asset', 'modeled'],
-      ['Walrus', 'stored proof', 'testnet-verified'],
-      ['DeepBook', 'liquidity reference', 'modeled'],
-      ['Pyth', 'market rate reference', 'modeled'],
-    ],
+    number: '02',
+    label: 'Settlement',
+    title: 'Funds cannot get stuck.',
+    copy: 'Every payment intent settles or reverts atomically in one programmable Sui transaction.',
+    image: '/isometric/transfer.svg',
+    imageAlt: 'Transparent isometric payment settlement receipt',
+    meta: lockedCopy.speed,
   },
-] as const;
+  {
+    number: '03',
+    label: 'Treasury',
+    title: 'Make cash work harder.',
+    copy: '0xWal recommends a treasury posture. Your business approves every action; execution remains gated.',
+    image: '/isometric/treasury.svg',
+    imageAlt: 'Isometric smart treasury card',
+    meta: 'Simulation - human approval',
+  },
+];
 
-const jobs = [
+const flowSteps = [
   {
-    icon: CircleDollarSign,
-    title: 'Money in',
-    line: 'Invoice and collect USD from global customers.',
-    support: 'Pay links create structured payment context with review before settlement.',
-    href: '#product',
+    id: 'intake',
+    number: '01',
+    title: 'Collect or upload',
+    description: 'Create a pay link, upload an accepted invoice, or fund USD into the operating account.',
+    image: '/isometric/USD.svg',
+    imageAlt: 'USD and stablecoin isometric illustration',
+    stat: 'Pay link or invoice',
   },
   {
-    icon: BanknoteArrowDown,
-    title: 'Money out',
-    line: 'Pay suppliers and payroll across SEA in local currency.',
-    support: 'Approval-led transfers, batches and receipts stay in one operating desk.',
-    href: '#how-it-works',
+    id: 'review',
+    number: '02',
+    title: 'Review controls',
+    description: 'KYB, recipient status, route, fee, treasury floor, and evidence labels appear before signature.',
+    image: '/isometric/checklist-icon.svg',
+    imageAlt: 'Isometric operating checklist',
+    stat: 'Human approval',
   },
   {
-    icon: ClockArrowUp,
-    title: 'Get paid early',
-    line: 'Turn accepted invoices into cash today - you set the rate.',
-    support: 'The v3 receivable path keeps buyer acceptance and proof attached.',
-    href: '#receivables',
+    id: 'settle',
+    number: '03',
+    title: 'Settle in one signature',
+    description: 'The prepared payment either completes as approved or stops safely before funds move.',
+    image: '/isometric/payment-intent.svg',
+    imageAlt: 'Isometric Sui payment intent',
+    stat: lockedCopy.speed,
+  },
+  {
+    id: 'deliver',
+    number: '04',
+    title: 'Deliver locally',
+    description: 'Pay a verified supplier or sweep value into the recipient ladder where the corridor allows it.',
+    image: '/isometric/payments.svg',
+    imageAlt: 'Isometric cross-border payment receipt',
+    stat: lockedCopy.fee,
+  },
+  {
+    id: 'proof',
+    number: '05',
+    title: 'Anchor the proof',
+    description: 'Receipts, encrypted documents, and daily audit evidence remain available for review.',
+    image: '/isometric/walrus-logo.svg',
+    imageAlt: 'Walrus storage proof illustration',
+    stat: 'Walrus + Sui audit',
+  },
+];
+
+const marqueeItems = [
+  ['1 live testnet', 'MY to PH corridor'],
+  ['Modeled routes', 'expand with controls'],
+  ['~400ms', 'Sui settlement finality'],
+  ['From 0.80%', 'starting edge fee'],
+  ['Human approved', 'AI recommendations'],
+  ['Stored proof', 'Walrus + Sui audit'],
+];
+
+const partnerRail: Array<{ src: string; name: string; role: string; logoClass?: string }> = [
+  { src: '/stripe-logo.svg', name: 'Stripe', role: 'USD collection' },
+  { src: '/airwallex-mark.png', name: 'Airwallex', role: 'bank rails', logoClass: 'iso-airwallex-logo' },
+  { src: '/pyth-logo.png', name: 'Pyth', role: 'FX and peg data' },
+  { src: '/deepbook-mark.png', name: 'DeepBook', role: 'amount-sized liquidity', logoClass: 'iso-deepbook-logo' },
+  { src: '/sumsub-logo.png', name: 'Sumsub', role: 'KYB and KYC' },
+  { src: '/walrus-logo.svg', name: 'Walrus', role: 'permanent records' },
+  { src: '/sui-logo-blue.svg', name: 'Sui', role: 'settlement network' },
+];
+
+const comparisonRows = [
+  {
+    feature: 'Settlement speed',
+    bank: '2-5 days',
+    broker: '1-3 days',
+    wise: '1-2 days',
+    splash: lockedCopy.speed,
+  },
+  {
+    feature: 'Starting fee',
+    bank: '3-5%',
+    broker: '2-4%',
+    wise: '0.5-1.5%',
+    splash: lockedCopy.fee,
+  },
+  {
+    feature: 'FX transparency',
+    bank: 'Hidden markup',
+    broker: 'Cash spread',
+    wise: 'Mid-market',
+    splash: 'Oracle-labeled quote',
+  },
+  {
+    feature: 'Atomic settlement',
+    bank: 'No',
+    broker: 'No',
+    wise: 'No',
+    splash: 'Yes',
+  },
+  {
+    feature: 'Batch payments',
+    bank: 'Limited',
+    broker: 'No',
+    wise: 'Limited',
+    splash: 'Native',
+  },
+  {
+    feature: 'AI treasury copilot',
+    bank: 'No',
+    broker: 'No',
+    wise: 'No',
+    splash: lockedCopy.agent,
+  },
+  {
+    feature: 'Early payment on invoices',
+    bank: 'Manual factoring',
+    broker: 'No',
+    wise: 'No',
+    splash: 'Buyer-approved discount offer',
+  },
+  {
+    feature: 'Bilateral netting',
+    bank: 'Manual',
+    broker: 'No',
+    wise: 'No',
+    splash: 'Modeled in account loop',
+  },
+  {
+    feature: 'Permanent audit trail',
+    bank: 'Siloed records',
+    broker: 'Manual receipts',
+    wise: 'Platform history',
+    splash: 'Encrypted Walrus + Sui',
+  },
+  {
+    feature: 'Recipient account ladder',
+    bank: 'Bank account only',
+    broker: 'Cash-out only',
+    wise: 'Wise account',
+    splash: 'Payout, sweep, stored balance',
+  },
+];
+
+type YieldBenchmarks = {
+  bank: number;
+  broker: number;
+  wise: number;
+  splash: number;
+  asOf: string;
+};
+
+const fallbackYieldBenchmarks: YieldBenchmarks = {
+  bank: 0.38,
+  broker: 3.12,
+  wise: 3.14,
+  splash: 0,
+  asOf: '',
+};
+
+const percentFormatter = new Intl.NumberFormat('en-US', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+function formatPercent(value: number) {
+  return `${percentFormatter.format(value)}%`;
+}
+
+const copilotLayers = [
+  {
+    icon: Gauge,
+    title: 'Rate intelligence',
+    copy: 'Watch every corridor and surface better timing before a payment is approved.',
+  },
+  {
+    icon: FileCheck2,
+    title: 'Invoice forecasting',
+    copy: 'Extract upcoming obligations from invoices while the original file remains encrypted on Walrus.',
+  },
+  {
+    icon: Workflow,
+    title: 'Batch optimizer',
+    copy: 'Recognize repeat corridor patterns and suggest grouped payouts with lower operating cost.',
   },
   {
     icon: TrendingUp,
-    title: 'Money working',
-    line: 'Idle balance earns variable T-bill-backed yield.',
-    support: 'Treasury floor protection stays visible before any approval.',
-    href: '#treasury',
+    title: 'Treasury advisor',
+    copy: 'Model payout liquidity and projected yield, then wait for explicit business approval.',
   },
-] as const;
+];
 
-const flow = [
-  ['01', 'Collect USD', 'Create an invoice or pay link and keep the original document access-controlled.'],
-  ['02', 'Review and approve', 'KYB, recipient, rate, fee and evidence labels appear before signature.'],
-  ['03', 'Settle in one signature', 'The transaction either completes as approved or safely stops.'],
-  ['04', 'Anchor the proof', 'Receipt, Walrus record and Sui anchor stay available for audit.'],
-] as const;
-
-const modules = [
+const walrusProofs = [
   {
-    title: 'Receivables',
-    copy: 'Buyer-accepted invoices become working-capital objects when the Phase C primitive ships.',
-    metric: formatMoney(BigInt(9840000), 'USD'),
-    badge: 'modeled',
-    icon: ReceiptText,
+    icon: KeyRound,
+    title: 'Seal-ready ownership',
+    copy: 'Invoice files are access-controlled before permanent storage.',
+    meta: 'Only approved keys can decrypt',
   },
   {
-    title: 'Transfers and batches',
-    copy: 'Queue, approve and trace payouts from quote to receipt.',
-    metric: lockedCopy.fee,
-    badge: claims.fee.status,
-    icon: BanknoteArrowDown,
-  },
-  {
-    title: 'Treasury controls',
-    copy: 'See available cash, operating floor, modeled yield and pending outflows together.',
-    metric: lockedCopy.yield,
-    badge: claims.treasuryYield.status,
-    icon: Landmark,
-  },
-  {
-    title: 'Reconciliation and audit',
-    copy: 'Store proof, verify batches and export the evidence trail.',
-    metric: '12 proof batches',
-    badge: claims.auditTrail.status,
-    icon: FileCheck2,
-  },
-  {
-    title: 'Early Pay',
-    copy: 'Offer inbox ranks supplier discounts by APR-equivalent and treasury comparison.',
-    metric: '12.4% APR-equiv - 38 days early',
-    badge: claims.receivable.status,
-    icon: ClockArrowUp,
-  },
-] as const;
-
-const comparison = [
-  ['Local delivery', 'Manual rail', 'Transfer only', 'Payment plus proof'],
-  ['Approval controls', 'Email and portals', 'Limited', 'Maker-checker and roles'],
-  ['Idle cash earns yield', 'No', 'No', 'Variable, T-bill-backed'],
-  ['Early payment on invoices', 'No', 'No', 'You set the discount'],
-  ['Bilateral netting', 'No', 'No', 'Settle only the difference'],
-  ['Audit trail', 'Siloed statements', 'Platform history', 'Stored proof and Sui anchor'],
-] as const;
-
-const securityBlocks = [
-  {
-    icon: LockKeyhole,
-    title: 'Private business records',
-    copy: 'Encrypted at rest today; threshold-encrypted mode activates only when live Seal is configured.',
-    badge: 'modeled',
+    icon: Database,
+    title: 'Daily audit batches',
+    copy: 'Settlement events are collected into a tamper-evident Merkle batch every day.',
+    meta: 'Seven-year retention',
   },
   {
     icon: ShieldCheck,
-    title: 'Approval-led controls',
-    copy: 'Maker-checker, thresholds and deterministic policy evaluation sit before submit.',
-    badge: 'testnet-verified',
+    title: 'Anchored on Sui',
+    copy: 'Every Walrus batch is connected to an immutable on-chain AuditAnchor.',
+    meta: 'Regulator-verifiable',
+  },
+];
+
+const walrusSlides = [
+  {
+    image: '/isometric/walrus-receipt-v2.png',
+    label: '01 / Walrus receipt',
+    tab: 'Audit',
+    title: 'Permanent audit proof',
+    copy: 'A normal payment receipt becomes immutable, independently verified, and auditable on Walrus.',
+    facts: ['On-chain receipt', 'Daily audit batch', 'Regulator-verifiable'],
+  },
+  {
+    image: '/isometric/memwal-agent-v2.png',
+    label: '02 / MemWal',
+    tab: 'AI',
+    title: 'The AI copilot remembers',
+    copy: 'An agent remembers safe behavior patterns, keeps useful memory, and suggests the next best action.',
+    facts: ['Behavior memory', 'Proactive suggestions', 'Human approval stays final'],
+  },
+  {
+    image: '/isometric/seal-vaults-sui-v3.png',
+    label: '03 / Seal',
+    tab: 'Ownership',
+    title: 'Encrypted ownership',
+    copy: 'Large sealed vaults protect owned data while permissioned verification keeps every audit possible.',
+    facts: ['Identity-based encryption', 'Owner-held access', 'Auditor access by permission'],
+  },
+];
+
+const readinessGates = [
+  {
+    icon: CircleCheckBig,
+    title: 'Payout proof',
+    copy: 'The MY-to-PH testnet path proves quote, intent, settlement, receipt, and audit evidence as one flow.',
+  },
+  {
+    icon: ShieldCheck,
+    title: 'Sweep-account launch',
+    copy: 'Phase 1 adds pay, get paid, sweep, and keep with corridor-by-corridor regulatory controls.',
+  },
+  {
+    icon: TrendingUp,
+    title: 'Closed-loop proof',
+    copy: 'Scale follows netting ratio, counterparty pull, repeat volume, and reliable external delivery.',
+  },
+];
+
+const scaleMetrics = [
+  ['Netting ratio', 'Value kept inside the loop'],
+  ['Counterparty pull', 'Pay links that recruit accounts'],
+  ['Treasury opt-in', 'Approved use of treasury tools'],
+  ['Discount capture', 'Invoice savings realized'],
+];
+
+const recipientLadder = [
+  {
+    number: '01',
+    title: 'Payout',
+    status: 'Live-model',
+    copy: 'Deliver local currency to a verified recipient through the current payout rail.',
+  },
+  {
+    number: '02',
+    title: 'Sweep account',
+    status: 'Phase 1 launch',
+    copy: 'Let recipients sweep value into a Splash account and recruit the next counterparty.',
+  },
+  {
+    number: '03',
+    title: 'Stored balance',
+    status: 'Corridor gated',
+    copy: 'Keep value inside the network where regulation and partner controls permit it.',
+  },
+];
+
+const phaseOneTools = [
+  {
+    icon: Workflow,
+    number: '01',
+    title: 'Batch payouts',
+    copy: 'Authorize a full payout run once, then follow every recipient from quote to receipt.',
+    href: '/dashboard/batch',
+    image: '/isometric/op-batch.svg',
+    imageAlt: 'Isometric batch payout illustration',
+    metric: '128 recipients',
+    result: 'One approval, every payout traced',
+    facts: ['Pre-screen recipients', 'Label 24-72h rate holds', 'Track every receipt'],
+  },
+  {
+    icon: ReceiptText,
+    number: '02',
+    title: 'Invoice desk',
+    copy: 'Turn invoices and pay links into structured payment instructions that recruit the next counterparty.',
+    href: '/dashboard/invoices',
+    image: '/isometric/op-invoice.svg',
+    imageAlt: 'Isometric encrypted invoice illustration',
+    metric: 'Pay link to intent',
+    result: 'Get paid, then keep value in the loop',
+    facts: ['Extract payment fields', 'Invite counterparties', 'Approve before settlement'],
   },
   {
     icon: FileCheck2,
-    title: 'Independent audit trail',
-    copy: 'Stored proof, ciphertext hash and Sui anchor are exposed through the proof drawer pattern.',
-    badge: 'testnet-verified',
+    number: '03',
+    title: 'Reconciliation & proof',
+    copy: 'Auto-match payment activity to accounting systems while private artifacts stay encrypted and verifiable.',
+    href: '/settings/kyb',
+    image: '/isometric/op-compliance.svg',
+    imageAlt: 'Isometric compliance archive illustration',
+    metric: 'Books to proof',
+    result: 'Reconciled without exposing private data',
+    facts: ['Xero + QuickBooks ready', 'Keep KYB off Walrus', 'Anchor daily audit batches'],
   },
   {
-    icon: WalletCards,
-    title: 'Qualified custody options',
-    copy: 'Governance and client-asset custody remain clearly labeled until contracts and licenses are final.',
-    badge: 'modeled',
+    icon: Layers3,
+    number: '04',
+    title: 'Treasury controls',
+    copy: 'Model available USD, corridor inventory, and projected productive liquidity from one operating view.',
+    href: '/dashboard/treasury',
+    image: '/isometric/op-treasury.svg',
+    imageAlt: 'Isometric treasury controls illustration',
+    metric: 'Projected USDY rate',
+    result: 'Approval-gated treasury simulation',
+    facts: ['Watch corridor inventory', 'Separate available cash', 'Approve every action'],
   },
-] as const;
-
-const routes = [
-  ['MY -> PH', 'live corridor (testnet)', 'testnet-verified'],
-  ['MY -> SG', 'in development - modeled', 'modeled'],
-  ['SG -> ID', 'in development - modeled', 'modeled'],
-  ['TH -> PH', 'in development - modeled', 'modeled'],
-  ['IN -> MY', 'in development - modeled', 'modeled'],
-] as const;
+  {
+    icon: TrendingUp,
+    number: '05',
+    title: 'Early Pay',
+    copy: 'Let suppliers offer a discount on buyer-accepted invoices, then prepare settlement for approval.',
+    href: '/dashboard/invoices',
+    image: '/isometric/op-invoice.svg',
+    imageAlt: 'Isometric early payment invoice illustration',
+    metric: 'Supplier offer',
+    result: 'Buyer approval stays final',
+    facts: ['Buyer-signed invoice', 'Supplier sets discount', '0xWal prepares only'],
+  },
+];
 
 export default function IsometricLanding() {
+  const [activeFlow, setActiveFlow] = useState(flowSteps[0]);
+  const [activeWalrus, setActiveWalrus] = useState(0);
+  const [yieldBenchmarks, setYieldBenchmarks] = useState(fallbackYieldBenchmarks);
+  const [showBackToTop, setShowBackToTop] = useState(false);
+  const [arrowLaunching, setArrowLaunching] = useState(false);
+  const [arrowGone, setArrowGone] = useState(false);
+  const [activeTool, setActiveTool] = useState<(typeof phaseOneTools)[number] | null>(null);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setActiveWalrus((current) => (current + 1) % walrusSlides.length);
+    }, 6500);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    async function refreshYields() {
+      try {
+        const response = await fetch('/api/market/yields');
+        if (!response.ok) return;
+        const body = await response.json() as YieldBenchmarks;
+        if (active) setYieldBenchmarks(body);
+      } catch {
+        // Keep the latest known benchmarks if a source is temporarily unavailable.
+      }
+    }
+
+    void refreshYields();
+    const interval = window.setInterval(refreshYields, 5 * 60 * 1000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, []);
+
+  useEffect(() => {
+    const hero = document.querySelector('#hero');
+    if (!hero) return;
+
+    const observer = new IntersectionObserver(([entry]) => {
+      setShowBackToTop(!entry.isIntersecting);
+    }, { threshold: 0.12 });
+    observer.observe(hero);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!activeTool) return;
+
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') setActiveTool(null);
+    }
+
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [activeTool]);
+
+  function launchArrow() {
+    if (arrowLaunching || arrowGone) return;
+    setArrowLaunching(true);
+    window.setTimeout(() => {
+      document.querySelector('#walrus')?.scrollIntoView({ behavior: 'smooth' });
+    }, 620);
+    window.setTimeout(() => {
+      setArrowGone(true);
+      setArrowLaunching(false);
+    }, 1050);
+  }
+
+  const walrusSlide = walrusSlides[activeWalrus];
+  const liveComparisonRows = [
+    ...comparisonRows,
+    {
+      feature: 'Yield on idle USD',
+      bank: `${formatPercent(yieldBenchmarks.bank)} APY`,
+      broker: `${formatPercent(yieldBenchmarks.broker)} APY`,
+      wise: `${formatPercent(yieldBenchmarks.wise)} APY`,
+      splash: `${formatPercent(yieldBenchmarks.splash)} projected variable APY`,
+    },
+  ];
+
   return (
-    <main className={styles.landing}>
-      <EnvironmentRibbon />
-      <header className={styles.header}>
-        <Link href="/" className={styles.brand} aria-label="Splash home">
-          <Image src="/splash-main-icon.png" alt="" width={38} height={38} priority />
-          <span>Splash</span>
-        </Link>
-        <nav className={styles.nav} aria-label="Primary navigation">
-          {navItems.map(([label, href]) => <a href={href} key={label}>{label}</a>)}
-        </nav>
-        <div className={styles.headerActions}>
-          <Link href="/login">Sign in</Link>
-          <Link href="/signup" className={styles.primarySmall}>Book demo</Link>
+    <main className="iso-landing">
+      <header className={`iso-header ${showBackToTop ? 'is-scrolled' : ''}`}>
+        <div className="iso-shell iso-header-inner">
+          <Link href="/" className="iso-brand" aria-label="Splash Finance home">
+            <Image src="/splash-main-icon.png" alt="" width={48} height={47} className="iso-header-brand-icon" priority />
+            <span className="iso-header-wordmark">
+              <strong>Splash</strong>
+              <small>Account network for cross-border money</small>
+            </span>
+          </Link>
+
+          <nav className="iso-nav" aria-label="Primary navigation">
+            <a href="#operating-layer">Platform</a>
+            <a href="#comparison">Compare</a>
+            <a href="#how-it-works">How it works</a>
+            <a href="#walrus">Walrus</a>
+            <a href="#corridors">Corridors</a>
+            <a href="#readiness">Readiness</a>
+          </nav>
+
+          <div className="iso-header-actions">
+            <Link href="/signup" className="iso-button iso-button-small">
+              Start sending
+              <ArrowDownRight aria-hidden="true" />
+            </Link>
+          </div>
         </div>
       </header>
 
-      <section className={styles.hero}>
-        <div className={styles.heroArt} aria-hidden="true">
-          <Image src="/isometric/v3/hero-network.svg" alt="" width={960} height={640} priority />
-        </div>
-        <div className={styles.heroGrid}>
-          <div className={styles.heroCopy}>
-            <p className={styles.eyebrow}>Built for regulated cross-border operations</p>
-            <h1>
-              Collect USD. Pay <br className={styles.mobileBreak} />Southeast Asia. <br className={styles.mobileBreak} />Keep cash <span>working.</span>
+      <section id="hero" className="iso-hero">
+        <div className="iso-grid-plane" aria-hidden="true" />
+        <div className="iso-orb iso-orb-a" aria-hidden="true" />
+        <div className="iso-orb iso-orb-b" aria-hidden="true" />
+
+        <div className="iso-shell iso-hero-layout">
+          <div className="iso-hero-copy">
+            <p className="iso-kicker">Splash</p>
+            <h1 className="iso-display">
+              MOVE MONEY.
+              <span>Faster &amp; Wiser.</span>
             </h1>
-            <p>{claims.heroSub.claim}</p>
-            <div className={styles.actions}>
-              <Link href="/signup" className={styles.primary}>Book demo <ArrowRight aria-hidden="true" /></Link>
-              <Link href="/dashboard" className={styles.secondary}>Explore sandbox</Link>
+            <p className="iso-hero-description">
+              A compliance-gated B2B account network for cross-border money: pay, get paid, sweep, and keep value
+              with human-approved AI, access-controlled records, and Sui settlement.
+            </p>
+
+            <div className="iso-hero-actions">
+              <Link href="/signup" className="iso-button">
+                Open payment desk
+                <ArrowRight aria-hidden="true" />
+              </Link>
+              <a href="#how-it-works" className="iso-button iso-button-ghost">
+                See the money move
+              </a>
             </div>
-            <div className={styles.trustPills} aria-label="Trust signals">
-              {['KYB-ready', 'Approval-led controls', 'Audit trail', 'Qualified custody'].map((item) => (
-                <span key={item}><Check aria-hidden="true" />{item}</span>
-              ))}
+
+            <div className="iso-proof-line">
+              <span><Check aria-hidden="true" /> Compliance-gated</span>
+              <span><Check aria-hidden="true" /> Verifiable</span>
             </div>
           </div>
-          <div className={styles.previewWrap}>
-            <DashboardPreview />
+
+          <div className="iso-hero-stage" aria-label="Splash Finance isometric settlement network">
+            <div className="iso-stage-shadow" aria-hidden="true" />
+            <Image
+              src="/isometric/hero-bg.svg"
+              alt="Isometric Southeast Asia payment and treasury network"
+              width={2172}
+              height={1629}
+              priority
+              className="iso-hero-main-art"
+            />
+            <div className="iso-floating-note iso-floating-note-a">
+              <span>TESTNET</span>
+              <strong>USD to PHP</strong>
+              <small>{lockedCopy.speed}</small>
+            </div>
+            <div className="iso-floating-note iso-floating-note-b">
+              <span>MODELED</span>
+              <strong>USD to MYR</strong>
+              <small>partner activation required</small>
+            </div>
+            <div className="iso-floating-note iso-floating-note-c">
+              <span>TREASURY</span>
+              <strong>USDY</strong>
+              <small>variable APY, approval gated</small>
+            </div>
+          </div>
+        </div>
+
+        <div className="iso-marquee" aria-label="Platform metrics">
+          <div className="iso-marquee-track">
+            {[...marqueeItems, ...marqueeItems].map(([value, label], index) => (
+              <div className="iso-marquee-item" key={`${value}-${index}`}>
+                <strong>{value}</strong>
+                <span>{label}</span>
+                <i aria-hidden="true">◆</i>
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
-      <section className={styles.trustStrip} aria-label="Trust and infrastructure">
-        {trustTiers.map((tier) => (
-          <div className={styles.trustTier} key={tier.title}>
-            <h2>{tier.title}</h2>
+      <section className="iso-partner-rail" aria-label="Infrastructure partners and benchmarks">
+        <div className="iso-shell">
+          <div className="iso-partner-intro">
+            <span>Infrastructure &amp; Partners</span>
+            <p>Licensed-partner rails outside. Sui-native settlement inside.</p>
+          </div>
+          <div className="iso-partner-grid">
+            {partnerRail.map((partner) => (
+              <div className="iso-partner-item" key={partner.name}>
+                <Image
+                  src={partner.src}
+                  alt={`${partner.name} logo`}
+                  width={120}
+                  height={80}
+                  className={partner.logoClass}
+                />
+                <span>
+                  <strong>{partner.name}</strong>
+                  <small>{partner.role}</small>
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="comparison" className="iso-section iso-comparison">
+        <div className="iso-shell">
+          <div className="iso-section-heading iso-heading-split">
             <div>
-              {tier.items.map(([name, role, status]) => (
-                <article key={name}>
-                  <strong>{name}</strong>
-                  <span>{role}</span>
-                  <SourceBadge state={status} />
+              <p className="iso-kicker">Comparison</p>
+              <h2 className="iso-section-title">
+                Built for business.
+                <span>Designed to move.</span>
+              </h2>
+            </div>
+            <p>
+              Splash makes internal account movement free, charges when value exits to local rails, and adds
+              programmable settlement, approval-led AI, and private audit proof.
+            </p>
+          </div>
+
+          <div className="iso-comparison-wrap">
+            <table className="iso-comparison-table">
+              <thead>
+                <tr>
+                  <th>Feature</th>
+                  <th>Bank</th>
+                  <th>Broker</th>
+                  <th>Wise</th>
+                  <th className="is-splash">Splash</th>
+                </tr>
+              </thead>
+              <tbody>
+                {liveComparisonRows.map((row) => (
+                  <tr key={row.feature}>
+                    <th scope="row">{row.feature}</th>
+                    <td>{row.bank}</td>
+                    <td>{row.broker}</td>
+                    <td>{row.wise}</td>
+                    <td className="is-splash"><Check aria-hidden="true" /> {row.splash}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="iso-yield-live">
+              <i aria-hidden="true" />
+              <strong>Reference yield benchmark</strong>
+              <span>
+                FDIC national savings - IBKR Pro cash - Wise USD Interest - Splash treasury projection
+                {yieldBenchmarks.asOf ? ` - refreshed ${new Date(yieldBenchmarks.asOf).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="operating-layer" className="iso-section iso-operating">
+        <div className="iso-shell">
+          <div className="iso-section-heading iso-heading-split">
+            <div>
+              <p className="iso-kicker">One operating layer</p>
+              <h2 className="iso-section-title">
+                Finance, with
+                <span>depth.</span>
+              </h2>
+            </div>
+            <p>
+              Splash turns settlement primitives into clear operating tools. Funding, payout, receivables,
+              and treasury actions stay approval-gated and sandboxed until licensed rails are active.
+            </p>
+          </div>
+
+          <div className="iso-layer-grid">
+            {operatingLayers.map((layer, index) => (
+              <article className={`iso-layer-card iso-layer-card-${index + 1}`} key={layer.number}>
+                <div className="iso-layer-meta">
+                  <span>{layer.number}</span>
+                  <p>{layer.label}</p>
+                </div>
+                <div className="iso-layer-art">
+                  <Image src={layer.image} alt={layer.imageAlt} width={1448} height={1086} />
+                </div>
+                <div className="iso-layer-copy">
+                  <h3>{layer.title}</h3>
+                  <p>{layer.copy}</p>
+                  <small>{layer.meta}</small>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="how-it-works" className="iso-section iso-flow">
+        <div className="iso-shell iso-flow-layout">
+          <div className="iso-flow-copy">
+            <p className="iso-kicker">How it works</p>
+            <h2 className="iso-section-title iso-section-title-light">
+              Five steps.
+              <span>No limbo.</span>
+            </h2>
+            <p className="iso-flow-intro">
+              Follow value from invoice or USD intake, through controls, settlement, local delivery, and proof.
+            </p>
+
+            <div className="iso-flow-tabs" role="tablist" aria-label="Settlement flow">
+              {flowSteps.map((step) => {
+                const active = activeFlow.id === step.id;
+                return (
+                  <button
+                    key={step.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    className={active ? 'is-active' : ''}
+                    onClick={() => setActiveFlow(step)}
+                  >
+                    <span>{step.number}</span>
+                    <strong>{step.title}</strong>
+                    <ChevronRight aria-hidden="true" />
+                  </button>
+                );
+              })}
+            </div>
+            <div className="iso-flow-branch">
+              <strong>Working-capital branch</strong>
+              <span>Accepted invoice to supplier discount offer to buyer approval to settlement proof.</span>
+            </div>
+          </div>
+
+          <div className="iso-flow-visual" role="tabpanel" aria-live="polite">
+            <div className="iso-flow-stat">
+              <small>Current checkpoint</small>
+              <strong>{activeFlow.stat}</strong>
+            </div>
+            <div className={`iso-flow-image ${activeFlow.id === 'intake' ? 'iso-flow-image-white iso-flow-image-fund' : ''}`}>
+              <Image
+                key={activeFlow.id}
+                src={activeFlow.image}
+                alt={activeFlow.imageAlt}
+                width={1448}
+                height={1086}
+                priority={activeFlow.id === 'settle'}
+              />
+            </div>
+            <div className="iso-flow-caption">
+              <span>{activeFlow.number}</span>
+              <div>
+                <strong>{activeFlow.title}</strong>
+                <p>{activeFlow.description}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="copilot" className="iso-section iso-copilot">
+        <div className="iso-shell iso-copilot-layout">
+          <div className="iso-copilot-stage">
+            <Image
+              src="/isometric/walrus-logo.svg"
+              alt="Walrus isometric logo"
+              width={2172}
+              height={1629}
+            />
+            <div className="iso-copilot-memory">
+              <BrainCircuit aria-hidden="true" />
+              <span>
+                <small>MemWal remembers patterns</small>
+                <strong>AI proposes. Your team approves.</strong>
+              </span>
+            </div>
+          </div>
+
+          <div className="iso-copilot-copy">
+            <p className="iso-kicker">AI Copilot</p>
+            <h2 className="iso-section-title">
+              Context that gets
+              <span>more useful.</span>
+            </h2>
+            <p>
+              The copilot connects rates, invoices, batch habits, and treasury posture without storing PII,
+              account numbers, transaction hashes, or raw dollar amounts in MemWal.
+            </p>
+            <div className="iso-copilot-list">
+              {copilotLayers.map(({ icon: Icon, title, copy }) => (
+                <article key={title}>
+                  <Icon aria-hidden="true" />
+                  <span>
+                    <strong>{title}</strong>
+                    <small>{copy}</small>
+                  </span>
                 </article>
               ))}
             </div>
           </div>
-        ))}
-      </section>
-
-      <section id="product" className={styles.section}>
-        <div className={styles.sectionHead}>
-          <p className={styles.eyebrow}>Product</p>
-          <h2>Four jobs, one operating account.</h2>
-          <p>Clean product surfaces first; isometric identity only where it helps people remember the network.</p>
-        </div>
-        <div className={styles.jobGrid}>
-          {jobs.map(({ icon: Icon, title, line, support, href }) => (
-            <a href={href} className={styles.jobCard} key={title}>
-              <span><Icon aria-hidden="true" /></span>
-              <strong>{title}</strong>
-              <p>{line}</p>
-              <small>{support}</small>
-            </a>
-          ))}
+          {!arrowGone && (
+            <button
+              type="button"
+              onClick={launchArrow}
+              className={`iso-copilot-next ${arrowLaunching ? 'is-launching' : ''}`}
+              aria-label="Continue to permanent records on Walrus"
+            >
+              <Image src="/isometric/arrow-coin.svg" alt="" width={180} height={180} />
+              <span>More below</span>
+            </button>
+          )}
         </div>
       </section>
 
-      <section id="how-it-works" className={`${styles.section} ${styles.how}`}>
-        <div className={styles.sectionHead}>
-          <p className={styles.eyebrow}>How it works</p>
-          <h2>Money movement with fewer blind spots.</h2>
-        </div>
-        <div className={styles.flowGrid}>
-          {flow.map(([number, title, copy]) => (
-            <article key={number}>
-              <span>{number}</span>
-              <strong>{title}</strong>
-              <p>{copy}</p>
-            </article>
-          ))}
-          <a href="#receivables" className={styles.branchChip}>Or get paid early <ArrowRight aria-hidden="true" /></a>
-        </div>
-      </section>
+      <section id="walrus" className="iso-section iso-walrus">
+        <div className="iso-shell iso-walrus-layout">
+          <div className="iso-walrus-copy">
+            <div className="iso-walrus-brand">
+              <Image src="/isometric/walrus-logo.svg" alt="Walrus" width={48} height={48} />
+              <span>Permanent records on Walrus</span>
+            </div>
+            <h2 className="iso-section-title iso-section-title-light">
+              Proof that outlives
+              <span>the payment.</span>
+            </h2>
+            <p>
+              Splash stores encrypted invoices and daily settlement proofs on Walrus, then anchors every batch on Sui.
+              Your records remain durable, private, and independently verifiable.
+            </p>
 
-      <section className={styles.section}>
-        <div className={styles.sectionHead}>
-          <p className={styles.eyebrow}>Modules</p>
-          <h2>Live UI crops, not raster screenshots.</h2>
-        </div>
-        <div className={styles.moduleGrid}>
-          {modules.map(({ title, copy, metric, badge, icon: Icon }) => (
-            <article className={styles.moduleCard} key={title}>
-              <div className={styles.moduleTop}>
-                <span><Icon aria-hidden="true" /></span>
-                <SourceBadge state={badge} />
-              </div>
-              <strong>{title}</strong>
-              <p>{copy}</p>
-              <div className={styles.metricLine}>{metric}</div>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section id="receivables" className={`${styles.section} ${styles.split}`}>
-        <div className={styles.scene}>
-          <Image src="/isometric/v3/receivable-flow.svg" alt="Isometric receivable lifecycle from invoice to anchored receipt" width={960} height={520} />
-        </div>
-        <div>
-          <p className={styles.eyebrow}>Receivable lifecycle</p>
-          <h2>An accepted invoice becomes a settled promise.</h2>
-          <p>An invoice your buyer accepts becomes a settled promise. Offer a discount you choose, get paid in one signature, keep the proof forever.</p>
-          <div className={styles.factChips}>
-            {['Buyer-signed on-chain', 'Funds move atomically', 'Treasury floor enforced'].map((fact) => (
-              <span key={fact}>{fact}<SourceBadge state="testnet-verified" href="/dashboard/history" /></span>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className={styles.section}>
-        <div className={styles.sectionHead}>
-          <p className={styles.eyebrow}>Compare</p>
-          <h2>Operator outcomes, not protocol theater.</h2>
-        </div>
-        <div className={styles.tableWrap}>
-          <table className={styles.compareTable}>
-            <thead>
-              <tr><th>Capability</th><th>Bank</th><th>Transfer app</th><th>Splash</th></tr>
-            </thead>
-            <tbody>
-              {comparison.map(([capability, bank, app, splash]) => (
-                <tr key={capability}>
-                  <th scope="row">{capability}</th>
-                  <td>{bank}</td>
-                  <td>{app}</td>
-                  <td>{splash}</td>
-                </tr>
+            <div className="iso-walrus-proof-list">
+              {walrusProofs.map(({ icon: Icon, title, copy, meta }) => (
+                <article key={title}>
+                  <div className="iso-walrus-proof-icon"><Icon aria-hidden="true" /></div>
+                  <div>
+                    <h3>{title}</h3>
+                    <p>{copy}</p>
+                    <small>{meta}</small>
+                  </div>
+                </article>
               ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section id="security" className={`${styles.section} ${styles.split}`}>
-        <div>
-          <p className={styles.eyebrow}>Security and compliance</p>
-          <h2>Controls people can understand.</h2>
-          <p>Every financial figure and claim is labeled by source state. Every money action keeps human approval as the final boundary.</p>
-          <Link href="/dashboard/history" className={styles.textLink}>View security details <ArrowRight aria-hidden="true" /></Link>
-        </div>
-        <div className={styles.securityGrid}>
-          {securityBlocks.map(({ icon: Icon, title, copy, badge }) => (
-            <article key={title}>
-              <Icon aria-hidden="true" />
-              <strong>{title}</strong>
-              <p>{copy}</p>
-              <SourceBadge state={badge} />
-            </article>
-          ))}
-        </div>
-        <div className={styles.sceneWide}>
-          <Image src="/isometric/v3/security-vault.svg" alt="Isometric security vault with two custodian towers" width={960} height={520} />
-        </div>
-      </section>
-
-      <section id="corridors" className={`${styles.section} ${styles.corridors}`}>
-        <div>
-          <p className={styles.eyebrow}>Corridors</p>
-          <h2>Live in one corridor. Expanding on demand, not on a map.</h2>
-          <p>MY to PH is the current testnet corridor. Other routes stay modeled until partner, liquidity and compliance gates are ready.</p>
-          <div className={styles.routeList}>
-            {routes.map(([route, label, state]) => (
-              <span key={route}><strong>{route}</strong>{label}<SourceBadge state={state} /></span>
-            ))}
+            </div>
           </div>
-        </div>
-        <div className={styles.scene}>
-          <Image src="/isometric/v3/corridors-map.svg" alt="Isometric Southeast Asia corridors map with route status badges" width={960} height={640} />
-        </div>
-      </section>
 
-      <section id="pricing" className={`${styles.section} ${styles.pricing}`}>
-        <article>
-          <p className={styles.eyebrow}>Pilot</p>
-          <h2>Custom pricing</h2>
-          <ul>
-            <li>Sandbox access</li>
-            <li>Corridor review</li>
-            <li>White-glove onboarding</li>
-          </ul>
-          <div className={styles.metricLine}>{lockedCopy.fee}<SourceBadge state={claims.fee.status} /></div>
-          <small>{lockedCopy.feeFootnote}</small>
-        </article>
-        <div>
-          <h2>Ready to modernize your payout operations?</h2>
-          <p>{lockedCopy.speed}. {lockedCopy.speedFootnote}</p>
-          <div className={styles.actions}>
-            <Link href="/signup" className={styles.primary}>Talk to operations <ArrowRight aria-hidden="true" /></Link>
-            <Link href="/dashboard" className={styles.secondary}>Request sandbox</Link>
+          <div className="iso-walrus-carousel" aria-label="Walrus, MemWal, and Seal showcase">
+            <div className="iso-walrus-slide-art">
+              <Image
+                key={walrusSlide.image}
+                src={walrusSlide.image}
+                alt={`${walrusSlide.title} isometric typography illustration`}
+                width={1536}
+                height={1024}
+                priority={activeWalrus === 0}
+              />
+            </div>
+            <div className="iso-walrus-slide-copy" aria-live="polite">
+              <span>{walrusSlide.label}</span>
+              <h3>{walrusSlide.title}</h3>
+              <p>{walrusSlide.copy}</p>
+              <div>
+                {walrusSlide.facts.map((fact) => (
+                  <small key={fact}><Check aria-hidden="true" /> {fact}</small>
+                ))}
+              </div>
+            </div>
+            <div className="iso-walrus-controls" role="tablist" aria-label="Select Walrus showcase slide">
+              {walrusSlides.map((slide, index) => (
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={activeWalrus === index}
+                  aria-label={slide.title}
+                  className={activeWalrus === index ? 'is-active' : ''}
+                  onClick={() => setActiveWalrus(index)}
+                  key={slide.title}
+                >
+                  <span>0{index + 1}</span>
+                  {slide.tab}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </section>
 
-      <footer className={styles.footer}>
-        <div>
-          <Image src="/splash-main-logo.png" alt="Splash" width={172} height={50} />
-          <p>{claims.footerLegal.claim}</p>
-          <SourceBadge state={claims.footerLegal.status} />
+      <section id="corridors" className="iso-section iso-corridors">
+        <div className="iso-shell iso-corridor-layout">
+          <div className="iso-corridor-copy">
+            <p className="iso-kicker">One testnet corridor. Modeled expansion routes.</p>
+            <h2 className="iso-section-title">
+              USD in.
+              <span>Local out.</span>
+            </h2>
+            <p>
+              The MY-to-PH corridor is the proving ground. Additional routes stay modeled until partner, liquidity,
+              and regulatory controls are ready market by market.
+            </p>
+            <div className="iso-route-list">
+              <span className="is-live">PHP testnet</span><span>MYR</span><span>IDR</span><span>VND</span>
+              <span>THB</span><span>SGD</span><span>EUR</span><span>GBP</span>
+            </div>
+            <div className="iso-recipient-ladder">
+              {recipientLadder.map((step) => (
+                <article key={step.number}>
+                  <span>{step.number}</span>
+                  <div>
+                    <small>{step.status}</small>
+                    <strong>{step.title}</strong>
+                    <p>{step.copy}</p>
+                  </div>
+                </article>
+              ))}
+            </div>
+            <Link href="/signup" className="iso-inline-link">
+              Open the payout desk
+              <ArrowRight aria-hidden="true" />
+            </Link>
+          </div>
+
+          <div className="iso-corridor-stage">
+            <div className="iso-corridor-number" aria-hidden="true">01</div>
+            <Image
+              src="/isometric/corridors.svg"
+              alt="Isometric platform showing modeled corridor expansion"
+              width={1448}
+              height={1086}
+            />
+          </div>
         </div>
-        <nav aria-label="Footer">
-          <a href="#product">Product</a>
-          <a href="#how-it-works">Solutions</a>
-          <a href="#security">Security</a>
-          <a href="#corridors">Resources</a>
-          <Link href="/login">Company</Link>
-          <a href="#pricing">Legal</a>
-        </nav>
+      </section>
+
+      <section id="readiness" className="iso-section iso-readiness">
+        <div className="iso-shell iso-readiness-layout">
+          <div className="iso-readiness-copy">
+            <p className="iso-kicker">Scale</p>
+            <h2 className="iso-section-title">
+              Proof becomes
+              <span>repeatable.</span>
+            </h2>
+            <p>
+              Scale is earned, not announced. These are the gates that turn a payout prototype into a repeatable
+              closed-loop account network.
+            </p>
+            <div className="iso-readiness-list">
+              {readinessGates.map(({ icon: Icon, title, copy }) => (
+                <article key={title}>
+                  <Icon aria-hidden="true" />
+                  <span>
+                    <strong>{title}</strong>
+                    <small>{copy}</small>
+                  </span>
+                </article>
+              ))}
+            </div>
+            <div className="iso-scale-metrics" aria-label="Scale proof metrics">
+              {scaleMetrics.map(([metric, definition]) => (
+                <span key={metric}>
+                  <strong>{metric}</strong>
+                  <small>{definition}</small>
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className="iso-readiness-stage">
+            <Image src="/isometric/splash-hero.svg" alt="Splash isometric global settlement engine" width={2172} height={1629} />
+            <div className="iso-readiness-card">
+              <Sparkles aria-hidden="true" />
+              <span>
+                <small>Scale unlock</small>
+                <strong>Pay + get paid + sweep + keep</strong>
+                <p>After corridor controls, reliability, netting, counterparty pull, and retention are repeatable.</p>
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="operations" className="iso-section iso-products">
+        <div className="iso-shell">
+          <div className="iso-section-heading iso-heading-split">
+            <div>
+              <p className="iso-kicker">Operating Desk</p>
+              <h2 className="iso-section-title">
+                More than
+                <span>a transfer.</span>
+              </h2>
+            </div>
+            <p>
+              The operating desk connects payout, receivables, reconciliation, access-controlled records, and approval-led
+              recommendations so finance teams can run the full loop.
+            </p>
+          </div>
+
+          <div className="iso-product-rail">
+            {phaseOneTools.map((tool) => {
+              const Icon = tool.icon;
+              const active = activeTool?.number === tool.number;
+              return (
+                <button
+                  type="button"
+                  className={`iso-product-row ${active ? 'is-active' : ''}`}
+                  aria-expanded={active}
+                  onClick={() => setActiveTool(tool)}
+                  key={tool.number}
+                >
+                  <span className="iso-product-number">{tool.number}</span>
+                  <span className="iso-product-icon"><Icon aria-hidden="true" /></span>
+                  <span className="iso-product-copy">
+                    <strong>{tool.title}</strong>
+                    <small>{tool.copy}</small>
+                  </span>
+                  <ChevronRight className="iso-product-chevron" aria-hidden="true" />
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {activeTool && (
+        <div className="iso-tool-modal" role="presentation" onClick={() => setActiveTool(null)}>
+          <article
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="iso-tool-modal-title"
+            className="iso-tool-modal-panel"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button type="button" className="iso-tool-modal-close" onClick={() => setActiveTool(null)} aria-label="Close tool preview">
+              <X aria-hidden="true" />
+            </button>
+            <div className="iso-tool-modal-art">
+              <div className="iso-tool-modal-wordmark" aria-hidden="true">
+                <span>{activeTool.number}</span>
+                <strong>{activeTool.title}</strong>
+              </div>
+              <Image src={activeTool.image} alt={activeTool.imageAlt} width={1448} height={1086} />
+              <div className="iso-tool-modal-metric">
+                <span>{activeTool.number}</span>
+                <strong>{activeTool.metric}</strong>
+                <small>{activeTool.result}</small>
+              </div>
+            </div>
+            <div className="iso-tool-modal-copy">
+              <span>Operating Desk / {activeTool.number}</span>
+              <h3 id="iso-tool-modal-title">{activeTool.title}</h3>
+              <p>{activeTool.copy}</p>
+              <div className="iso-tool-modal-facts">
+                {activeTool.facts.map((fact) => <small key={fact}><Check aria-hidden="true" /> {fact}</small>)}
+              </div>
+              <Link href={activeTool.href} className="iso-button">
+                Open {activeTool.title}
+                <ArrowRight aria-hidden="true" />
+              </Link>
+            </div>
+          </article>
+        </div>
+      )}
+
+      <section className="iso-section iso-final">
+        <div className="iso-shell iso-final-panel">
+          <div className="iso-final-copy">
+            <p className="iso-kicker">Move money better</p>
+            <h2 className="iso-section-title iso-section-title-light">
+              Your global treasury,
+              <span>finally programmable.</span>
+            </h2>
+            <p>
+              Start with USD. Prove the MY-to-PH path. Expand only when controls and partners are ready.
+            </p>
+            <div className="iso-hero-actions">
+              <Link href="/signup" className="iso-button iso-button-gold">
+                Start sending
+                <ArrowRight aria-hidden="true" />
+              </Link>
+              <Link href="/login" className="iso-button iso-button-dark-ghost">Log in</Link>
+            </div>
+          </div>
+
+          <div className="iso-final-art">
+            <Image
+              src="/isometric/payments.svg"
+              alt="Isometric local currency payment receipt"
+              width={1448}
+              height={1086}
+            />
+          </div>
+        </div>
+      </section>
+
+      <footer className="iso-footer">
+        <div className="iso-shell iso-footer-inner">
+          <div className="iso-brand iso-brand-footer">
+            <Image src="/splash-main-logo.png" alt="Splash Finance" width={310} height={90} className="iso-main-logo iso-main-logo-footer" />
+          </div>
+          <p>USD-first settlement infrastructure for Southeast Asian finance teams.</p>
+          <nav aria-label="Footer navigation">
+            <a href="#operating-layer">Platform</a>
+            <a href="#comparison">Compare</a>
+            <a href="#how-it-works">How it works</a>
+            <a href="#walrus">Walrus</a>
+            <a href="#corridors">Corridors</a>
+            <a href="#readiness">Readiness</a>
+            <Link href="/login">Log in</Link>
+          </nav>
+          <small>{claims.footerLegal.claim}</small>
+        </div>
       </footer>
+      <button
+        type="button"
+        className={`iso-back-to-top ${showBackToTop ? 'is-visible' : ''}`}
+        onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+        aria-label="Back to top"
+      >
+        <ArrowUp aria-hidden="true" />
+      </button>
     </main>
   );
 }
