@@ -113,6 +113,24 @@ const marqueeItems = [
   ['Stored proof', 'Walrus + Sui audit'],
 ];
 
+const clientProofPoints = [
+  {
+    icon: Gauge,
+    title: 'Fast transfers',
+    copy: 'Go from recipient to quote to approval in one guided flow, with Sui settlement finality measured in milliseconds.',
+  },
+  {
+    icon: ShieldCheck,
+    title: 'Safe authorization',
+    copy: 'Every payout keeps source selection, risk checks, rate holds, and human approval visible before money moves.',
+  },
+  {
+    icon: FileCheck2,
+    title: 'Audit-ready records',
+    copy: 'Invoices, receipts, payment intents, and settlement proof stay connected so audit prep is already organized.',
+  },
+];
+
 const partnerRail: Array<{ src: string; name: string; role: string; logoClass?: string }> = [
   { src: '/stripe-logo.svg', name: 'Stripe', role: 'USD collection' },
   { src: '/airwallex-mark.png', name: 'Airwallex', role: 'bank rails', logoClass: 'iso-airwallex-logo' },
@@ -1064,6 +1082,41 @@ export default function IsometricLanding() {
           </article>
         </div>
       )}
+
+      <section className="iso-section iso-client-proof" aria-labelledby="client-proof-title">
+        <div className="iso-shell iso-client-proof-layout">
+          <div className="iso-feedback-quote">
+            <p className="iso-kicker">User feedback</p>
+            <blockquote>
+              &ldquo;I don&rsquo;t have time to compile every payout, chase every invoice, and gather proof every time an auditor asks.&rdquo;
+            </blockquote>
+            <p>
+              Splash turns that messy back-office work into a single transfer path: choose a saved recipient, approve the source,
+              send safely, and keep the proof ready.
+            </p>
+          </div>
+
+          <div className="iso-benefit-stack" aria-label="Splash transfer benefits">
+            <h2 id="client-proof-title" className="iso-section-title">
+              Built for teams that need money to move
+              <span>fast, safely, and with proof.</span>
+            </h2>
+            <div className="iso-benefit-grid">
+              {clientProofPoints.map(({ icon: Icon, title, copy }) => (
+                <article className="iso-benefit-card" key={title}>
+                  <div className="iso-benefit-icon">
+                    <Icon aria-hidden="true" />
+                  </div>
+                  <div>
+                    <h3>{title}</h3>
+                    <p>{copy}</p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
 
       <section className="iso-section iso-final">
         <div className="iso-shell iso-final-panel">

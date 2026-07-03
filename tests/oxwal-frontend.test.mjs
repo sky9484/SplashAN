@@ -73,6 +73,10 @@ test('ActionCard model exposes full proposal anatomy and trust treatment', () =>
 test('default dashboard is the streaming 0xWal surface and avoids browser money storage', async () => {
   const page = await readFile(new URL('../app/dashboard/page.tsx', import.meta.url), 'utf8');
   const layout = await readFile(new URL('../app/dashboard/layout.tsx', import.meta.url), 'utf8');
+  const queue = await readFile(new URL('../app/queue/page.tsx', import.meta.url), 'utf8');
+  const kybSettings = await readFile(new URL('../app/settings/kyb/page.tsx', import.meta.url), 'utf8');
+  const forgotPassword = await readFile(new URL('../app/forgot-password/page.tsx', import.meta.url), 'utf8');
+  const shell = await readFile(new URL('../components/dashboard/DashboardShell.tsx', import.meta.url), 'utf8');
 
   assert.match(page, /fetch\('\/api\/oxwal'/);
   assert.match(page, /response\.body\.getReader\(\)/);
@@ -81,8 +85,19 @@ test('default dashboard is the streaming 0xWal surface and avoids browser money 
   assert.match(page, /What's on the agenda today\?/);
   assert.match(page, /href="\/queue"/);
   assert.doesNotMatch(page, /localStorage|sessionStorage/);
-  assert.match(layout, /label: '0xWal',\s+href: '\/dashboard'/);
-  assert.match(layout, /href: '\/dashboard\/overview'/);
+  assert.match(layout, /export const dynamic = 'force-dynamic'/);
+  assert.match(layout, /<DashboardShell session=\{session\}>\{children\}<\/DashboardShell>/);
+  assert.match(shell, /label: '0xWal',\s+href: '\/dashboard'/);
+  assert.match(shell, /href: '\/dashboard\/overview'/);
+  assert.match(queue, /export const dynamic = 'force-dynamic'/);
+  assert.match(queue, /getCustomerSession/);
+  assert.match(queue, /redirect\('\/login'\)/);
+  assert.match(kybSettings, /export const dynamic = "force-dynamic"/);
+  assert.match(kybSettings, /getCustomerSession/);
+  assert.match(kybSettings, /redirect\("\/login"\)/);
+  assert.match(forgotPassword, /fetch\('\/api\/auth\/recovery'/);
+  assert.match(forgotPassword, /Recovery instructions ready/);
+  assert.doesNotMatch(forgotPassword, /setTimeout|Reset link sent|Recovery email sent/);
 });
 
 test('ActionCard component names release-gate sections and warning accent', async () => {

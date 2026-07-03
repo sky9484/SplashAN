@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
+import { requireCustomerRequest } from '@/lib/server/customer-auth';
 import { readJsonBody } from '@/lib/server/http';
 import { readInvoice, updateInvoice } from '@/lib/server/operations';
 
@@ -10,7 +11,10 @@ const patchSchema = z.object({
   transferIntentId: z.string().trim().optional(),
 });
 
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await requireCustomerRequest(request);
+  if (auth.response) return auth.response;
+
   const { id } = await params;
   const invoice = readInvoice(id);
   return invoice
@@ -19,6 +23,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 }
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await requireCustomerRequest(request);
+  if (auth.response) return auth.response;
+
   const { id } = await params;
   const parsed = patchSchema.safeParse(await readJsonBody(request));
   if (!parsed.success) return NextResponse.json({ error: 'Invalid invoice update' }, { status: 400 });

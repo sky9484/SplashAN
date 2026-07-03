@@ -33,6 +33,7 @@
 
 # local dev admin session secret (generated when ADMIN_SESSION_SECRET is unset)
 .admin-session-secret.local
+.customer-session-secret.local
 
 # debug
 npm-debug.log*

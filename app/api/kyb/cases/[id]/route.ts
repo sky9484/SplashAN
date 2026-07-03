@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server';
 
+import { requireCustomerRequest } from '@/lib/server/customer-auth';
 import { readKybCase } from '@/lib/server/kyb';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await requireCustomerRequest(request);
+  if (auth.response) return auth.response;
+
   const { id } = await params;
   const record = readKybCase(id);
 

@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { NextResponse } from 'next/server';
 
 import { verifyStoredSettlementEvidence } from '@/lib/evidence/settlement';
+import { requireCustomerRequest } from '@/lib/server/customer-auth';
 import { readAuditReceipt, readInvoice, readSweepJob, readTransferIntent } from '@/lib/server/operations';
 import { readSealPolicy, sealAdapter } from '@/lib/server/seal';
 import { retrieveBlob } from '@/lib/server/walrus';
@@ -41,7 +42,10 @@ async function settlementProof(view: NonNullable<ReturnType<typeof auditView>>) 
   };
 }
 
-export async function GET(_request: Request, { params }: { params: Promise<{ intentId: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ intentId: string }> }) {
+  const auth = await requireCustomerRequest(request);
+  if (auth.response) return auth.response;
+
   const { intentId } = await params;
   const view = auditView(intentId);
   return view
@@ -49,7 +53,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ int
     : NextResponse.json({ error: 'Audit receipt not found' }, { status: 404 });
 }
 
-export async function POST(_request: Request, { params }: { params: Promise<{ intentId: string }> }) {
+export async function POST(request: Request, { params }: { params: Promise<{ intentId: string }> }) {
+  const auth = await requireCustomerRequest(request);
+  if (auth.response) return auth.response;
+
   const { intentId } = await params;
   const view = auditView(intentId);
   const settlement = view ? await settlementProof(view) : null;

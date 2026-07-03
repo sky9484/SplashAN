@@ -22,6 +22,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [authorizing, setAuthorizing] = useState(false);
+  const [error, setError] = useState('');
 
   const canSubmit = email.trim().length > 0 && password.length >= 6 && !isSubmitting;
 
@@ -29,11 +30,31 @@ export default function LoginPage() {
     event.preventDefault();
     if (!canSubmit) return;
     setIsSubmitting(true);
-    await new Promise((resolve) => setTimeout(resolve, 450));
-    toast.success('Signed in securely');
-    setAuthorizing(true);
-    await new Promise((resolve) => setTimeout(resolve, 700));
-    router.push('/dashboard');
+    setError('');
+
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, remember }),
+      });
+      const body = await response.json().catch(() => ({})) as { error?: string };
+
+      if (!response.ok) {
+        throw new Error(body.error ?? 'Unable to sign in. Check your credentials and try again.');
+      }
+
+      toast.success('Signed in securely');
+      setAuthorizing(true);
+      router.push('/dashboard');
+      router.refresh();
+    } catch (reason) {
+      const message = reason instanceof Error ? reason.message : 'Unable to sign in. Check your credentials and try again.';
+      setError(message);
+      toast.error(message);
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   function fillDemo() {
@@ -103,6 +124,8 @@ export default function LoginPage() {
           </label>
           <Link href="/forgot-password">Forgot password?</Link>
         </div>
+
+        {error ? <p className="iso-auth-error" role="alert">{error}</p> : null}
 
         <button type="submit" disabled={!canSubmit} className="iso-auth-submit">
           {isSubmitting ? 'Signing in...' : 'Sign in to workspace'}

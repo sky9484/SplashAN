@@ -1,5 +1,6 @@
 import Image from 'next/image';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -13,6 +14,9 @@ import {
 
 import type { ProposalExplain, SimulationResult, UnsignedProposal } from '@/lib/agent/types';
 import { buildApprovalQueue, queueLanes, type QueueLane } from '@/lib/queue/approval-queue';
+import { getCustomerSession } from '@/lib/server/customer-auth';
+
+export const dynamic = 'force-dynamic';
 
 const generatedAt = new Date();
 
@@ -156,7 +160,13 @@ function riskClass(risk: UnsignedProposal['explain']['risk']) {
   return 'border-[#5C9EAD]/30 bg-[#5C9EAD]/12 text-[#326273]';
 }
 
-export default function QueuePage() {
+export default async function QueuePage() {
+  const session = await getCustomerSession();
+
+  if (!session) {
+    redirect('/login');
+  }
+
   return (
     <main className="min-h-screen bg-[#F6F0ED] px-4 py-6 text-[#326273] md:px-8">
       <div className="mx-auto flex max-w-7xl flex-col gap-6">

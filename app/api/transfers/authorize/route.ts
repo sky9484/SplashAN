@@ -24,6 +24,7 @@ import {
   resolveFundingSelection,
   type FundingSelection,
 } from '@/lib/funding/registry';
+import { requireCustomerRequest } from '@/lib/server/customer-auth';
 import { readJsonBody } from '@/lib/server/http';
 
 export const maxDuration = 60;
@@ -67,6 +68,9 @@ const authorizeSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  const auth = await requireCustomerRequest(request);
+  if (auth.response) return auth.response;
+
   const parsed = authorizeSchema.safeParse(await readJsonBody(request));
   if (!parsed.success) return NextResponse.json({ error: 'Invalid transfer authorization' }, { status: 400 });
   const body = parsed.data;

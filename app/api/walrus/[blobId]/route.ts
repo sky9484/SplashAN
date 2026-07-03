@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server';
 
+import { requireCustomerRequest } from '@/lib/server/customer-auth';
 import { retrieveBlob, WalrusAdapterError } from '@/lib/server/walrus';
 
-export async function GET(_request: Request, { params }: { params: Promise<{ blobId: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ blobId: string }> }) {
+  const auth = await requireCustomerRequest(request);
+  if (auth.response) return auth.response;
+
   const { blobId } = await params;
   try {
     const blob = await retrieveBlob(blobId);

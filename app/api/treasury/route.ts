@@ -12,6 +12,8 @@
 
 import { NextResponse } from 'next/server';
 
+import { requireCustomerRequest } from '@/lib/server/customer-auth';
+import { readJsonBody } from '@/lib/server/http';
 import {
   getLedger,
   listNotices,
@@ -43,23 +45,24 @@ function snapshot() {
   };
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const auth = await requireCustomerRequest(request);
+  if (auth.response) return auth.response;
+
   return NextResponse.json(snapshot());
 }
 
 export async function POST(request: Request) {
+  const auth = await requireCustomerRequest(request);
+  if (auth.response) return auth.response;
+
   if (process.env.TREASURY_EXECUTION_ENABLED !== 'true') {
     return NextResponse.json(
       { error: 'Projection only - execution disabled pending regulatory approval.' },
       { status: 403 },
     );
   }
-  let body: { action?: string; amountUsd?: number };
-  try {
-    body = (await request.json()) as { action?: string; amountUsd?: number };
-  } catch {
-    return NextResponse.json({ error: 'invalid json' }, { status: 400 });
-  }
+  const body = await readJsonBody(request);
 
   const amountUsd = Number(body.amountUsd);
   if (!Number.isFinite(amountUsd) || amountUsd <= 0) {

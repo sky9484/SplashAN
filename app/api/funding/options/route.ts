@@ -7,10 +7,14 @@ import {
   suggestedUsdProvider,
   type FundingSourceId,
 } from '@/lib/funding/registry';
+import { requireCustomerRequest } from '@/lib/server/customer-auth';
 import { getLedgerBalance } from '@/lib/server/operations';
 import { readLastUsedFundingSource } from '@/lib/server/funding-sessions';
 
 export async function GET(request: Request) {
+  const auth = await requireCustomerRequest(request);
+  if (auth.response) return auth.response;
+
   const url = new URL(request.url);
   const amountUsd = Number.parseFloat(url.searchParams.get('amountUsd') ?? '0');
   const amountDueMicro = Number.isFinite(amountUsd) && amountUsd > 0 ? Math.round(amountUsd * 1_000_000) : 0;

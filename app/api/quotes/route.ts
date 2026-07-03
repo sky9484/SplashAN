@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server';
 
+import { requireCustomerRequest } from '@/lib/server/customer-auth';
 import { readJsonBody } from '@/lib/server/http';
 import { calculateQuote } from '@/lib/server/quote';
 
 export async function POST(request: Request) {
+  const auth = await requireCustomerRequest(request);
+  if (auth.response) return auth.response;
+
   const body = await readJsonBody(request);
   const fromAmountSen = body.fromAmount === undefined
     ? Math.round(Number(body.amount ?? 0) * 100)

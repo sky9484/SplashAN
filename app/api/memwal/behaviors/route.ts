@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 
+import { requireCustomerRequest } from '@/lib/server/customer-auth';
 import { recallMemories } from '@/lib/server/memwal';
 
 const demoBehaviors = [
@@ -11,7 +12,10 @@ const demoBehaviors = [
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: Request) {
+  const auth = await requireCustomerRequest(request);
+  if (auth.response) return auth.response;
+
   try {
     const recalled = await recallMemories('business payment behavior patterns', 3);
     const seen = new Set<string>();

@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { FundingRegistryError, type FundingSelection } from '@/lib/funding/registry';
+import { requireCustomerRequest } from '@/lib/server/customer-auth';
 import { createFundingSession } from '@/lib/server/funding-sessions';
 import { readJsonBody } from '@/lib/server/http';
 
@@ -29,6 +30,9 @@ const sessionSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  const auth = await requireCustomerRequest(request);
+  if (auth.response) return auth.response;
+
   const parsed = sessionSchema.safeParse(await readJsonBody(request));
   if (!parsed.success) return NextResponse.json({ error: 'Invalid funding session request' }, { status: 400 });
 
