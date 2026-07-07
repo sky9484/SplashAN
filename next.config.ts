@@ -7,6 +7,8 @@ const nextConfig: NextConfig = {
     root: process.cwd(),
   },
   images: {
+    // 90 is used by the landing hero artwork for crispness under scale.
+    qualities: [75, 90],
     remotePatterns: [
       {
         protocol: "https",

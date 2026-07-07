@@ -24,6 +24,8 @@ import {
   X,
 } from 'lucide-react';
 
+import FloatingToken from '@/components/landing/FloatingToken';
+import SettlementCinematic from '@/components/landing/SettlementCinematic';
 import { claims, lockedCopy } from '@/content/claims';
 
 const operatingLayers = [
@@ -32,8 +34,8 @@ const operatingLayers = [
     label: 'Liquidity',
     title: 'Keep USD productive.',
     copy: 'Keep payout inventory ready while treasury projections model how excess USD could remain productive.',
-    image: '/isometric/liquidity-pools.svg',
-    imageAlt: 'Isometric stablecoin liquidity pools',
+    image: '/cinematic/liquidity-pools.png',
+    imageAlt: 'Tiered isometric liquidity pools with gold coin reserves flowing between basins',
     meta: 'Available cash - projected treasury',
   },
   {
@@ -41,8 +43,8 @@ const operatingLayers = [
     label: 'Settlement',
     title: 'Funds cannot get stuck.',
     copy: 'Every payment intent settles or reverts atomically in one programmable Sui transaction.',
-    image: '/isometric/transfer.svg',
-    imageAlt: 'Transparent isometric payment settlement receipt',
+    image: '/cinematic/settlement-machine.png',
+    imageAlt: 'Isometric settlement machine turning US dollar coins into local currency through a checkpoint',
     meta: lockedCopy.speed,
   },
   {
@@ -50,8 +52,8 @@ const operatingLayers = [
     label: 'Treasury',
     title: 'Make cash work harder.',
     copy: '0xWal recommends a treasury posture. Your business approves every action; execution remains gated.',
-    image: '/isometric/treasury.svg',
-    imageAlt: 'Isometric smart treasury card',
+    image: '/cinematic/treasury-island.png',
+    imageAlt: 'Isometric floating treasury island with an open vault of reserves and orbiting coins',
     meta: 'Simulation - human approval',
   },
 ];
@@ -62,17 +64,17 @@ const flowSteps = [
     number: '01',
     title: 'Collect or upload',
     description: 'Create a pay link, upload an accepted invoice, or fund USD into the operating account.',
-    image: '/isometric/USD.svg',
-    imageAlt: 'USD and stablecoin isometric illustration',
+    image: '/cinematic/flow-collect.png',
+    imageAlt: 'Collect isometric typography with an invoice, pay link, and dollar coins',
     stat: 'Pay link or invoice',
   },
   {
     id: 'review',
     number: '02',
-    title: 'Review controls',
+    title: 'Review quotes',
     description: 'KYB, recipient status, route, fee, treasury floor, and evidence labels appear before signature.',
-    image: '/isometric/checklist-icon.svg',
-    imageAlt: 'Isometric operating checklist',
+    image: '/cinematic/flow-review-quotes.png',
+    imageAlt: 'Review quotes isometric typography with FX quote cards, checklist, and approval stamp',
     stat: 'Human approval',
   },
   {
@@ -80,8 +82,8 @@ const flowSteps = [
     number: '03',
     title: 'Settle in one signature',
     description: 'The prepared payment either completes as approved or stops safely before funds move.',
-    image: '/isometric/payment-intent.svg',
-    imageAlt: 'Isometric Sui payment intent',
+    image: '/cinematic/flow-settle.png',
+    imageAlt: 'Settle isometric typography with a coin passing an approval gate and a signing pen',
     stat: lockedCopy.speed,
   },
   {
@@ -89,8 +91,8 @@ const flowSteps = [
     number: '04',
     title: 'Deliver locally',
     description: 'Pay a verified supplier or sweep value into the recipient ladder where the corridor allows it.',
-    image: '/isometric/payments.svg',
-    imageAlt: 'Isometric cross-border payment receipt',
+    image: '/cinematic/flow-deliver.png',
+    imageAlt: 'Deliver isometric typography with a truck bringing a peso coin to a local shop',
     stat: lockedCopy.fee,
   },
   {
@@ -98,8 +100,8 @@ const flowSteps = [
     number: '05',
     title: 'Anchor the proof',
     description: 'Receipts, encrypted documents, and daily audit evidence remain available for review.',
-    image: '/isometric/walrus-logo.svg',
-    imageAlt: 'Walrus storage proof illustration',
+    image: '/cinematic/flow-proof.png',
+    imageAlt: 'Proof isometric typography with an archive vault, sealed certificate, and shield badge',
     stat: 'Walrus + Sui audit',
   },
 ];
@@ -115,13 +117,40 @@ const marqueeItems = [
 
 const partnerRail: Array<{ src: string; name: string; role: string; logoClass?: string }> = [
   { src: '/stripe-logo.svg', name: 'Stripe', role: 'USD collection' },
-  { src: '/airwallex-mark.png', name: 'Airwallex', role: 'bank rails', logoClass: 'iso-airwallex-logo' },
-  { src: '/pyth-logo.png', name: 'Pyth', role: 'FX and peg data' },
+  { src: '/partners/airwallex.png', name: 'Airwallex', role: 'bank rails', logoClass: 'iso-airwallex-logo' },
+  { src: '/partners/pyth.png', name: 'Pyth', role: 'FX and peg data' },
   { src: '/deepbook-mark.png', name: 'DeepBook', role: 'amount-sized liquidity', logoClass: 'iso-deepbook-logo' },
   { src: '/sumsub-logo.png', name: 'Sumsub', role: 'KYB and KYC' },
-  { src: '/walrus-logo.svg', name: 'Walrus', role: 'permanent records' },
+  { src: '/partners/walrus.png', name: 'Walrus', role: 'permanent records' },
   { src: '/sui-logo-blue.svg', name: 'Sui', role: 'settlement network' },
 ];
+
+/** Partner badge that inflates like a balloon on click, pops, then floats
+    back up from below. */
+function PartnerBadge({ src, name, role, logoClass }: (typeof partnerRail)[number]) {
+  const [popping, setPopping] = useState(false);
+  return (
+    <button
+      type="button"
+      className="iso-partner-item cin-partner"
+      onClick={() => setPopping(true)}
+      aria-label={`${name} — ${role}`}
+    >
+      <span
+        className={`cin-partner-logo ${popping ? 'is-popping' : ''}`}
+        onAnimationEnd={(event) => {
+          if (event.animationName === 'cin-balloon') setPopping(false);
+        }}
+      >
+        <Image src={src} alt={`${name} logo`} width={240} height={140} className={logoClass} />
+      </span>
+      <span>
+        <strong>{name}</strong>
+        <small>{role}</small>
+      </span>
+    </button>
+  );
+}
 
 const comparisonRows = [
   {
@@ -401,10 +430,11 @@ const phaseOneTools = [
   },
 ];
 
+/* Ordered to match the page's narrative: how it works → compare → platform → proof → routes → scale. */
 const headerNavItems = [
+  { href: '#how-it-works', label: 'How it works', detail: '5 steps' },
+  { href: '#comparison', label: 'Compare', detail: 'Fees + speed' },
   { href: '#operating-layer', label: 'Platform', detail: 'Pay + treasury' },
-  { href: '#how-it-works', label: 'Workflow', detail: '5 steps' },
-  { href: '#comparison', label: 'Compare', detail: 'Fees + proof' },
   { href: '#walrus', label: 'Proof', detail: 'Walrus + Sui' },
   { href: '#corridors', label: 'Routes', detail: 'MY-PH testnet' },
   { href: '#readiness', label: 'Scale', detail: 'Controls' },
@@ -415,8 +445,6 @@ export default function IsometricLanding() {
   const [activeWalrus, setActiveWalrus] = useState(0);
   const [yieldBenchmarks, setYieldBenchmarks] = useState(fallbackYieldBenchmarks);
   const [showBackToTop, setShowBackToTop] = useState(false);
-  const [arrowLaunching, setArrowLaunching] = useState(false);
-  const [arrowGone, setArrowGone] = useState(false);
   const [activeTool, setActiveTool] = useState<(typeof phaseOneTools)[number] | null>(null);
 
   useEffect(() => {
@@ -463,6 +491,30 @@ export default function IsometricLanding() {
   }, []);
 
   useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    const targets = document.querySelectorAll(
+      '.iso-section > .iso-shell, .iso-partner-rail > .iso-shell',
+    );
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('is-inview');
+            observer.unobserve(entry.target);
+          }
+        });
+      },
+      { rootMargin: '0px 0px -12% 0px' },
+    );
+    targets.forEach((el) => {
+      el.classList.add('cin-reveal');
+      observer.observe(el);
+    });
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
     if (!activeTool) return;
 
     function closeOnEscape(event: KeyboardEvent) {
@@ -472,18 +524,6 @@ export default function IsometricLanding() {
     window.addEventListener('keydown', closeOnEscape);
     return () => window.removeEventListener('keydown', closeOnEscape);
   }, [activeTool]);
-
-  function launchArrow() {
-    if (arrowLaunching || arrowGone) return;
-    setArrowLaunching(true);
-    window.setTimeout(() => {
-      document.querySelector('#walrus')?.scrollIntoView({ behavior: 'smooth' });
-    }, 620);
-    window.setTimeout(() => {
-      setArrowGone(true);
-      setArrowLaunching(false);
-    }, 1050);
-  }
 
   const walrusSlide = walrusSlides[activeWalrus];
   const liveComparisonRows = [
@@ -502,7 +542,7 @@ export default function IsometricLanding() {
       <header className={`iso-header ${showBackToTop ? 'is-scrolled' : ''}`}>
         <div className="iso-shell iso-header-inner">
           <Link href="/" className="iso-brand" aria-label="Splash Finance home">
-            <Image src="/splash-main-icon.png" alt="" width={48} height={47} className="iso-header-brand-icon" priority />
+            <Image src="/cinematic/brand-mark.png" alt="" width={256} height={256} className="iso-header-brand-icon" priority />
             <span className="iso-header-wordmark">
               <strong>Splash</strong>
               <small>Account network for cross-border money</small>
@@ -531,79 +571,19 @@ export default function IsometricLanding() {
         </div>
       </header>
 
-      <section id="hero" className="iso-hero">
-        <div className="iso-grid-plane" aria-hidden="true" />
-        <div className="iso-orb iso-orb-a" aria-hidden="true" />
-        <div className="iso-orb iso-orb-b" aria-hidden="true" />
+      <SettlementCinematic />
 
-        <div className="iso-shell iso-hero-layout">
-          <div className="iso-hero-copy">
-            <p className="iso-kicker">Splash</p>
-            <h1 className="iso-display">
-              MOVE MONEY.
-              <span>Faster &amp; Wiser.</span>
-            </h1>
-            <p className="iso-hero-description">
-              A compliance-gated B2B account network for cross-border money: pay, get paid, sweep, and keep value
-              with human-approved AI, access-controlled records, and Sui settlement.
-            </p>
-
-            <div className="iso-hero-actions">
-              <Link href="/signup" className="iso-button">
-                Open payment desk
-                <ArrowRight aria-hidden="true" />
-              </Link>
-              <a href="#how-it-works" className="iso-button iso-button-ghost">
-                See the money move
-              </a>
+      <div className="iso-marquee is-static" aria-label="Platform metrics">
+        <div className="iso-marquee-track">
+          {[...marqueeItems, ...marqueeItems].map(([value, label], index) => (
+            <div className="iso-marquee-item" key={`${value}-${index}`}>
+              <strong>{value}</strong>
+              <span>{label}</span>
+              <i aria-hidden="true">◆</i>
             </div>
-
-            <div className="iso-proof-line">
-              <span><Check aria-hidden="true" /> Compliance-gated</span>
-              <span><Check aria-hidden="true" /> Verifiable</span>
-            </div>
-          </div>
-
-          <div className="iso-hero-stage" aria-label="Splash Finance isometric settlement network">
-            <div className="iso-stage-shadow" aria-hidden="true" />
-            <Image
-              src="/isometric/hero-bg.svg"
-              alt="Isometric Southeast Asia payment and treasury network"
-              width={2172}
-              height={1629}
-              priority
-              className="iso-hero-main-art"
-            />
-            <div className="iso-floating-note iso-floating-note-a">
-              <span>TESTNET</span>
-              <strong>USD to PHP</strong>
-              <small>{lockedCopy.speed}</small>
-            </div>
-            <div className="iso-floating-note iso-floating-note-b">
-              <span>MODELED</span>
-              <strong>USD to MYR</strong>
-              <small>partner activation required</small>
-            </div>
-            <div className="iso-floating-note iso-floating-note-c">
-              <span>TREASURY</span>
-              <strong>USDY</strong>
-              <small>variable APY, approval gated</small>
-            </div>
-          </div>
+          ))}
         </div>
-
-        <div className="iso-marquee" aria-label="Platform metrics">
-          <div className="iso-marquee-track">
-            {[...marqueeItems, ...marqueeItems].map(([value, label], index) => (
-              <div className="iso-marquee-item" key={`${value}-${index}`}>
-                <strong>{value}</strong>
-                <span>{label}</span>
-                <i aria-hidden="true">◆</i>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+      </div>
 
       <section className="iso-partner-rail" aria-label="Infrastructure partners and benchmarks">
         <div className="iso-shell">
@@ -613,25 +593,16 @@ export default function IsometricLanding() {
           </div>
           <div className="iso-partner-grid">
             {partnerRail.map((partner) => (
-              <div className="iso-partner-item" key={partner.name}>
-                <Image
-                  src={partner.src}
-                  alt={`${partner.name} logo`}
-                  width={120}
-                  height={80}
-                  className={partner.logoClass}
-                />
-                <span>
-                  <strong>{partner.name}</strong>
-                  <small>{partner.role}</small>
-                </span>
-              </div>
+              <PartnerBadge key={partner.name} {...partner} />
             ))}
           </div>
         </div>
       </section>
 
       <section id="comparison" className="iso-section iso-comparison">
+        <div className="cin-drop" style={{ top: 26, right: '4%' }} aria-hidden="true">
+          <FloatingToken src="/cinematic/token-thb.png" alt="Thai baht token" size={104} float="cin-float-slow" />
+        </div>
         <div className="iso-shell">
           <div className="iso-section-heading iso-heading-split">
             <div>
@@ -720,6 +691,9 @@ export default function IsometricLanding() {
       </section>
 
       <section id="how-it-works" className="iso-section iso-flow">
+        <div className="cin-drop" style={{ top: 34, right: '5%' }} aria-hidden="true">
+          <FloatingToken src="/cinematic/token-sgd.png" alt="Singapore dollar token" size={112} float="cin-float-drift" />
+        </div>
         <div className="iso-shell iso-flow-layout">
           <div className="iso-flow-copy">
             <p className="iso-kicker">How it works</p>
@@ -786,8 +760,8 @@ export default function IsometricLanding() {
         <div className="iso-shell iso-copilot-layout">
           <div className="iso-copilot-stage">
             <Image
-              src="/isometric/walrus-logo.svg"
-              alt="Walrus isometric logo"
+              src="/cinematic/copilot-desk.png"
+              alt="0xWal, an isometric robot assistant at a desk, presenting suggestion cards"
               width={2172}
               height={1629}
             />
@@ -822,17 +796,6 @@ export default function IsometricLanding() {
               ))}
             </div>
           </div>
-          {!arrowGone && (
-            <button
-              type="button"
-              onClick={launchArrow}
-              className={`iso-copilot-next ${arrowLaunching ? 'is-launching' : ''}`}
-              aria-label="Continue to permanent records on Walrus"
-            >
-              <Image src="/isometric/arrow-coin.svg" alt="" width={180} height={180} />
-              <span>More below</span>
-            </button>
-          )}
         </div>
       </section>
 
@@ -908,6 +871,9 @@ export default function IsometricLanding() {
       </section>
 
       <section id="corridors" className="iso-section iso-corridors">
+        <div className="cin-drop" style={{ bottom: 40, right: '6%' }} aria-hidden="true">
+          <FloatingToken src="/cinematic/token-php.png" alt="Philippine peso token" size={120} />
+        </div>
         <div className="iso-shell iso-corridor-layout">
           <div className="iso-corridor-copy">
             <p className="iso-kicker">One testnet corridor. Modeled expansion routes.</p>
@@ -944,10 +910,10 @@ export default function IsometricLanding() {
           <div className="iso-corridor-stage">
             <div className="iso-corridor-number" aria-hidden="true">01</div>
             <Image
-              src="/isometric/corridors.svg"
-              alt="Isometric platform showing modeled corridor expansion"
-              width={1448}
-              height={1086}
+              src="/cinematic/corridor-bridge.png"
+              alt="Two isometric city platforms, Kuala Lumpur and Manila, connected by a golden bridge of flowing coins"
+              width={2752}
+              height={1536}
             />
           </div>
         </div>
@@ -1112,22 +1078,45 @@ export default function IsometricLanding() {
         </div>
       </section>
 
-      <footer className="iso-footer">
-        <div className="iso-shell iso-footer-inner">
-          <div className="iso-brand iso-brand-footer">
+      <footer className="iso-footer cin-footer">
+        <div className="iso-shell cin-footer-grid">
+          <div className="cin-footer-brand">
             <Image src="/splash-main-logo.png" alt="Splash Finance" width={310} height={90} className="iso-main-logo iso-main-logo-footer" />
+            <p>USD-first settlement infrastructure for Southeast Asian finance teams.</p>
+            <div className="cin-footer-status" aria-label="Network status">
+              <span><i aria-hidden="true" /> Sandbox · MY-PH testnet</span>
+              <span><i aria-hidden="true" /> {lockedCopy.speed}</span>
+              <span><i aria-hidden="true" /> {lockedCopy.agent}</span>
+            </div>
           </div>
-          <p>USD-first settlement infrastructure for Southeast Asian finance teams.</p>
-          <nav aria-label="Footer navigation">
-            <a href="#operating-layer">Platform</a>
-            <a href="#comparison">Compare</a>
+
+          <nav className="cin-footer-col" aria-label="Product">
+            <strong>Product</strong>
             <a href="#how-it-works">How it works</a>
-            <a href="#walrus">Walrus</a>
-            <a href="#corridors">Corridors</a>
-            <a href="#readiness">Readiness</a>
-            <Link href="/login">Log in</Link>
+            <a href="#comparison">Compare</a>
+            <a href="#operating-layer">Platform</a>
+            <a href="#corridors">Routes</a>
           </nav>
-          <small>{claims.footerLegal.claim}</small>
+
+          <nav className="cin-footer-col" aria-label="Trust">
+            <strong>Trust</strong>
+            <a href="#walrus">Proof &amp; audit</a>
+            <a href="#readiness">Scale controls</a>
+            <Link href="/login">Log in</Link>
+            <Link href="/signup">Open payment desk</Link>
+          </nav>
+
+          <div className="cin-footer-col cin-footer-compliance">
+            <strong>Compliance</strong>
+            <small>{claims.footerLegal.claim}</small>
+          </div>
+        </div>
+
+        <div className="cin-footer-bar">
+          <div className="iso-shell cin-footer-bar-inner">
+            <span>© 2026 Splash Financial Labuan Ltd.</span>
+            <span className="cin-footer-tick">USD → PHP · {lockedCopy.speed} · {lockedCopy.fee}</span>
+          </div>
         </div>
       </footer>
       <button

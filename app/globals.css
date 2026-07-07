@@ -2,6 +2,7 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "../styles/tokens.css";
+@import "../styles/cinematic.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -325,7 +326,9 @@ body {
   --iso-gold: #efc46f;
   --iso-line: rgba(12, 62, 72, .16);
   min-height: 100svh;
-  overflow: hidden;
+  /* clip (not hidden): hidden makes this the scroll container and breaks
+     position: sticky inside the cinematic hero. */
+  overflow: clip;
   color: var(--iso-ink);
   background: var(--iso-paper);
   font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
@@ -409,13 +412,7 @@ body {
 }
 
 .iso-nav {
-  gap: 4px;
-  border: 1px solid rgba(12, 62, 72, .11);
-  border-radius: 999px;
-  padding: 5px;
-  background: rgba(255, 250, 244, .54);
-  box-shadow: 0 10px 30px rgba(8, 54, 64, .05);
-  backdrop-filter: blur(12px);
+  gap: 6px;
 }
 
 .iso-nav a,
@@ -4351,17 +4348,60 @@ body {
   text-transform: uppercase;
 }
 
-/* Section / page heading — bold, tight tracking (mirrors .iso-section-title). */
+/* Section / page heading — bold, tight tracking (mirrors .iso-section-title),
+   with the landing's subtle hard-offset extrude. */
 .dash-title {
   color: var(--fintech-ink);
   font-size: clamp(20px, 2vw, 30px);
   font-weight: 950;
   letter-spacing: -.04em;
   line-height: 1.05;
+  text-shadow: 2px 3px 0 rgba(12, 62, 72, .12);
 }
 
 /* Tabular numerals for stat values. */
 .dash-num { font-variant-numeric: tabular-nums; }
+
+/* Extruded action buttons — mirrors the landing's hard-shadow CTAs.
+   .dash-btn = primary teal, .dash-btn-gold = gold accent, .dash-btn-ghost = outline. */
+.dash-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 12px;
+  background-color: #0d6370;
+  padding: 10px 18px;
+  color: #fffaf4;
+  font-size: 13px;
+  font-weight: 800;
+  box-shadow: 0 5px 0 var(--fintech-ink-deep);
+  transition: transform .18s ease, box-shadow .18s ease, background-color .18s ease;
+}
+.dash-btn:hover { transform: translateY(-2px); background-color: #0b5560; box-shadow: 0 7px 0 var(--fintech-ink-deep); }
+.dash-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 var(--fintech-ink-deep); }
+.dash-btn:disabled { opacity: .5; transform: none; }
+
+.dash-btn-gold {
+  background-color: var(--fintech-gold);
+  color: var(--fintech-ink-deep);
+  box-shadow: 0 5px 0 #c99a2e;
+}
+.dash-btn-gold:hover { background-color: #f2cd85; box-shadow: 0 7px 0 #c99a2e; }
+.dash-btn-gold:active { box-shadow: 0 2px 0 #c99a2e; }
+
+.dash-btn-ghost {
+  background-color: rgba(255, 253, 249, .8);
+  color: var(--fintech-ink);
+  border: 1px solid var(--fintech-line);
+  box-shadow: 0 4px 0 rgba(12, 62, 72, .14);
+}
+.dash-btn-ghost:hover { background-color: #fffdf9; border-color: rgba(13, 99, 112, .45); box-shadow: 0 6px 0 rgba(12, 62, 72, .16); }
+.dash-btn-ghost:active { box-shadow: 0 2px 0 rgba(12, 62, 72, .14); }
+
+@media (prefers-reduced-motion: reduce) {
+  .dash-btn, .dash-btn-gold, .dash-btn-ghost { transition: none; }
+}
 
 /* Entrance motion (Melio/Mercury). Transform-only so content is NEVER left
    invisible — even when the dashboard's loading.tsx mounts it inside a
@@ -4832,10 +4872,11 @@ body {
 .iso-header { order: 0; }
 .iso-hero { order: 1; }
 .iso-partner-rail { order: 2; }
-.iso-operating { order: 3; }
-.iso-flow { order: 4; }
-.iso-products { order: 5; }
-.iso-comparison { order: 6; }
+/* Narrative order: hero → how it works → comparison → the rest. */
+.iso-flow { order: 3; }
+.iso-comparison { order: 4; }
+.iso-operating { order: 5; }
+.iso-products { order: 6; }
 .iso-copilot { order: 7; }
 .iso-walrus { order: 8; }
 .iso-corridors { order: 9; }
@@ -5940,9 +5981,10 @@ button.iso-product-row {
 }
 
 /* A proof-first story: promise, infrastructure, comparison, operation, then scale. */
-.iso-comparison { order: 3; }
-.iso-operating { order: 4; }
-.iso-flow { order: 5; }
+/* Narrative order: hero → how it works → comparison → the rest. */
+.iso-flow { order: 3; }
+.iso-comparison { order: 4; }
+.iso-operating { order: 5; }
 .iso-copilot { order: 6; }
 .iso-walrus { order: 7; }
 .iso-products { order: 8; }

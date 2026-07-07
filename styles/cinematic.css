@@ -1,0 +1,890 @@
+/* ═══════════════════════════════════════════════════════════════════
+   Settlement Cinematic  (.cin-*)
+   Scroll-pinned hero → telemetry scan → push-through → product vision,
+   on the bright brand stage: paper cream, teal ink, gold. The main
+   object is the enhanced isometric SEA network artwork; satellites are
+   isometric currency tokens (USD · MYR · Sui). Type and buttons reuse
+   the landing's own iso-* classes. Layers (z): backdrop 0 · object 2 ·
+   tokens 3 · edge glow 4 · telemetry 5 · copy 6 · flash 7 · vision 8.
+   Only transform/opacity animate.
+   ═══════════════════════════════════════════════════════════════════ */
+
+.cin-section {
+  --cin-paper: #fffaf4;
+  --cin-paper-deep: #f8f0e5;
+  --cin-ink: #0c3e48;
+  --cin-teal: #0d6370;
+  --cin-teal-dark: #083640;
+  --cin-mint: #9fcfc7;
+  --cin-gold: #efc46f;
+  --cin-line: rgba(12, 62, 72, .16);
+  position: relative;
+  order: 1; /* .iso-landing lays sections out with flex order */
+  height: 520vh;
+  color: var(--cin-ink);
+  background: linear-gradient(180deg, #fffdf8 0%, var(--cin-paper) 30%, #fbf3e7 70%, var(--cin-paper-deep) 100%);
+}
+
+.cin-sticky {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  height: 100svh;
+  overflow: hidden;
+}
+
+/* ── Backdrop: soft brand orbs + isometric grid ───────────────────── */
+
+.cin-orb {
+  position: absolute;
+  z-index: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  filter: blur(70px);
+}
+
+.cin-orb-gold {
+  top: -14%;
+  right: -10%;
+  width: 48vw;
+  height: 48vw;
+  background: radial-gradient(circle, rgba(239, 196, 111, .42), transparent 70%);
+}
+
+.cin-orb-mint {
+  bottom: -16%;
+  left: -12%;
+  width: 42vw;
+  height: 42vw;
+  background: radial-gradient(circle, rgba(159, 207, 199, .5), transparent 70%);
+}
+
+.cin-grid {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-image:
+    linear-gradient(rgba(12, 62, 72, .06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(12, 62, 72, .06) 1px, transparent 1px);
+  background-size: 68px 68px;
+  -webkit-mask-image: radial-gradient(ellipse 90% 75% at 55% 45%, rgba(0, 0, 0, .9), transparent 78%);
+  mask-image: radial-gradient(ellipse 90% 75% at 55% 45%, rgba(0, 0, 0, .9), transparent 78%);
+}
+
+.cin-vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(255, 253, 248, .85) 0%, transparent 13%),
+    radial-gradient(ellipse 120% 95% at 50% 46%, transparent 56%, rgba(226, 206, 180, .32) 100%);
+}
+
+/* ── The network artwork + floating currency tokens ───────────────── */
+
+.cin-object-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.cin-object {
+  position: relative;
+  width: min(62vw, 940px);
+}
+
+.cin-object img {
+  width: 100%;
+  height: auto;
+  filter: drop-shadow(0 42px 60px rgba(12, 62, 72, .2));
+}
+
+.cin-object-glow {
+  position: absolute;
+  inset: -14%;
+  z-index: -1;
+  background:
+    radial-gradient(circle at 52% 46%, rgba(239, 196, 111, .22), transparent 55%),
+    radial-gradient(circle at 44% 62%, rgba(159, 207, 199, .18), transparent 60%);
+  filter: blur(8px);
+}
+
+.cin-float {
+  animation: cin-float 9s ease-in-out infinite;
+  will-change: transform;
+}
+
+.cin-float-slow {
+  animation-duration: 13s;
+  animation-delay: -4s;
+}
+
+.cin-float-drift {
+  animation-duration: 11s;
+  animation-delay: -7s;
+}
+
+@keyframes cin-float {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+  50% { transform: translate3d(0, -14px, 0) rotate(.5deg); }
+}
+
+.cin-tokens {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.cin-token {
+  position: absolute;
+  width: var(--token-size, 160px);
+}
+
+.cin-token img {
+  width: 100%;
+  height: auto;
+  filter: drop-shadow(0 22px 30px rgba(12, 62, 72, .24));
+}
+
+.cin-token-usd { top: 12%; right: 26%; --token-size: 170px; }
+.cin-token-myr { bottom: 7%; left: 34%; --token-size: 140px; transform: rotate(-8deg); }
+.cin-token-sui { bottom: 13%; right: 4%; --token-size: 200px; transform: rotate(7deg); }
+
+.cin-token-button {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: transform .2s ease;
+}
+
+.cin-token-button:hover {
+  transform: translateY(-4px);
+}
+
+.cin-token-button:focus-visible {
+  outline: 2px solid var(--cin-teal);
+  outline-offset: 6px;
+  border-radius: 50%;
+}
+
+.cin-token-button.is-spinning {
+  animation: cin-spin 2.4s cubic-bezier(.25, .6, .3, 1);
+}
+
+.cin-token-inner {
+  display: block;
+}
+
+@keyframes cin-spin {
+  from { transform: perspective(600px) rotateY(0deg); }
+  to { transform: perspective(600px) rotateY(1800deg); }
+}
+
+/* Loading state: soft shimmer until the artwork decodes. */
+.cin-object-poster {
+  position: absolute;
+  inset: 16% 8%;
+  border-radius: 26px;
+  background:
+    radial-gradient(circle at 50% 45%, rgba(239, 196, 111, .25), transparent 55%),
+    radial-gradient(circle at 48% 62%, rgba(159, 207, 199, .22), transparent 60%);
+  animation: cin-breathe 2.4s ease-in-out infinite;
+}
+
+@keyframes cin-breathe {
+  0%, 100% { opacity: .45; transform: scale(.97); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+/* ── Act I · hero copy (type + buttons come from iso-*) ───────────── */
+
+.cin-copy-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+}
+
+.cin-copy {
+  width: 100%;
+  padding-top: 60px;
+}
+
+/* Height-aware sizing: the hero must fit one viewport on short laptops,
+   so type and rhythm scale with vh as well as vw. */
+.cin-copy .iso-display {
+  max-width: 640px;
+  margin-top: clamp(10px, 2vh, 22px);
+  font-size: clamp(44px, min(7.2vw, 11vh), 120px);
+}
+
+.cin-copy .iso-hero-description {
+  max-width: 500px;
+  margin-top: clamp(14px, 2.6vh, 32px);
+  font-size: clamp(13.5px, 1.9vh, 16px);
+}
+
+.cin-copy .iso-hero-actions {
+  margin-top: clamp(14px, 2.8vh, 28px);
+}
+
+.cin-copy .iso-proof-line {
+  margin-top: clamp(14px, 3vh, 30px);
+}
+
+@media (max-height: 760px) {
+  .cin-copy {
+    padding-top: 72px;
+  }
+
+  .cin-object {
+    width: min(56vw, 720px);
+  }
+
+  .cin-token-usd { --token-size: 130px; }
+  .cin-token-myr { --token-size: 110px; }
+  .cin-token-sui { --token-size: 150px; }
+}
+
+/* ── Act II · telemetry callouts + scan frame ─────────────────────── */
+
+.cin-callout {
+  position: absolute;
+  z-index: 5;
+  display: grid;
+  gap: 4px;
+  max-width: 250px;
+  border-left: 3px solid var(--cin-teal);
+  border-radius: 0 10px 10px 0;
+  padding: 12px 16px;
+  background: rgba(255, 253, 249, .94);
+  box-shadow: 0 18px 40px rgba(8, 54, 64, .13);
+}
+
+.cin-callout i {
+  color: var(--cin-teal);
+  font-family: var(--font-mono), monospace;
+  font-style: normal;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+}
+
+.cin-callout strong {
+  color: var(--cin-ink);
+  font-size: 14px;
+  font-weight: 850;
+  letter-spacing: -.01em;
+}
+
+.cin-callout small {
+  color: rgba(12, 62, 72, .64);
+  font-family: var(--font-mono), monospace;
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+
+.cin-callout::after {
+  position: absolute;
+  top: 50%;
+  width: 46px;
+  height: 1px;
+  content: "";
+}
+
+.cin-callout-a { top: 19%; left: 9%; }
+.cin-callout-b { top: 23%; right: 7%; }
+.cin-callout-c { bottom: 25%; left: 11%; }
+.cin-callout-d { bottom: 20%; right: 9%; }
+
+.cin-callout-a::after,
+.cin-callout-c::after {
+  right: -46px;
+  background: linear-gradient(90deg, rgba(13, 99, 112, .6), transparent);
+}
+
+.cin-callout-b::after,
+.cin-callout-d::after {
+  left: -46px;
+  background: linear-gradient(270deg, rgba(13, 99, 112, .6), transparent);
+}
+
+.cin-scan {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  width: min(66vmin, 680px);
+  height: min(44vmin, 440px);
+  margin: auto;
+  pointer-events: none;
+  border: 1px dashed rgba(12, 62, 72, .38);
+}
+
+.cin-scan-corner {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border: 0 solid var(--cin-teal-dark);
+}
+
+.cin-scan-corner.is-tl { top: -2px; left: -2px; border-top-width: 2px; border-left-width: 2px; }
+.cin-scan-corner.is-tr { top: -2px; right: -2px; border-top-width: 2px; border-right-width: 2px; }
+.cin-scan-corner.is-bl { bottom: -2px; left: -2px; border-bottom-width: 2px; border-left-width: 2px; }
+.cin-scan-corner.is-br { bottom: -2px; right: -2px; border-bottom-width: 2px; border-right-width: 2px; }
+
+.cin-callout-badge {
+  position: absolute;
+  top: -30px;
+  right: -22px;
+  width: 64px;
+  pointer-events: none;
+}
+
+.cin-callout-badge img {
+  width: 100%;
+  height: auto;
+  filter: drop-shadow(0 10px 14px rgba(12, 62, 72, .25));
+  animation: cin-float 7s ease-in-out infinite;
+}
+
+.cin-status {
+  position: absolute;
+  right: 0;
+  bottom: 26px;
+  left: 0;
+  z-index: 5;
+  color: rgba(12, 62, 72, .5);
+  font-family: var(--font-mono), monospace;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: .16em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+/* ── Act III · gold light burst + product vision ──────────────────── */
+
+.cin-flash {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 50%, rgba(239, 196, 111, .6), rgba(255, 250, 244, .42) 38%, transparent 68%);
+}
+
+.cin-vision {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  display: grid;
+  place-content: center;
+  padding: 0 24px;
+  pointer-events: none;
+  text-align: center;
+}
+
+.cin-vision-chip {
+  justify-self: center;
+  padding: 6px 14px;
+  color: var(--cin-ink);
+  background: var(--cin-gold);
+  box-shadow: 3px 3px 0 var(--cin-teal-dark);
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+}
+
+.cin-vision-title {
+  margin-top: 30px;
+  color: #fffaf1;
+  font-size: clamp(42px, 6vw, 100px);
+  font-weight: 950;
+  letter-spacing: -.06em;
+  line-height: .94;
+  -webkit-text-stroke: 2px var(--cin-teal-dark);
+  text-shadow:
+    2px 2px 0 var(--cin-teal),
+    4px 4px 0 var(--cin-teal),
+    6px 6px 0 var(--cin-teal),
+    8px 8px 0 var(--cin-teal-dark),
+    14px 18px 28px rgba(8, 54, 64, .22);
+}
+
+.cin-vision-title span {
+  display: block;
+  margin-top: .12em;
+  color: var(--cin-gold);
+  -webkit-text-stroke: 1.5px var(--cin-teal-dark);
+  text-shadow:
+    2px 2px 0 #c49646,
+    4px 4px 0 #c49646,
+    6px 6px 0 var(--cin-teal-dark),
+    12px 16px 24px rgba(8, 54, 64, .16);
+}
+
+.cin-vision-lede {
+  max-width: 660px;
+  margin: 30px auto 0;
+  color: rgba(12, 62, 72, .76);
+  font-size: 17px;
+  font-weight: 540;
+  line-height: 1.75;
+}
+
+.cin-vision-mark {
+  width: 62px;
+  height: auto;
+  justify-self: center;
+  margin-bottom: 16px;
+  filter: drop-shadow(0 14px 20px rgba(12, 62, 72, .22));
+  animation: cin-float 8s ease-in-out infinite;
+}
+
+.cin-vision-pillars {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 34px;
+}
+
+.cin-vision-pillars span {
+  padding: 7px 13px;
+  color: var(--cin-teal-dark);
+  background: var(--cin-gold);
+  box-shadow: 3px 3px 0 var(--cin-teal-dark);
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+}
+
+.cin-vision-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  justify-content: center;
+  margin-top: 34px;
+  pointer-events: auto;
+}
+
+/* ── Scroll hint ──────────────────────────────────────────────────── */
+
+.cin-hint {
+  position: absolute;
+  right: 30px;
+  bottom: 26px;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: rgba(12, 62, 72, .6);
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+}
+
+.cin-hint-wheel {
+  position: relative;
+  width: 17px;
+  height: 27px;
+  border: 1px solid rgba(12, 62, 72, .4);
+  border-radius: 10px;
+}
+
+.cin-hint-wheel::before {
+  position: absolute;
+  top: 5px;
+  left: 50%;
+  width: 3px;
+  height: 6px;
+  margin-left: -1.5px;
+  content: "";
+  border-radius: 2px;
+  background: var(--cin-teal);
+  animation: cin-wheel 1.8s ease-in-out infinite;
+}
+
+@keyframes cin-wheel {
+  0%, 100% { transform: translateY(0); opacity: 1; }
+  60% { transform: translateY(9px); opacity: .2; }
+  61% { opacity: 0; }
+}
+
+/* ── Tokens dropped into other sections ───────────────────────────── */
+
+.cin-drop {
+  position: absolute;
+  z-index: 6;
+}
+
+.iso-flow,
+.iso-comparison,
+.iso-corridors {
+  position: relative;
+}
+
+/* The metrics marquee doubles as the bridge band into the next section. */
+.iso-marquee.is-static {
+  position: static;
+  order: 1; /* directly after .cin-section, before .iso-partner-rail (2) */
+}
+
+/* ── Scroll reveals (transform-only; class added by JS, so no-JS users
+      see everything immediately) ──────────────────────────────────── */
+
+.cin-reveal {
+  transform: translateY(30px);
+  transition: transform .85s cubic-bezier(.16, 1, .3, 1);
+  will-change: transform;
+}
+
+.cin-reveal.is-inview {
+  transform: none;
+  will-change: auto;
+}
+
+/* ── Comparison table: Splash column gets the gold isometric chip ──── */
+
+.iso-comparison-table thead th.is-splash {
+  color: var(--iso-teal-dark);
+  background: var(--iso-gold);
+  box-shadow: 3px 3px 0 var(--iso-teal-dark);
+}
+
+/* ── Header brand slot ────────────────────────────────────────────── */
+
+.iso-header-brand-icon {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 8px rgba(12, 62, 72, .18));
+}
+
+/* ── Fintech footer ───────────────────────────────────────────────── */
+
+.iso-footer.cin-footer {
+  padding-block: 72px 0;
+}
+
+.cin-footer-grid {
+  display: grid;
+  grid-template-columns: 1.4fr .7fr .7fr 1.1fr;
+  align-items: start;
+  gap: 46px;
+  border-top: 2px solid var(--iso-teal-dark);
+  padding-top: 44px;
+  padding-bottom: 54px;
+}
+
+.cin-footer-brand p {
+  max-width: 300px;
+  margin-top: 16px;
+  color: rgba(12, 62, 72, .6);
+  font-size: 12px;
+  font-weight: 560;
+  line-height: 1.65;
+}
+
+.cin-footer-status {
+  display: grid;
+  gap: 9px;
+  margin-top: 20px;
+  color: var(--iso-teal);
+  font-family: var(--font-mono), monospace;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.cin-footer-status span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cin-footer-status i {
+  width: 8px;
+  height: 8px;
+  background: var(--iso-gold);
+  box-shadow: 2px 2px 0 var(--iso-teal-dark);
+}
+
+.cin-footer-col {
+  display: grid;
+  justify-items: start;
+  gap: 11px;
+}
+
+.cin-footer-col strong {
+  margin-bottom: 7px;
+  color: var(--iso-teal);
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+}
+
+.cin-footer-col a {
+  color: rgba(12, 62, 72, .75);
+  font-size: 13px;
+  font-weight: 720;
+  transition: color .2s ease, transform .2s ease;
+}
+
+.cin-footer-col a:hover {
+  color: var(--iso-teal);
+  transform: translateX(3px);
+}
+
+.cin-footer-compliance small {
+  max-width: 340px;
+  color: rgba(12, 62, 72, .55);
+  font-size: 10.5px;
+  line-height: 1.7;
+}
+
+.cin-footer-bar {
+  border-top: 1px solid rgba(244, 236, 223, .16);
+  background: var(--iso-teal-dark);
+}
+
+.cin-footer-bar-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 24px;
+  padding-block: 16px;
+  color: rgba(255, 250, 241, .68);
+  font-family: var(--font-mono), monospace;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.cin-footer-tick {
+  color: var(--iso-gold);
+}
+
+@media (max-width: 980px) {
+  .cin-footer-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 36px;
+  }
+}
+
+@media (max-width: 560px) {
+  .cin-footer-grid {
+    grid-template-columns: 1fr;
+    gap: 30px;
+  }
+
+  .cin-footer-bar-inner {
+    justify-content: flex-start;
+  }
+}
+
+/* ── Reduced-motion static variant ────────────────────────────────── */
+
+.cin-section-static {
+  height: auto;
+}
+
+.cin-static-hero {
+  position: relative;
+  display: flex;
+  min-height: 92vh;
+  align-items: center;
+  overflow: hidden;
+  padding: 150px 0 90px;
+}
+
+.cin-static-stage {
+  position: absolute;
+  inset: 0;
+  opacity: .5;
+}
+
+.cin-copy-static {
+  position: relative;
+  z-index: 2;
+}
+
+.cin-static-telemetry {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  padding-block: 24px 56px;
+}
+
+.cin-callout-static {
+  position: static;
+}
+
+.cin-callout-static::after {
+  content: none;
+}
+
+.cin-vision-static {
+  position: static;
+  display: block;
+  padding: 80px 24px 150px;
+  pointer-events: auto;
+}
+
+/* ── Infrastructure & Partners: cards + balloon-pop ───────────────── */
+
+.cin-partner {
+  display: block;
+  width: 100%;
+  border: 1px solid rgba(12, 62, 72, .12);
+  border-radius: 14px;
+  padding: 18px 14px 15px;
+  background: #fffdf9;
+  font: inherit;
+  color: inherit;
+  text-align: center;
+  cursor: pointer;
+  transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease;
+}
+
+.cin-partner:hover {
+  transform: translateY(-4px);
+  border-color: var(--iso-teal-dark);
+  box-shadow: 5px 5px 0 var(--iso-teal-dark);
+}
+
+.cin-partner:focus-visible {
+  outline: 2px solid var(--iso-teal);
+  outline-offset: 3px;
+}
+
+.cin-partner-logo {
+  display: grid;
+  place-items: center;
+  height: 54px;
+  margin-bottom: 10px;
+}
+
+.cin-partner-logo img {
+  max-width: 84%;
+  max-height: 44px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+
+.cin-partner-logo.is-popping {
+  animation: cin-balloon 2.3s cubic-bezier(.4, .9, .5, 1) both;
+}
+
+@keyframes cin-balloon {
+  0% { transform: scale(1); opacity: 1; }
+  42% { transform: scale(1.22); opacity: 1; }
+  56% { transform: scale(1.48); opacity: 1; }
+  59% { transform: scale(1.75); opacity: 0; }
+  60% { transform: translateY(46px) scale(.5); opacity: 0; }
+  76% { opacity: 1; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+/* ── Responsive ───────────────────────────────────────────────────── */
+
+@media (max-width: 1180px) {
+  .cin-callout-a { left: 4%; }
+  .cin-callout-b { right: 3%; }
+  .cin-callout-c { left: 5%; }
+  .cin-callout-d { right: 4%; }
+  .cin-token-usd { right: 6%; }
+}
+
+@media (max-width: 880px) {
+  .cin-section {
+    height: 430vh;
+  }
+
+  .cin-copy {
+    padding-top: 88px;
+  }
+
+  .cin-object {
+    width: 96vw;
+    opacity: .5;
+  }
+
+  .cin-token-usd { top: 11%; right: 4%; --token-size: 110px; }
+  .cin-token-myr { bottom: 6%; left: 3%; --token-size: 96px; }
+  .cin-token-sui { bottom: 9%; right: 3%; --token-size: 130px; }
+
+  .cin-callout {
+    max-width: 190px;
+    padding: 10px 12px;
+  }
+
+  .cin-callout strong { font-size: 12.5px; }
+  .cin-callout small { font-size: 9.5px; }
+  .cin-callout::after { content: none; }
+
+  .cin-callout-a { top: 13%; left: 5%; }
+  .cin-callout-b { top: 13%; right: 4%; }
+  .cin-callout-c { bottom: 17%; left: 5%; }
+  .cin-callout-d { bottom: 11%; right: 4%; }
+
+  .cin-scan {
+    width: min(88vw, 400px);
+    height: min(58vw, 270px);
+  }
+
+  .cin-scan-caption { font-size: 8.5px; }
+  .cin-status { display: none; }
+  .cin-hint { right: 20px; bottom: 20px; }
+  .cin-vision-lede { font-size: 15px; }
+  .cin-vision-strip { letter-spacing: .2em; }
+}
+
+@media (max-width: 880px) {
+  .cin-callout-badge {
+    top: -22px;
+    right: -12px;
+    width: 46px;
+  }
+
+  .cin-token-usd { top: 10%; right: 5%; }
+  .cin-token-myr { bottom: 6%; left: 4%; }
+
+  .cin-drop {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cin-hint-wheel::before,
+  .cin-float,
+  .cin-object-poster,
+  .cin-callout-badge img,
+  .cin-token-button.is-spinning,
+  .cin-vision-mark,
+  .cin-partner-logo.is-popping {
+    animation: none;
+  }
+}
