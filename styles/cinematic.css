@@ -1,12 +1,11 @@
 /* ═══════════════════════════════════════════════════════════════════
    Settlement Cinematic  (.cin-*)
-   Scroll-pinned hero → telemetry scan → push-through → product vision,
-   on the bright brand stage: paper cream, teal ink, gold. The main
-   object is the enhanced isometric SEA network artwork; satellites are
-   isometric currency tokens (USD · MYR · Sui). Type and buttons reuse
-   the landing's own iso-* classes. Layers (z): backdrop 0 · object 2 ·
-   tokens 3 · edge glow 4 · telemetry 5 · copy 6 · flash 7 · vision 8.
-   Only transform/opacity animate.
+   Scroll-pinned dive: city of towers → one bright window → the boy at
+   his desk → into the monitor screen → the product act → ice-melt into
+   the partners rail. Scenes are SVG so the camera can push in 7x and
+   stay sharp. Layers (z): backdrop 0 · scenes 2 · tokens 3 · vignette 4
+   · telemetry + frame 5 · copy 6 · flash + drips 7 · vision + band 8.
+   Only transform/opacity/filter animate.
    ═══════════════════════════════════════════════════════════════════ */
 
 .cin-section {
@@ -20,7 +19,7 @@
   --cin-line: rgba(12, 62, 72, .16);
   position: relative;
   order: 1; /* .iso-landing lays sections out with flex order */
-  height: 520vh;
+  height: 680vh;
   color: var(--cin-ink);
   background: linear-gradient(180deg, #fffdf8 0%, var(--cin-paper) 30%, #fbf3e7 70%, var(--cin-paper-deep) 100%);
 }
@@ -59,18 +58,6 @@
   background: radial-gradient(circle, rgba(159, 207, 199, .5), transparent 70%);
 }
 
-.cin-grid {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  background-image:
-    linear-gradient(rgba(12, 62, 72, .06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(12, 62, 72, .06) 1px, transparent 1px);
-  background-size: 68px 68px;
-  -webkit-mask-image: radial-gradient(ellipse 90% 75% at 55% 45%, rgba(0, 0, 0, .9), transparent 78%);
-  mask-image: radial-gradient(ellipse 90% 75% at 55% 45%, rgba(0, 0, 0, .9), transparent 78%);
-}
-
 .cin-vignette {
   position: absolute;
   inset: 0;
@@ -81,37 +68,56 @@
     radial-gradient(ellipse 120% 95% at 50% 46%, transparent 56%, rgba(226, 206, 180, .32) 100%);
 }
 
-/* ── The network artwork + floating currency tokens ───────────────── */
+/* ── The artwork scenes (city, then the room behind the window) ────── */
 
-.cin-object-layer {
+.cin-scene-layer {
   position: absolute;
   inset: 0;
   z-index: 2;
-  display: grid;
-  place-items: center;
   pointer-events: none;
+  will-change: transform, opacity;
 }
 
-.cin-object {
-  position: relative;
-  width: min(62vw, 940px);
-}
-
-.cin-object img {
-  width: 100%;
-  height: auto;
-  filter: drop-shadow(0 42px 60px rgba(12, 62, 72, .2));
-}
-
-.cin-object-glow {
+.cin-city,
+.cin-room {
   position: absolute;
-  inset: -14%;
-  z-index: -1;
-  background:
-    radial-gradient(circle at 52% 46%, rgba(239, 196, 111, .22), transparent 55%),
-    radial-gradient(circle at 44% 62%, rgba(159, 207, 199, .18), transparent 60%);
-  filter: blur(8px);
+  inset: 0;
 }
+
+.cin-city img,
+.cin-room img {
+  width: 100%;
+  height: 100%;
+}
+
+.cin-city img {
+  object-fit: contain;
+  object-position: center bottom;
+}
+
+.cin-room img {
+  object-fit: cover;
+  object-position: center;
+}
+
+/* Pulsing halo on the one bright window the camera dives into. */
+.cin-city-beacon {
+  position: absolute;
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle, rgba(255, 217, 138, .85), rgba(242, 185, 75, .3) 55%, transparent 72%);
+  mix-blend-mode: screen;
+  animation: cin-beacon 2.6s ease-in-out infinite;
+}
+
+@keyframes cin-beacon {
+  0%, 100% { opacity: .55; }
+  50% { opacity: 1; }
+}
+
+/* ── Floating currency tokens ─────────────────────────────────────── */
 
 .cin-float {
   animation: cin-float 9s ease-in-out infinite;
@@ -189,22 +195,6 @@
   to { transform: perspective(600px) rotateY(1800deg); }
 }
 
-/* Loading state: soft shimmer until the artwork decodes. */
-.cin-object-poster {
-  position: absolute;
-  inset: 16% 8%;
-  border-radius: 26px;
-  background:
-    radial-gradient(circle at 50% 45%, rgba(239, 196, 111, .25), transparent 55%),
-    radial-gradient(circle at 48% 62%, rgba(159, 207, 199, .22), transparent 60%);
-  animation: cin-breathe 2.4s ease-in-out infinite;
-}
-
-@keyframes cin-breathe {
-  0%, 100% { opacity: .45; transform: scale(.97); }
-  50% { opacity: 1; transform: scale(1); }
-}
-
 /* ── Act I · hero copy (type + buttons come from iso-*) ───────────── */
 
 .cin-copy-layer {
@@ -215,7 +205,18 @@
   align-items: center;
 }
 
+/* Soft cream veil so the headline stays readable over the skyline. */
+.cin-copy-layer::before {
+  position: absolute;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+  background: radial-gradient(ellipse 62% 78% at 26% 44%, rgba(255, 253, 248, .94), rgba(255, 253, 248, .6) 52%, transparent 74%);
+}
+
 .cin-copy {
+  position: relative;
+  z-index: 1;
   width: 100%;
   padding-top: 60px;
 }
@@ -226,6 +227,10 @@
   max-width: 640px;
   margin-top: clamp(10px, 2vh, 22px);
   font-size: clamp(44px, min(7.2vw, 11vh), 120px);
+  color: var(--cin-ink);
+  text-shadow:
+    3px 3px 0 rgba(239, 196, 111, .9),
+    6px 6px 0 rgba(8, 54, 64, .14);
 }
 
 .cin-copy .iso-hero-description {
@@ -245,10 +250,6 @@
 @media (max-height: 760px) {
   .cin-copy {
     padding-top: 72px;
-  }
-
-  .cin-object {
-    width: min(56vw, 720px);
   }
 
   .cin-token-usd { --token-size: 130px; }
@@ -358,29 +359,14 @@
   animation: cin-float 7s ease-in-out infinite;
 }
 
-.cin-status {
-  position: absolute;
-  right: 0;
-  bottom: 26px;
-  left: 0;
-  z-index: 5;
-  color: rgba(12, 62, 72, .5);
-  font-family: var(--font-mono), monospace;
-  font-size: 9.5px;
-  font-weight: 700;
-  letter-spacing: .16em;
-  text-align: center;
-  text-transform: uppercase;
-}
-
-/* ── Act III · gold light burst + product vision ──────────────────── */
+/* ── Screen-light burst + product act + melt ──────────────────────── */
 
 .cin-flash {
   position: absolute;
   inset: 0;
   z-index: 7;
   pointer-events: none;
-  background: radial-gradient(circle at 50% 50%, rgba(239, 196, 111, .6), rgba(255, 250, 244, .42) 38%, transparent 68%);
+  background: radial-gradient(circle at 50% 46%, rgba(238, 250, 245, .95), rgba(239, 196, 111, .4) 42%, transparent 70%);
 }
 
 .cin-vision {
@@ -482,6 +468,42 @@
   pointer-events: auto;
 }
 
+/* Melt wrappers: each act piece melts independently, origin-top. */
+.cin-melt-center {
+  display: flex;
+  justify-content: center;
+}
+
+.cin-melt-drips {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  pointer-events: none;
+}
+
+.cin-melt-drip {
+  position: absolute;
+  top: 40%;
+  width: 13px;
+  border-radius: 0 0 12px 12px;
+  background: linear-gradient(180deg, rgba(239, 196, 111, .05), var(--cin-gold) 30%, #e0a53c);
+}
+
+/* The metrics band docked at the foot of the product act. */
+.cin-band {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 8;
+  will-change: transform, opacity;
+}
+
+.cin-band .iso-marquee,
+.cin-marquee {
+  position: static;
+}
+
 /* ── Scroll hint ──────────────────────────────────────────────────── */
 
 .cin-hint {
@@ -540,11 +562,6 @@
   position: relative;
 }
 
-/* The metrics marquee doubles as the bridge band into the next section. */
-.iso-marquee.is-static {
-  position: static;
-  order: 1; /* directly after .cin-section, before .iso-partner-rail (2) */
-}
 
 /* ── Scroll reveals (transform-only; class added by JS, so no-JS users
       see everything immediately) ──────────────────────────────────── */
@@ -752,14 +769,16 @@
   pointer-events: auto;
 }
 
-/* ── Infrastructure & Partners: cards + balloon-pop ───────────────── */
+/* ── Infrastructure & Partners: logo-first cards. Hover dims the logo
+      and reveals the centred name + role. Click still balloon-pops. ── */
 
 .cin-partner {
+  position: relative;
   display: block;
   width: 100%;
   border: 1px solid rgba(12, 62, 72, .12);
   border-radius: 14px;
-  padding: 18px 14px 15px;
+  padding: 22px 14px;
   background: #fffdf9;
   font: inherit;
   color: inherit;
@@ -782,16 +801,58 @@
 .cin-partner-logo {
   display: grid;
   place-items: center;
-  height: 54px;
-  margin-bottom: 10px;
+  height: 62px;
+  transition: opacity .3s ease, transform .3s ease, filter .3s ease;
 }
 
 .cin-partner-logo img {
-  max-width: 84%;
-  max-height: 44px;
+  max-width: 86%;
+  max-height: 52px;
   width: auto;
   height: auto;
   object-fit: contain;
+}
+
+.cin-partner:hover .cin-partner-logo,
+.cin-partner:focus-visible .cin-partner-logo {
+  opacity: .07;
+  transform: scale(.9);
+  filter: blur(1px);
+}
+
+.cin-partner-reveal {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 4px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity .3s ease, transform .3s cubic-bezier(.16, 1, .3, 1);
+  pointer-events: none;
+  text-align: center;
+}
+
+.cin-partner-reveal strong {
+  color: var(--iso-teal-dark);
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: -.01em;
+}
+
+.cin-partner-reveal small {
+  color: var(--iso-teal);
+  font-family: var(--font-mono), monospace;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+.cin-partner:hover .cin-partner-reveal,
+.cin-partner:focus-visible .cin-partner-reveal {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .cin-partner-logo.is-popping {
@@ -808,6 +869,408 @@
   100% { transform: translateY(0) scale(1); opacity: 1; }
 }
 
+/* ── Comparison: pinned reveal, row by row ────────────────────────── */
+
+.cin-compare {
+  height: 470vh;
+  padding-block: 0;
+}
+
+.cin-compare-pin {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  min-height: 100vh;
+  min-height: 100svh;
+  overflow: hidden;
+  padding-block: 96px 36px;
+}
+
+.cin-compare-pin > .iso-shell {
+  width: 100%;
+}
+
+.cin-compare .iso-comparison-table {
+  font-size: 15px;
+}
+
+.cin-compare .iso-comparison-table thead th {
+  font-size: 12px;
+}
+
+.cin-compare .iso-comparison-table tbody th {
+  font-size: 15.5px;
+}
+
+.cin-compare .iso-comparison-table tbody td {
+  font-size: 15px;
+}
+
+.cin-compare tbody tr {
+  opacity: .06;
+  transform: translateX(-16px);
+  transition: opacity .55s ease, transform .55s cubic-bezier(.16, 1, .3, 1);
+}
+
+.cin-compare tbody tr.is-uncovered {
+  opacity: 1;
+  transform: none;
+}
+
+@media (max-width: 880px), (prefers-reduced-motion: reduce) {
+  .cin-compare {
+    height: auto;
+  }
+
+  .cin-compare-pin {
+    position: static;
+    min-height: 0;
+    overflow: visible;
+    padding-block: 0;
+  }
+
+  .cin-compare tbody tr {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ── Walrus: calmer scale, so the section fits its story ──────────── */
+
+.iso-walrus .iso-section-title {
+  font-size: clamp(30px, 3.4vw, 52px);
+}
+
+.iso-walrus.iso-section {
+  padding-block: clamp(72px, 10vh, 110px);
+}
+
+.iso-walrus-wordmark {
+  width: 96px;
+  height: auto;
+  filter: brightness(0) invert(1); /* teal wordmark → white on the dark panel */
+  opacity: .92;
+}
+
+/* ── User feedback: the settlement-receipt testimonial ────────────── */
+
+.cin-feedback {
+  position: relative;
+  overflow: hidden;
+}
+
+.cin-feedback-watermark {
+  position: absolute;
+  top: -60px;
+  right: 2%;
+  z-index: 0;
+  color: rgba(13, 99, 112, .07);
+  font-size: clamp(280px, 34vw, 520px);
+  font-weight: 950;
+  line-height: 1;
+  pointer-events: none;
+  user-select: none;
+}
+
+.cin-feedback-layout {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  gap: 46px;
+  align-items: start;
+  margin-top: 44px;
+}
+
+.cin-feedback-receipt {
+  position: relative;
+  margin: 0;
+  border: 2px solid var(--iso-teal-dark);
+  border-radius: 18px;
+  padding: 0 30px 28px;
+  background: #fffdf9;
+  box-shadow: 10px 10px 0 rgba(8, 54, 64, .9);
+}
+
+.cin-feedback-receipt header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 -30px 24px;
+  border-bottom: 2px dashed rgba(12, 62, 72, .25);
+  padding: 14px 30px;
+  color: var(--iso-teal);
+  font-family: var(--font-mono), monospace;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+}
+
+.cin-feedback-receipt blockquote {
+  margin: 0;
+  color: var(--iso-teal-dark);
+  font-size: clamp(21px, 2.1vw, 29px);
+  font-weight: 850;
+  letter-spacing: -.015em;
+  line-height: 1.38;
+}
+
+.cin-feedback-receipt figcaption {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 26px;
+  border-top: 2px dashed rgba(12, 62, 72, .25);
+  padding-top: 20px;
+}
+
+.cin-feedback-avatar {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  color: var(--iso-teal-dark);
+  background: var(--cin-gold, #efc46f);
+  box-shadow: 3px 3px 0 var(--iso-teal-dark);
+  font-family: var(--font-mono), monospace;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: .04em;
+}
+
+.cin-feedback-receipt figcaption strong {
+  display: block;
+  color: var(--iso-teal-dark);
+  font-size: 14.5px;
+  font-weight: 850;
+}
+
+.cin-feedback-receipt figcaption small {
+  color: rgba(12, 62, 72, .6);
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.cin-feedback-stamp {
+  position: absolute;
+  top: -16px;
+  right: 26px;
+  padding: 8px 16px;
+  color: var(--iso-teal-dark);
+  background: var(--cin-gold, #efc46f);
+  box-shadow: 3px 3px 0 var(--iso-teal-dark);
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  transform: rotate(-6deg);
+}
+
+.cin-feedback-points {
+  display: grid;
+  gap: 16px;
+}
+
+.cin-feedback-point {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 16px;
+  align-items: start;
+  border: 1px solid rgba(12, 62, 72, .14);
+  border-radius: 14px;
+  padding: 20px 56px 20px 20px;
+  background: #fffdf9;
+  transition: transform .3s cubic-bezier(.16, 1, .3, 1), box-shadow .3s ease, border-color .3s ease;
+}
+
+.cin-feedback-point:hover {
+  transform: translateX(8px);
+  border-color: var(--iso-teal-dark);
+  box-shadow: 6px 6px 0 var(--iso-teal-dark);
+}
+
+.cin-feedback-point-icon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  color: var(--iso-teal-dark);
+  background: rgba(239, 196, 111, .35);
+}
+
+.cin-feedback-point-icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.cin-feedback-point h3 {
+  margin: 0;
+  color: var(--iso-teal-dark);
+  font-size: 16.5px;
+  font-weight: 850;
+  letter-spacing: -.01em;
+}
+
+.cin-feedback-point p {
+  margin: 8px 0 0;
+  color: rgba(12, 62, 72, .68);
+  font-size: 13.5px;
+  line-height: 1.65;
+}
+
+.cin-feedback-point > span {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  color: rgba(13, 99, 112, .18);
+  font-family: var(--font-mono), monospace;
+  font-size: 26px;
+  font-weight: 900;
+}
+
+@media (max-width: 980px) {
+  .cin-feedback-layout {
+    grid-template-columns: 1fr;
+    gap: 30px;
+  }
+}
+
+/* ── Brand slots: crisp original mark, no tagline ─────────────────── */
+
+.iso-header-wordmark strong {
+  font-size: 19px;
+}
+
+.cin-footer-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.cin-footer-logo img {
+  width: 46px;
+  height: 46px;
+  object-fit: contain;
+}
+
+.cin-footer-logo strong {
+  color: var(--iso-teal-dark);
+  font-size: 25px;
+  font-weight: 900;
+  letter-spacing: -.025em;
+}
+
+/* ── Route loading state ──────────────────────────────────────────── */
+
+.cin-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  min-height: 100vh;
+  min-height: 100svh;
+  background: linear-gradient(180deg, #fffdf8 0%, #fffaf4 55%, #f8f0e5 100%);
+  color: #0c3e48;
+}
+
+.cin-loading-stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 132px;
+  height: 132px;
+}
+
+.cin-loading-mark {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  animation: cin-loading-bob 2.2s ease-in-out infinite;
+  filter: drop-shadow(0 12px 18px rgba(12, 62, 72, .22));
+}
+
+.cin-loading-ring {
+  position: absolute;
+  inset: 0;
+  border: 2px solid rgba(13, 99, 112, .35);
+  border-radius: 50%;
+  animation: cin-loading-ripple 2.2s cubic-bezier(.16, 1, .3, 1) infinite;
+}
+
+.cin-loading-ring.is-late {
+  animation-delay: 1.1s;
+}
+
+@keyframes cin-loading-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-9px); }
+}
+
+@keyframes cin-loading-ripple {
+  0% { transform: scale(.42); opacity: 0; }
+  30% { opacity: .8; }
+  100% { transform: scale(1.06); opacity: 0; }
+}
+
+.cin-loading-word {
+  font-size: 26px;
+  font-weight: 900;
+  letter-spacing: -.03em;
+}
+
+.cin-loading-bar {
+  position: relative;
+  width: 168px;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: rgba(12, 62, 72, .12);
+}
+
+.cin-loading-bar i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 44%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #0d6370, #efc46f);
+  animation: cin-loading-sweep 1.5s cubic-bezier(.45, 0, .3, 1) infinite;
+}
+
+@keyframes cin-loading-sweep {
+  0% { transform: translateX(-110%); }
+  100% { transform: translateX(400%); }
+}
+
+.cin-loading-line {
+  color: rgba(12, 62, 72, .55);
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cin-loading-mark,
+  .cin-loading-ring,
+  .cin-loading-bar i {
+    animation: none;
+  }
+}
+
 /* ── Responsive ───────────────────────────────────────────────────── */
 
 @media (max-width: 1180px) {
@@ -820,16 +1283,11 @@
 
 @media (max-width: 880px) {
   .cin-section {
-    height: 430vh;
+    height: 560vh;
   }
 
   .cin-copy {
     padding-top: 88px;
-  }
-
-  .cin-object {
-    width: 96vw;
-    opacity: .5;
   }
 
   .cin-token-usd { top: 11%; right: 4%; --token-size: 110px; }
@@ -856,10 +1314,9 @@
   }
 
   .cin-scan-caption { font-size: 8.5px; }
-  .cin-status { display: none; }
   .cin-hint { right: 20px; bottom: 20px; }
   .cin-vision-lede { font-size: 15px; }
-  .cin-vision-strip { letter-spacing: .2em; }
+  .cin-melt-drip { width: 8px; }
 }
 
 @media (max-width: 880px) {
@@ -880,11 +1337,11 @@
 @media (prefers-reduced-motion: reduce) {
   .cin-hint-wheel::before,
   .cin-float,
-  .cin-object-poster,
   .cin-callout-badge img,
   .cin-token-button.is-spinning,
   .cin-vision-mark,
-  .cin-partner-logo.is-popping {
+  .cin-partner-logo.is-popping,
+  .cin-city-beacon {
     animation: none;
   }
 }
