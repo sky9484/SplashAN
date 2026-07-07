@@ -5,7 +5,6 @@ import {
   ArrowUpRight,
   CheckCircle2,
   Clock,
-  ExternalLink,
   RefreshCw,
   XCircle,
   AlertTriangle,
@@ -19,6 +18,9 @@ import {
 import Link from 'next/link';
 import Papa from 'papaparse';
 
+import DashPageHeader from '@/components/dashboard/DashPageHeader';
+import DashStat from '@/components/dashboard/DashStat';
+import ExplorerLinks from '@/components/dashboard/ExplorerLinks';
 import StatusBadge from '@/components/StatusBadge';
 import type { TransferIntentRecord, TransferIntentState } from '@/lib/server/operations';
 import { getCorridorFeeBps } from '@/lib/fx/corridors';
@@ -135,13 +137,6 @@ function ProgressSteps({ state }: { state: TransferIntentState }) {
 }
 
 function TransferCard({ record }: { record: TransferIntentRecord & { heldDurationMs?: number | null } }) {
-  const suiScanUrl = record.suiTxDigest
-    ? `https://suiscan.xyz/testnet/tx/${record.suiTxDigest}`
-    : null;
-  const suiVisionUrl = record.suiTxDigest
-    ? `https://testnet.suivision.xyz/txblock/${record.suiTxDigest}`
-    : null;
-
   return (
     <div className="dash-block dash-block-interactive p-5">
       <div className="flex items-start justify-between gap-4">
@@ -181,28 +176,7 @@ function TransferCard({ record }: { record: TransferIntentRecord & { heldDuratio
           <div className="min-w-0 flex-1 break-all rounded-lg bg-[#F6F0ED] px-3 py-1.5 font-mono text-[11px] text-[#326273]/60">
             {record.suiTxDigest}
           </div>
-          <div className="flex shrink-0 gap-2">
-            {suiScanUrl && (
-              <a
-                href={suiScanUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 rounded-lg bg-[#5C9EAD]/10 px-2.5 py-1.5 text-xs font-semibold text-[#5C9EAD] hover:bg-[#5C9EAD]/20"
-              >
-                <ExternalLink size={11} /> SuiScan
-              </a>
-            )}
-            {suiVisionUrl && (
-              <a
-                href={suiVisionUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 rounded-lg bg-[#5C9EAD]/10 px-2.5 py-1.5 text-xs font-semibold text-[#5C9EAD] hover:bg-[#5C9EAD]/20"
-              >
-                <ExternalLink size={11} /> SuiVision
-              </a>
-            )}
-          </div>
+          <ExplorerLinks digest={record.suiTxDigest} />
         </div>
       )}
 
@@ -334,68 +308,43 @@ export default function HistoryPage() {
   return (
     <div className="mx-auto w-full max-w-6xl space-y-5">
       {/* Header */}
-      <header className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-        <div>
-          <span className="dash-kicker">Settlement history</span>
-          <h1 className="dash-title mt-2">History</h1>
-          <p className="mt-0.5 max-w-xl text-xs text-[#326273]/60">
-            All your single transfers — live status, on-chain proofs, and failure reasons.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => void exportReconciliation('csv')}
-            className="inline-flex items-center gap-2 rounded-lg border border-[#326273]/15 bg-white px-3 py-2 text-xs font-semibold text-[#326273] shadow-sm transition-colors hover:border-[#5C9EAD]/40"
-          >
-            <Download size={14} />
-            Export CSV
-          </button>
-          <button
-            type="button"
-            onClick={() => void exportReconciliation('json')}
-            className="inline-flex items-center gap-2 rounded-lg border border-[#326273]/15 bg-white px-3 py-2 text-xs font-semibold text-[#326273] shadow-sm transition-colors hover:border-[#5C9EAD]/40"
-          >
-            <Download size={14} />
-            Export JSON
-          </button>
-          <button
-            type="button"
-            onClick={() => void fetchTransfers(filter, true)}
-            disabled={refreshing}
-            className="inline-flex items-center gap-2 rounded-lg border border-[#326273]/15 bg-white px-3 py-2 text-xs font-semibold text-[#326273] shadow-sm transition-colors hover:border-[#5C9EAD]/40 disabled:opacity-50"
-          >
-            <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
-            Refresh
-          </button>
-          <Link
-            href="/dashboard/transfer"
-            className="inline-flex items-center gap-2 rounded-lg bg-[#326273] px-3 py-2 text-xs font-bold text-white shadow-sm transition-colors hover:bg-[#264e5b]"
-          >
-            <ArrowUpRight size={14} />
-            New transfer
-          </Link>
-        </div>
-      </header>
+      <DashPageHeader
+        kicker="Settlement history"
+        title="History"
+        description="All your single transfers — live status, on-chain proofs, and failure reasons."
+        actions={
+          <>
+            <button type="button" onClick={() => void exportReconciliation('csv')} className="dash-btn dash-btn-ghost !px-3 !py-2 !text-xs">
+              <Download size={14} />
+              Export CSV
+            </button>
+            <button type="button" onClick={() => void exportReconciliation('json')} className="dash-btn dash-btn-ghost !px-3 !py-2 !text-xs">
+              <Download size={14} />
+              Export JSON
+            </button>
+            <button
+              type="button"
+              onClick={() => void fetchTransfers(filter, true)}
+              disabled={refreshing}
+              className="dash-btn dash-btn-ghost !px-3 !py-2 !text-xs"
+            >
+              <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+              Refresh
+            </button>
+            <Link href="/dashboard/transfer" className="dash-btn !px-3 !py-2 !text-xs">
+              <ArrowUpRight size={14} />
+              New transfer
+            </Link>
+          </>
+        }
+      />
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3 dash-reveal-stagger md:grid-cols-4">
-        <div className="dash-block dash-block-interactive p-4">
-          <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#326273]/55">Total</div>
-          <div className="dash-num mt-2 text-2xl font-extrabold text-[#326273]">{data?.total ?? 0}</div>
-        </div>
-        <div className="dash-block dash-block-interactive p-4">
-          <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#326273]/55">Pending</div>
-          <div className="dash-num mt-2 text-2xl font-extrabold text-[#E39774]">{counts.pending}</div>
-        </div>
-        <div className="dash-block dash-block-interactive p-4">
-          <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#326273]/55">Settled</div>
-          <div className="dash-num mt-2 text-2xl font-extrabold text-[#5C9EAD]">{counts.successful}</div>
-        </div>
-        <div className="dash-block dash-block-interactive p-4">
-          <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#326273]/55">Failed</div>
-          <div className="dash-num mt-2 text-2xl font-extrabold text-red-500">{counts.failed}</div>
-        </div>
+        <DashStat label="Total" value={String(data?.total ?? 0)} valueClassName="text-[#326273]" />
+        <DashStat label="Pending" value={String(counts.pending)} valueClassName="text-[#E39774]" />
+        <DashStat label="Settled" value={String(counts.successful)} valueClassName="text-[#5C9EAD]" />
+        <DashStat label="Failed" value={String(counts.failed)} valueClassName="text-red-500" />
       </div>
 
       {/* Filter tabs */}

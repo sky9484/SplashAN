@@ -1,11 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle2, Clock, Download, ExternalLink, FileWarning, Layers, Loader2, PercentCircle, ShieldCheck, Upload, Wallet, XCircle, type LucideIcon } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock, Download, FileWarning, Layers, Loader2, PercentCircle, ShieldCheck, Upload, Wallet, XCircle, type LucideIcon } from "lucide-react";
 import Papa from "papaparse";
 import { toast } from "sonner";
 
 import HoverPopup from "@/components/HoverPopup";
+import DashPageHeader from "@/components/dashboard/DashPageHeader";
+import DashStat from "@/components/dashboard/DashStat";
+import ExplorerLinks from "@/components/dashboard/ExplorerLinks";
 import SettlementEngineFlow from "@/components/dashboard/SettlementEngineFlow";
 
 type ComplianceResult = "PASS" | "REVIEW" | "BLOCK";
@@ -283,18 +286,20 @@ export default function BatchPage() {
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-5">
-      <header className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-        <div>
-          <span className="dash-kicker">Batch operations</span>
-          <h1 className="dash-title mt-2">Upload, screen, authorize</h1>
-          <p className="mt-0.5 max-w-2xl text-xs text-[#326273]/60">
+      <DashPageHeader
+        kicker="Batch operations"
+        title="Upload, screen, authorize"
+        description={
+          <>
             Upload a CSV with columns <code className="font-mono">name,address,amount,country,purpose</code>. Splash preflights AML, KYT, limits, corridor &amp; purpose-code checks before TOTP authorization.
-          </p>
-        </div>
-        <div className="rounded-xl border border-[#326273]/10 bg-white px-3 py-2 text-xs font-semibold text-[#326273]">
-          Tier 1 limits · RM 20k / transfer
-        </div>
-      </header>
+          </>
+        }
+        actions={
+          <div className="rounded-xl border border-[#326273]/10 bg-white px-3 py-2 text-xs font-semibold text-[#326273]">
+            Tier 1 limits · RM 20k / transfer
+          </div>
+        }
+      />
 
       <SettlementEngineFlow variant="batch" className="dash-reveal" />
 
@@ -546,20 +551,7 @@ function BatchStatusPanel({ status }: { status: BatchStatus }) {
           <div className="min-w-0 flex-1 break-all rounded-lg bg-white px-3 py-1.5 font-mono text-[11px] text-[#326273]/60">
             {status.digest}
           </div>
-          <div className="flex shrink-0 gap-2">
-            {status.explorer.suiScanTxUrl && (
-              <a href={status.explorer.suiScanTxUrl} target="_blank" rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 rounded-lg bg-[#5C9EAD]/10 px-2.5 py-1.5 text-xs font-semibold text-[#5C9EAD] hover:bg-[#5C9EAD]/20">
-                <ExternalLink size={11} /> SuiScan
-              </a>
-            )}
-            {status.explorer.suiVisionTxUrl && (
-              <a href={status.explorer.suiVisionTxUrl} target="_blank" rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 rounded-lg bg-[#5C9EAD]/10 px-2.5 py-1.5 text-xs font-semibold text-[#5C9EAD] hover:bg-[#5C9EAD]/20">
-                <ExternalLink size={11} /> SuiVision
-              </a>
-            )}
-          </div>
+          <ExplorerLinks digest={status.digest} />
         </div>
       )}
 
@@ -574,13 +566,14 @@ function BatchStatusPanel({ status }: { status: BatchStatus }) {
 
 function SummaryCard({ icon: Icon, label, value, tone }: { icon: LucideIcon; label: string; value: string; tone: string }) {
   return (
-    <div className="dash-block dash-block-interactive cursor-pointer p-5">
-      <div className="flex items-center justify-between">
-        <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#326273]/55">{label}</div>
-        <Icon className={tone} size={18} />
-      </div>
-      <div className="dash-num mt-3 text-2xl font-extrabold text-[#0c3e48]">{value}</div>
-    </div>
+    <DashStat
+      className="cursor-pointer p-5"
+      label={label}
+      value={value}
+      icon={Icon}
+      iconClassName={tone}
+      iconWrapClassName="bg-transparent p-0"
+    />
   );
 }
 

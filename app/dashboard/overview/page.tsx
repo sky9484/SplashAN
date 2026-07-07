@@ -18,9 +18,10 @@ import Link from 'next/link';
 
 import HoverPopup from '@/components/HoverPopup';
 import LiveExchangeTicker from '@/components/LiveExchangeTicker';
+import DashPageHeader from '@/components/dashboard/DashPageHeader';
+import DashStat from '@/components/dashboard/DashStat';
 import SettlementEngineFlow from '@/components/dashboard/SettlementEngineFlow';
 import StatusBadge, { type Status } from '@/components/StatusBadge';
-import MemWalBehaviorCard from '@/components/MemWalBehaviorCard';
 import { cn } from '@/lib/utils';
 import { getCorridorFeeBps } from '@/lib/fx/corridors';
 
@@ -31,10 +32,11 @@ function bpsToPct(bps: number) {
 
 // ─── Data ────────────────────────────────────────────────────────────────────
 
+// Treasury projection lives in the right column (single source on this page);
+// deeper treasury detail is the Treasury page's job.
 const TOP_STATS = [
   { label: '0xWal operating scan', value: null, icon: Bot, accent: 'text-[#E39774]', bg: 'bg-[#E39774]/10', id: '0xwal' },
   { label: 'Volume (30d)', value: '$39,120', delta: '+12.4%', icon: ArrowUpRight, accent: 'text-[#326273]', bg: 'bg-[#326273]/10', id: 'volume' },
-  { label: 'Treasury Projection', value: null, icon: TrendingUp, accent: 'text-amber-600', bg: 'bg-amber-100', id: 'yield' },
   { label: 'Corridor Coverage', value: '1 live-model', delta: '8 implemented in code', icon: Globe, accent: 'text-[#5C9EAD]', bg: 'bg-[#5C9EAD]/10', id: 'corridors' },
   { label: 'Settlement SLA', value: '400ms', delta: 'On target', icon: Zap, accent: 'text-[#E39774]', bg: 'bg-[#E39774]/10', id: 'sla' },
 ] as const;
@@ -116,7 +118,6 @@ function TxPill({ status }: { status: TxStatus }) {
 export default function DashboardOverview() {
   const [corridors] = useState(INITIAL_CORRIDORS);
   const [yieldEarned, setYield]   = useState(98.72);
-  const [copilotDismissed, setCopilotDismissed] = useState(false);
   const [treasuryPrincipal, setTreasuryPrincipal] = useState(24500);
   const [walSummary, setWalSummary] = useState({ detected: 0, batchable: 0, needsApproval: 0 });
   const [treasuryRateLabel, setTreasuryRateLabel] = useState('USDY · variable');
@@ -155,30 +156,25 @@ export default function DashboardOverview() {
       <LiveExchangeTicker />
 
       {/* Page header */}
-      <header className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <span className="dash-kicker">Operating desk</span>
-          <h1 className="dash-title mt-2">Overview</h1>
-          <p className="mt-1 text-xs font-medium text-[#326273]/55">Acme Trading Sdn Bhd · Updated just now</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <StatusBadge status="verified" />
-          <Link
-            href="/dashboard/transfer"
-            className="flex items-center gap-2 rounded-lg bg-[#0d6370] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[#0b5560]"
-          >
-            <Send size={14} />
-            New Transfer
-          </Link>
-          <Link
-            href="/dashboard/batch"
-            className="flex items-center gap-2 rounded-[11px] border border-[#326273]/20 bg-white/70 px-4 py-2.5 text-sm font-bold text-[#326273] transition-colors hover:border-[#5C9EAD] hover:bg-white"
-          >
-            <Layers size={14} />
-            Batch Payout
-          </Link>
-        </div>
-      </header>
+      <DashPageHeader
+        className="mt-5"
+        kicker="Operating desk"
+        title="Overview"
+        description="Acme Trading Sdn Bhd · Updated just now"
+        actions={
+          <>
+            <StatusBadge status="verified" />
+            <Link href="/dashboard/transfer" className="dash-btn">
+              <Send size={14} />
+              New Transfer
+            </Link>
+            <Link href="/dashboard/batch" className="dash-btn dash-btn-ghost">
+              <Layers size={14} />
+              Batch Payout
+            </Link>
+          </>
+        }
+      />
 
       {/* Signature: animated settlement-engine flow */}
       <SettlementEngineFlow variant="settlement" className="dash-reveal" />
@@ -196,10 +192,8 @@ export default function DashboardOverview() {
         ))}
       </section>
 
-      <MemWalBehaviorCard />
-
       {/* Top stats row */}
-      <section className="grid grid-cols-2 gap-3 dash-reveal-stagger md:grid-cols-3 xl:grid-cols-5">
+      <section className="grid grid-cols-2 gap-3 dash-reveal-stagger xl:grid-cols-4">
         {TOP_STATS.map(({ label, value, icon: Icon, accent, bg, id }) => {
           if (id === '0xwal') {
             return (
@@ -217,27 +211,18 @@ export default function DashboardOverview() {
               </Link>
             );
           }
-          const displayValue =
-            id === 'yield'   ? `$${yieldEarned.toFixed(2)} modeled` :
-            value ?? '—';
-          const delta =
-            id === 'yield'   ? 'USDY · approval gated' :
-            (TOP_STATS.find((s) => s.id === id) as { delta?: string })?.delta ?? '';
-          const deltaGreen = id === 'yield' || id === 'corridors' || id === 'sla' || id === 'volume';
-
           return (
-            <div key={label} className="dash-block dash-block-interactive p-4">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#326273]/55">{label}</span>
-                <div className={cn('rounded-lg p-1.5', bg)}>
-                  <Icon size={14} className={accent} />
-                </div>
-              </div>
-              <div className="dash-num mt-2 text-xl font-extrabold text-[#0c3e48]">{displayValue}</div>
-              <div className={cn('mt-0.5 text-[11px] font-semibold', deltaGreen ? 'text-emerald-600' : 'text-[#E39774]')}>
-                {delta}
-              </div>
-            </div>
+            <DashStat
+              key={label}
+              label={label}
+              value={value ?? '—'}
+              delta={(TOP_STATS.find((s) => s.id === id) as { delta?: string })?.delta ?? ''}
+              deltaClassName="text-emerald-600"
+              icon={Icon}
+              iconClassName={accent}
+              iconWrapClassName={bg}
+              valueClassName="text-xl"
+            />
           );
         })}
       </section>
@@ -246,67 +231,9 @@ export default function DashboardOverview() {
       <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_300px]">
 
         {/* ── LEFT COLUMN ── */}
+        {/* AI recommendations live on the 0xWal desk and Copilot pages; this
+            column stays focused on operating state. */}
         <div className="min-w-0 space-y-5">
-
-          {/* AI Copilot suggestion panel */}
-          {!copilotDismissed && (
-            <div className="dash-surface p-4" style={{ borderLeft: '4px solid #E39774' }}>
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-start gap-3">
-                  <div className="mt-0.5 rounded-lg bg-[#E39774]/15 p-2">
-                    <Bot size={16} className="text-[#C97A56]" />
-                  </div>
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-bold text-[#1F4452]">0xWal</span>
-                      <span className="rounded-full bg-[#E39774]/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#C97A56]">
-                        MemWal · Claude
-                      </span>
-                    </div>
-                    <p className="mt-0.5 text-[11px] text-[#326273]/55">
-                      Payroll pattern detected from 8 weeks of activity
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setCopilotDismissed(true)}
-                  className="shrink-0 text-[11px] text-[#326273]/35 transition-colors hover:text-[#326273]"
-                >
-                  Dismiss
-                </button>
-              </div>
-
-              <div className="mt-3 rounded-lg bg-[#F6F0ED] p-3">
-                <p className="text-sm font-semibold text-[#1F4452]">
-                  Manila BPO payroll · Friday batch window
-                </p>
-                <p className="mt-1 text-xs leading-5 text-[#326273]/65">
-                  PHP rate 56.42 is within 0.3% of your 30-day best. Typical batch runs 52 recipients
-                  (~$12,400 USD). Suggested window: 09:00 MYT — historically pre-market stable.
-                </p>
-                <div className="mt-2.5 flex items-center gap-3">
-                  <span className="text-[10px] font-semibold text-[#326273]/50">Confidence</span>
-                  <div className="flex-1 overflow-hidden rounded-full bg-white h-1.5">
-                    <div className="h-full w-[94%] rounded-full bg-[#E39774]" />
-                  </div>
-                  <span className="text-[10px] font-bold text-[#C97A56]">94%</span>
-                </div>
-              </div>
-
-              <div className="mt-3 flex flex-wrap items-center gap-3">
-                <Link
-                  href="/dashboard/batch"
-                  className="rounded-lg bg-[#326273] px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-[#264e5b]"
-                >
-                  Pre-stage batch →
-                </Link>
-                <span className="text-[11px] text-[#326273]/50">
-                  52 recipients · $12,400 USD → PHP 699,608
-                </span>
-              </div>
-            </div>
-          )}
 
           {/* Settlement pipeline */}
           <div className="dash-surface p-4">

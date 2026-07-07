@@ -171,19 +171,20 @@ export default function OxwalDeskPage() {
   return (
     <div className="mx-auto grid w-full max-w-7xl gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
       <main className="min-w-0 space-y-4">
-        <header className="rounded-lg border border-[#326273]/16 bg-[#F6F0ED] p-5 shadow-sm">
+        <header className="dash-block dash-block-accent dash-reveal p-5">
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-2 rounded-md bg-[#1F4452] px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-white">
-                  <Bot className="h-3.5 w-3.5" />
+                <span className="dash-kicker">Operating desk · AI</span>
+                <span className="inline-flex items-center gap-2 rounded-md bg-[#0c3e48] px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-white">
+                  <Bot className="h-3.5 w-3.5 text-[#efc46f]" />
                   0xWal
                 </span>
                 <span className="rounded-md border border-[#5C9EAD]/35 bg-[#5C9EAD]/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-[#326273]">
                   {source ?? 'local'} mode
                 </span>
               </div>
-              <h1 className="mt-3 text-3xl font-black tracking-normal text-[#1F4452] md:text-4xl">
+              <h1 className="dash-title mt-3 text-3xl md:text-4xl">
                 Finance command desk
               </h1>
               <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-[#326273]/62">
@@ -198,7 +199,7 @@ export default function OxwalDeskPage() {
           </div>
         </header>
 
-        <section className="rounded-lg border border-[#326273]/12 bg-[#FBFAF7] px-4 py-8 shadow-sm md:px-8 md:py-10">
+        <section className="dash-surface dash-reveal px-4 py-8 md:px-8 md:py-10">
           <OxWalComposer
             title="What's on the agenda today?"
             value={input}
@@ -211,8 +212,8 @@ export default function OxwalDeskPage() {
           />
         </section>
 
-        <section className="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-          <div className="rounded-lg border border-[#326273]/16 bg-white/82">
+        <section className="grid gap-4 dash-reveal-stagger lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+          <div className="dash-surface overflow-hidden">
             <div className="flex items-center gap-2 border-b border-[#326273]/10 px-4 py-3">
               <MessageSquareText className="h-4 w-4 text-[#5C9EAD]" />
               <h2 className="text-sm font-black text-[#1F4452]">Conversation</h2>
@@ -236,7 +237,7 @@ export default function OxwalDeskPage() {
             </div>
           </div>
 
-          <div className="rounded-lg border border-[#326273]/16 bg-white/82">
+          <div className="dash-surface overflow-hidden">
             <div className="flex items-center justify-between gap-3 border-b border-[#326273]/10 px-4 py-3">
               <div className="flex items-center gap-2">
                 <BrainCircuit className="h-4 w-4 text-[#5C9EAD]" />
@@ -262,15 +263,15 @@ export default function OxwalDeskPage() {
         <section className="space-y-3">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-[#5C9EAD]">Unsigned proposals</p>
-              <h2 className="text-2xl font-black tracking-normal text-[#1F4452]">Action cards</h2>
+              <span className="dash-kicker">Unsigned proposals</span>
+              <h2 className="mt-1 text-2xl font-black tracking-tight text-[#0c3e48]">Action cards</h2>
             </div>
-            <Link href="/dashboard/overview" className="rounded-md border border-[#326273]/18 bg-white/70 px-3 py-2 text-sm font-black text-[#326273]">
+            <Link href="/dashboard/overview" className="dash-btn-ghost dash-btn">
               Overview
             </Link>
           </div>
           {proposals.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-[#326273]/20 bg-white/64 p-8 text-center">
+            <div className="dash-surface p-8 text-center">
               <Sparkles className="mx-auto h-8 w-8 text-[#5C9EAD]" />
               <p className="mt-3 text-sm font-black text-[#1F4452]">No active proposals</p>
             </div>
@@ -284,9 +285,9 @@ export default function OxwalDeskPage() {
         </section>
       </main>
 
-      <aside className="space-y-4">
-        <MemWalBehaviorCard />
-        <div className="rounded-lg border border-[#326273]/16 bg-white/78 p-4">
+      <aside className="space-y-4 dash-reveal-stagger">
+        <MemWalBehaviorCard compact />
+        <div className="dash-block p-4">
           <div className="flex items-center gap-2">
             <ShieldCheck className="h-4 w-4 text-[#5C9EAD]" />
             <h2 className="text-sm font-black text-[#1F4452]">Control state</h2>
@@ -297,13 +298,13 @@ export default function OxwalDeskPage() {
             <ControlRow icon={AlertTriangle} label="Circuit breaker" value="Armed" caution={false} />
           </div>
         </div>
-        <div className="rounded-lg border border-[#326273]/16 bg-[#1F4452] p-4 text-white">
-          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/48">Approval surface</p>
+        <div className="rounded-2xl border border-[#0c3e48] bg-[#0c3e48] p-4 text-white shadow-[6px_7px_0_rgba(12,62,72,0.18)]">
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#efc46f]/80">Approval surface</p>
           <div className="mt-2 text-2xl font-black">Maker-checker</div>
           <p className="mt-2 text-xs font-semibold leading-5 text-white/62">
             Pending proposals, compliance holds, expiring quotes, failed settlements, and anomaly halts live in the queue.
           </p>
-          <Link href="/queue" className="mt-4 inline-flex items-center gap-2 rounded-md bg-white px-3 py-2 text-sm font-black text-[#1F4452]">
+          <Link href="/queue" className="dash-btn dash-btn-gold mt-4">
             Open queue
           </Link>
         </div>

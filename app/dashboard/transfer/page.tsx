@@ -174,7 +174,7 @@ export default function TransferPage() {
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-4">
-      <header className="overflow-hidden rounded-lg border border-[#1F4452]/20 bg-[#1F4452] text-white shadow-[8px_8px_0_rgba(31,68,82,0.12)]">
+      <header className="dash-reveal overflow-hidden rounded-2xl border border-[#0c3e48]/30 bg-[#0c3e48] text-white shadow-[8px_8px_0_rgba(12,62,72,0.14)]">
         <div className="grid gap-5 p-5 md:grid-cols-[minmax(0,1fr)_300px] md:p-6">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
@@ -248,7 +248,7 @@ export default function TransferPage() {
       <Stepper current={state.step} />
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1.55fr)_360px]">
-        <div className="rounded-lg border border-[#326273]/15 bg-white/80 p-4 shadow-[0_18px_38px_-28px_rgba(50,98,115,0.45)] md:p-6">
+        <div className="dash-surface p-4 md:p-6">
           {state.step === 1 && <StepBeneficiary state={state} set={set} next={() => go(2)} />}
           {state.step === 2 && <StepDelivery state={state} set={set} prev={() => go(1)} next={() => go(3)} />}
           {state.step === 3 && <StepQuote state={state} set={set} prev={() => go(2)} next={() => go(4)} />}
@@ -256,8 +256,8 @@ export default function TransferPage() {
           {state.step === 5 && <StepReceipt state={state} reset={() => setState(initial)} />}
         </div>
 
-        <aside className="space-y-3">
-          <div className="overflow-hidden rounded-lg border border-[#0c3e48] bg-[#0c3e48] text-white shadow-[6px_7px_0_rgba(12,62,72,0.18)]">
+        <aside className="space-y-3 dash-reveal-stagger">
+          <div className="overflow-hidden rounded-2xl border border-[#0c3e48] bg-[#0c3e48] text-white shadow-[6px_7px_0_rgba(12,62,72,0.18)]">
             <div className="border-b border-white/10 p-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
@@ -346,7 +346,7 @@ function RouteNode({ label, value, alignRight = false }: { label: string; value:
 
 function SignalRow({ icon: Icon, title, metric, body }: { icon: LucideIcon; title: string; metric: string; body: string }) {
   return (
-    <div className="rounded-lg border border-[#326273]/15 bg-white/70 p-4 shadow-sm">
+    <div className="dash-block p-4">
       <div className="flex items-start gap-3">
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#5C9EAD]/10 text-[#326273]">
           <Icon className="h-4 w-4" />
@@ -367,7 +367,7 @@ function SignalRow({ icon: Icon, title, metric, body }: { icon: LucideIcon; titl
 
 function Stepper({ current }: { current: number }) {
   return (
-    <ol className="grid overflow-hidden rounded-lg border border-[#326273]/15 bg-white/80 shadow-sm sm:grid-cols-5">
+    <ol className="dash-surface grid overflow-hidden sm:grid-cols-5">
       {stepLabels.map((label, index) => {
         const step = index + 1;
         const active = step === current;
