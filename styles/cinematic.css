@@ -68,7 +68,7 @@
     radial-gradient(ellipse 120% 95% at 50% 46%, transparent 56%, rgba(226, 206, 180, .32) 100%);
 }
 
-/* ── The artwork scenes (city, then the room behind the window) ────── */
+/* ── The landmark island under the swinging camera ────────────────── */
 
 .cin-scene-layer {
   position: absolute;
@@ -78,43 +78,24 @@
   will-change: transform, opacity;
 }
 
-.cin-city,
-.cin-room {
+.cin-island {
   position: absolute;
   inset: 0;
+  display: grid;
+  place-items: center;
 }
 
-.cin-city img,
-.cin-room img {
-  width: 100%;
-  height: 100%;
-}
-
-.cin-city img {
+.cin-island img {
+  width: min(100vh, 100vw);
+  height: min(100vh, 100vw);
   object-fit: contain;
-  object-position: center bottom;
+  filter: drop-shadow(0 46px 64px rgba(12, 62, 72, .24));
+  animation: cin-hover 10s ease-in-out infinite;
 }
 
-.cin-room img {
-  object-fit: cover;
-  object-position: center;
-}
-
-/* Pulsing halo on the one bright window the camera dives into. */
-.cin-city-beacon {
-  position: absolute;
-  width: 90px;
-  height: 90px;
-  border-radius: 50%;
-  transform: translate(-50%, -50%);
-  background: radial-gradient(circle, rgba(255, 217, 138, .85), rgba(242, 185, 75, .3) 55%, transparent 72%);
-  mix-blend-mode: screen;
-  animation: cin-beacon 2.6s ease-in-out infinite;
-}
-
-@keyframes cin-beacon {
-  0%, 100% { opacity: .55; }
-  50% { opacity: 1; }
+@keyframes cin-hover {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
 }
 
 /* ── Floating currency tokens ─────────────────────────────────────── */
@@ -257,107 +238,104 @@
   .cin-token-sui { --token-size: 150px; }
 }
 
-/* ── Act II · telemetry callouts + scan frame ─────────────────────── */
+/* ── Act II · the tour stops: generated telemetry plaques ─────────── */
 
-.cin-callout {
+.cin-stop {
   position: absolute;
   z-index: 5;
-  display: grid;
-  gap: 4px;
-  max-width: 250px;
-  border-left: 3px solid var(--cin-teal);
-  border-radius: 0 10px 10px 0;
-  padding: 12px 16px;
-  background: rgba(255, 253, 249, .94);
-  box-shadow: 0 18px 40px rgba(8, 54, 64, .13);
+  width: min(378px, 86vw);
+  aspect-ratio: 1264 / 848;
+  filter: drop-shadow(0 26px 40px rgba(8, 54, 64, .32));
+  will-change: transform, opacity;
 }
 
-.cin-callout i {
-  color: var(--cin-teal);
+.cin-stop-art {
+  position: absolute;
+  inset: 0;
+  background: url('/cinematic/callout-panel.png') center / contain no-repeat;
+}
+
+.cin-stop-art.is-flipped {
+  transform: scaleX(-1);
+}
+
+.cin-stop-body {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 4px;
+  padding: 16% 19% 17% 20%;
+}
+
+.cin-stop-body i {
+  color: #ffd98a;
   font-family: var(--font-mono), monospace;
   font-style: normal;
-  font-size: 9px;
+  font-size: 8.5px;
   font-weight: 800;
-  letter-spacing: .18em;
+  letter-spacing: .16em;
   text-transform: uppercase;
 }
 
-.cin-callout strong {
-  color: var(--cin-ink);
-  font-size: 14px;
-  font-weight: 850;
+.cin-stop-body strong {
+  color: #ffffff;
+  font-size: 17px;
+  font-weight: 900;
   letter-spacing: -.01em;
+  line-height: 1.15;
+  text-shadow: 0 2px 8px rgba(4, 28, 34, .5);
 }
 
-.cin-callout small {
-  color: rgba(12, 62, 72, .64);
+.cin-stop-body small {
+  color: #c9e8df;
   font-family: var(--font-mono), monospace;
-  font-size: 10.5px;
+  font-size: 9px;
   line-height: 1.45;
 }
 
-.cin-callout::after {
+.cin-stop-body em {
+  margin-top: 3px;
+  color: rgba(255, 255, 255, .5);
+  font-family: var(--font-mono), monospace;
+  font-style: normal;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+/* Pulsing gold locator dot, mirroring the plaque's pin side. */
+.cin-stop-ping {
   position: absolute;
-  top: 50%;
-  width: 46px;
-  height: 1px;
-  content: "";
+  bottom: -6px;
+  left: 13%;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #f2b94b;
+  box-shadow: 0 0 0 0 rgba(242, 185, 75, .65);
+  animation: cin-ping 2.1s cubic-bezier(.3, .7, .4, 1) infinite;
 }
 
-.cin-callout-a { top: 19%; left: 9%; }
-.cin-callout-b { top: 23%; right: 7%; }
-.cin-callout-c { bottom: 25%; left: 11%; }
-.cin-callout-d { bottom: 20%; right: 9%; }
-
-.cin-callout-a::after,
-.cin-callout-c::after {
-  right: -46px;
-  background: linear-gradient(90deg, rgba(13, 99, 112, .6), transparent);
+.cin-stop.is-left .cin-stop-ping {
+  right: 13%;
+  left: auto;
 }
 
-.cin-callout-b::after,
-.cin-callout-d::after {
-  left: -46px;
-  background: linear-gradient(270deg, rgba(13, 99, 112, .6), transparent);
+@keyframes cin-ping {
+  0% { box-shadow: 0 0 0 0 rgba(242, 185, 75, .65); }
+  70% { box-shadow: 0 0 0 20px rgba(242, 185, 75, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(242, 185, 75, 0); }
 }
 
-.cin-scan {
-  position: absolute;
-  inset: 0;
-  z-index: 5;
-  width: min(66vmin, 680px);
-  height: min(44vmin, 440px);
-  margin: auto;
-  pointer-events: none;
-  border: 1px dashed rgba(12, 62, 72, .38);
+.cin-stop.is-left .cin-stop-body {
+  padding: 16% 20% 17% 21%;
 }
 
-.cin-scan-corner {
-  position: absolute;
-  width: 22px;
-  height: 22px;
-  border: 0 solid var(--cin-teal-dark);
-}
-
-.cin-scan-corner.is-tl { top: -2px; left: -2px; border-top-width: 2px; border-left-width: 2px; }
-.cin-scan-corner.is-tr { top: -2px; right: -2px; border-top-width: 2px; border-right-width: 2px; }
-.cin-scan-corner.is-bl { bottom: -2px; left: -2px; border-bottom-width: 2px; border-left-width: 2px; }
-.cin-scan-corner.is-br { bottom: -2px; right: -2px; border-bottom-width: 2px; border-right-width: 2px; }
-
-.cin-callout-badge {
-  position: absolute;
-  top: -30px;
-  right: -22px;
-  width: 64px;
-  pointer-events: none;
-}
-
-.cin-callout-badge img {
-  width: 100%;
-  height: auto;
-  filter: drop-shadow(0 10px 14px rgba(12, 62, 72, .25));
-  animation: cin-float 7s ease-in-out infinite;
-}
+.cin-stop-fee { top: 15%; left: 6%; }
+.cin-stop-corridor { top: 14%; right: 5%; }
+.cin-stop-treasury { top: 17%; right: 7%; }
+.cin-stop-agent { top: 16%; left: 5%; }
 
 /* ── Screen-light burst + product act + melt ──────────────────────── */
 
@@ -739,7 +717,14 @@
 .cin-static-stage {
   position: absolute;
   inset: 0;
+  display: grid;
+  place-items: center;
   opacity: .5;
+}
+
+.cin-static-stage img {
+  width: min(88vh, 92vw);
+  height: auto;
 }
 
 .cin-copy-static {
@@ -754,12 +739,9 @@
   padding-block: 24px 56px;
 }
 
-.cin-callout-static {
+.cin-stop-static {
   position: static;
-}
-
-.cin-callout-static::after {
-  content: none;
+  width: 100%;
 }
 
 .cin-vision-static {
@@ -867,73 +849,6 @@
   60% { transform: translateY(46px) scale(.5); opacity: 0; }
   76% { opacity: 1; }
   100% { transform: translateY(0) scale(1); opacity: 1; }
-}
-
-/* ── Comparison: pinned reveal, row by row ────────────────────────── */
-
-.cin-compare {
-  height: 470vh;
-  padding-block: 0;
-}
-
-.cin-compare-pin {
-  position: sticky;
-  top: 0;
-  display: flex;
-  align-items: center;
-  min-height: 100vh;
-  min-height: 100svh;
-  overflow: hidden;
-  padding-block: 96px 36px;
-}
-
-.cin-compare-pin > .iso-shell {
-  width: 100%;
-}
-
-.cin-compare .iso-comparison-table {
-  font-size: 15px;
-}
-
-.cin-compare .iso-comparison-table thead th {
-  font-size: 12px;
-}
-
-.cin-compare .iso-comparison-table tbody th {
-  font-size: 15.5px;
-}
-
-.cin-compare .iso-comparison-table tbody td {
-  font-size: 15px;
-}
-
-.cin-compare tbody tr {
-  opacity: .06;
-  transform: translateX(-16px);
-  transition: opacity .55s ease, transform .55s cubic-bezier(.16, 1, .3, 1);
-}
-
-.cin-compare tbody tr.is-uncovered {
-  opacity: 1;
-  transform: none;
-}
-
-@media (max-width: 880px), (prefers-reduced-motion: reduce) {
-  .cin-compare {
-    height: auto;
-  }
-
-  .cin-compare-pin {
-    position: static;
-    min-height: 0;
-    overflow: visible;
-    padding-block: 0;
-  }
-
-  .cin-compare tbody tr {
-    opacity: 1;
-    transform: none;
-  }
 }
 
 /* ── Walrus: calmer scale, so the section fits its story ──────────── */
@@ -1274,10 +1189,7 @@
 /* ── Responsive ───────────────────────────────────────────────────── */
 
 @media (max-width: 1180px) {
-  .cin-callout-a { left: 4%; }
-  .cin-callout-b { right: 3%; }
-  .cin-callout-c { left: 5%; }
-  .cin-callout-d { right: 4%; }
+  .cin-stop { width: min(300px, 82vw); }
   .cin-token-usd { right: 6%; }
 }
 
@@ -1294,38 +1206,24 @@
   .cin-token-myr { bottom: 6%; left: 3%; --token-size: 96px; }
   .cin-token-sui { bottom: 9%; right: 3%; --token-size: 130px; }
 
-  .cin-callout {
-    max-width: 190px;
-    padding: 10px 12px;
+  .cin-stop {
+    width: min(272px, 86vw);
   }
 
-  .cin-callout strong { font-size: 12.5px; }
-  .cin-callout small { font-size: 9.5px; }
-  .cin-callout::after { content: none; }
+  .cin-stop-body strong { font-size: 16px; }
+  .cin-stop-body small { font-size: 9px; }
 
-  .cin-callout-a { top: 13%; left: 5%; }
-  .cin-callout-b { top: 13%; right: 4%; }
-  .cin-callout-c { bottom: 17%; left: 5%; }
-  .cin-callout-d { bottom: 11%; right: 4%; }
+  .cin-stop-fee { top: 9%; left: 4%; }
+  .cin-stop-corridor { top: 9%; right: 4%; }
+  .cin-stop-treasury { top: 10%; right: 4%; }
+  .cin-stop-agent { top: 9%; left: 4%; }
 
-  .cin-scan {
-    width: min(88vw, 400px);
-    height: min(58vw, 270px);
-  }
-
-  .cin-scan-caption { font-size: 8.5px; }
   .cin-hint { right: 20px; bottom: 20px; }
   .cin-vision-lede { font-size: 15px; }
   .cin-melt-drip { width: 8px; }
 }
 
 @media (max-width: 880px) {
-  .cin-callout-badge {
-    top: -22px;
-    right: -12px;
-    width: 46px;
-  }
-
   .cin-token-usd { top: 10%; right: 5%; }
   .cin-token-myr { bottom: 6%; left: 4%; }
 
@@ -1337,11 +1235,11 @@
 @media (prefers-reduced-motion: reduce) {
   .cin-hint-wheel::before,
   .cin-float,
-  .cin-callout-badge img,
   .cin-token-button.is-spinning,
   .cin-vision-mark,
   .cin-partner-logo.is-popping,
-  .cin-city-beacon {
+  .cin-island img,
+  .cin-stop-ping {
     animation: none;
   }
 }

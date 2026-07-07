@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ArrowRight, Check } from 'lucide-react';
 import {
   motion,
@@ -14,8 +14,6 @@ import {
   type MotionValue,
 } from 'framer-motion';
 
-import CityScene, { CITY_VIEW } from '@/components/landing/CityScene';
-import RoomScene, { ROOM_VIEW } from '@/components/landing/RoomScene';
 import { lockedCopy } from '@/content/claims';
 
 const EASE_OUT_EXPO = [0.16, 1, 0.3, 1] as const;
@@ -30,55 +28,62 @@ const rise = {
   shown: { opacity: 1, y: 0, transition: { duration: 0.8, ease: EASE_OUT_EXPO } },
 };
 
-/* ── Acts on the scroll track ─────────────────────────────────────────
-   0.00-0.12  city + hero copy
-   0.10-0.34  camera dives toward the bright window (telemetry pops)
-   0.32-0.40  crossfade into the room
-   0.40-0.60  camera pushes into the monitor screen
-   0.56-0.68  the screen fills the rectangular frame — light burst
-   0.66-0.86  the product act (with the metrics band docked at its foot)
-   0.86-1.00  everything melts down into Infrastructure & Partners      */
+/* ── The landmark island ──────────────────────────────────────────────
+   One floating island carries the four SEA landmarks around a gold
+   ring. The camera zooms in and swings landmark to landmark; each stop
+   pops its telemetry plaque. Geometry is measured on the artwork's
+   1024x1024 basis (rendered object-fit contain, centred). */
 
-const telemetry = [
-  {
-    id: 'corridor',
-    className: 'cin-callout-a',
-    enter: 0.13,
-    exit: 0.3,
-    tag: 'Corridor · Testnet',
-    value: 'USD → PHP',
-    meta: lockedCopy.speed,
-    badge: '/cinematic/token-php.png',
-    badgeAlt: 'Philippine peso token',
-  },
+const ISLAND_SIZE = 1024;
+
+const tourStops = [
   {
     id: 'fee',
-    className: 'cin-callout-b',
+    landmark: 'Marina Bay Sands · Singapore',
+    target: { x: 722, y: 338 },
+    rotate: -10,
     enter: 0.16,
-    exit: 0.3,
+    exit: 0.26,
+    side: 'left' as const,
     tag: 'Edge fee · Modeled',
     value: lockedCopy.fee,
     meta: lockedCopy.feeFootnote,
   },
   {
+    id: 'corridor',
+    landmark: 'Petronas Towers · Kuala Lumpur',
+    target: { x: 320, y: 274 },
+    rotate: 12,
+    enter: 0.325,
+    exit: 0.42,
+    side: 'right' as const,
+    tag: 'Corridor · Testnet',
+    value: 'USD → PHP',
+    meta: lockedCopy.speed,
+  },
+  {
     id: 'treasury',
-    className: 'cin-callout-c',
-    enter: 0.42,
+    landmark: 'Monas · Jakarta',
+    target: { x: 329, y: 567 },
+    rotate: -12,
+    enter: 0.485,
     exit: 0.56,
+    side: 'right' as const,
     tag: 'Treasury · Approval-gated',
     value: 'USDY posture',
     meta: lockedCopy.yield,
   },
   {
     id: 'agent',
-    className: 'cin-callout-d',
-    enter: 0.45,
-    exit: 0.56,
+    landmark: 'Wat Arun · Bangkok',
+    target: { x: 704, y: 558 },
+    rotate: 10,
+    enter: 0.625,
+    exit: 0.7,
+    side: 'left' as const,
     tag: 'Agent · Human-final',
     value: '0xWal desk',
     meta: lockedCopy.agent,
-    badge: '/cinematic/agent-bot.png',
-    badgeAlt: '0xWal assistant robot',
   },
 ];
 
@@ -97,52 +102,105 @@ const tokens = [
   { className: 'cin-token-sui', src: '/cinematic/token-sui.png', alt: 'Sui token', float: 'cin-float-drift', depth: 44, rate: -240 },
 ];
 
-function Callout({
-  progress,
-  enter,
-  exit,
-  className,
-  children,
-}: {
-  progress: MotionValue<number>;
-  enter: number;
-  exit: number;
-  className: string;
-  children: ReactNode;
-}) {
-  const opacity = useTransform(progress, [enter, enter + 0.04, exit, exit + 0.05], [0, 1, 1, 0]);
-  const y = useTransform(progress, [enter, enter + 0.06], [22, 0]);
-  return (
-    <motion.div className={`cin-callout ${className}`} style={{ opacity, y }}>
-      {children}
-    </motion.div>
-  );
+/* Camera keyframes: between stops the island swings (rotate) while the
+   zoom breathes out and back in; during each dwell it holds still.
+   Translation keyframes re-centre the active landmark, computed from
+   the island's rendered geometry at the current viewport size. */
+function buildCamera(vw: number, vh: number) {
+  const s = Math.min(vw, vh) / ISLAND_SIZE;
+  const offsetX = (vw - ISLAND_SIZE * s) / 2;
+  const offsetY = (vh - ISLAND_SIZE * s) / 2;
+  const centre = { x: vw / 2, y: vh / 2 };
+
+  const ZOOM = 2.35;
+  const BREATHE = 1.9;
+
+  const shift = (stop: (typeof tourStops)[number], zoom: number) => {
+    const px = { x: offsetX + stop.target.x * s, y: offsetY + stop.target.y * s };
+    const rad = (stop.rotate * Math.PI) / 180;
+    const v = { x: px.x - centre.x, y: px.y - centre.y };
+    return {
+      x: -(v.x * Math.cos(rad) - v.y * Math.sin(rad)) * zoom,
+      y: -(v.x * Math.sin(rad) + v.y * Math.cos(rad)) * zoom,
+    };
+  };
+
+  const p: number[] = [0, 0.09];
+  const x: number[] = [vw * 0.17, vw * 0.17];
+  const y: number[] = [0, 0];
+  const scale: number[] = [1, 1.05];
+  const rotate: number[] = [0, 0];
+
+  tourStops.forEach((stop, index) => {
+    const at = shift(stop, ZOOM);
+    p.push(stop.enter, stop.exit);
+    x.push(at.x, at.x);
+    y.push(at.y, at.y);
+    scale.push(ZOOM, ZOOM);
+    rotate.push(stop.rotate, stop.rotate);
+    const next = tourStops[index + 1];
+    if (next) {
+      const mid = (stop.exit + next.enter) / 2;
+      const midRotate = (stop.rotate + next.rotate) / 2;
+      const a = shift(stop, BREATHE);
+      const b = shift(next, BREATHE);
+      p.push(mid);
+      x.push((a.x + b.x) / 2);
+      y.push((a.y + b.y) / 2);
+      scale.push(BREATHE);
+      rotate.push(midRotate);
+    }
+  });
+
+  /* Exit: pull back slightly and keep drifting as the flash takes over. */
+  p.push(0.76);
+  x.push(0);
+  y.push(-vh * 0.06);
+  scale.push(1.24);
+  rotate.push(0);
+
+  return { p, x, y, scale, rotate };
 }
 
-function CalloutBody({
-  tag,
-  value,
-  meta,
-  badge,
-  badgeAlt,
-}: {
-  tag: string;
-  value: string;
-  meta: string;
-  badge?: string;
-  badgeAlt?: string;
-}) {
+function CalloutBody({ tag, value, meta }: { tag: string; value: string; meta: string }) {
   return (
     <>
-      {badge ? (
-        <span className="cin-callout-badge">
-          <Image src={badge} alt={badgeAlt ?? ''} width={1024} height={1024} sizes="72px" loading="eager" />
-        </span>
-      ) : null}
       <i>{tag}</i>
       <strong>{value}</strong>
       <small>{meta}</small>
     </>
+  );
+}
+
+/* The telemetry plaque: generated gold-framed teal glass panel, popped
+   with a scroll-linked overshoot and counter-rotated to stay upright. */
+function StopCallout({
+  progress,
+  islandRotate,
+  stop,
+}: {
+  progress: MotionValue<number>;
+  islandRotate: MotionValue<number>;
+  stop: (typeof tourStops)[number];
+}) {
+  const { enter, exit } = stop;
+  const opacity = useTransform(progress, [enter, enter + 0.018, exit - 0.02, exit], [0, 1, 1, 0]);
+  const scale = useTransform(progress, [enter, enter + 0.024, enter + 0.04], [0.55, 1.07, 1]);
+  const yPop = useTransform(progress, [enter, enter + 0.04], [30, 0]);
+  const rotate = useTransform(islandRotate, (value) => value * -0.35);
+
+  return (
+    <motion.div
+      className={`cin-stop cin-stop-${stop.id} is-${stop.side}`}
+      style={{ opacity, scale, y: yPop, rotate }}
+    >
+      <span className={`cin-stop-art ${stop.side === 'left' ? 'is-flipped' : ''}`} aria-hidden="true" />
+      <span className="cin-stop-ping" aria-hidden="true" />
+      <div className="cin-stop-body">
+        <CalloutBody tag={stop.tag} value={stop.value} meta={stop.meta} />
+        <em>{stop.landmark}</em>
+      </div>
+    </motion.div>
   );
 }
 
@@ -188,9 +246,9 @@ function Token({
 }) {
   const x = useTransform(mouseX, (value) => value * depth);
   const mouseLift = useTransform(mouseY, (value) => value * depth * 0.6);
-  const scrollLift = useTransform(progress, [0, 0.3], [0, rate]);
+  const scrollLift = useTransform(progress, [0, 0.2], [0, rate]);
   const y = useTransform([mouseLift, scrollLift], ([a, b]) => (a as number) + (b as number));
-  const opacity = useTransform(progress, [0.18, 0.3], [1, 0]);
+  const opacity = useTransform(progress, [0.09, 0.17], [1, 0]);
 
   return (
     <div className={`cin-token ${className}`}>
@@ -376,16 +434,20 @@ function StaticCinematic() {
         <div className="cin-orb cin-orb-gold" aria-hidden="true" />
         <div className="cin-orb cin-orb-mint" aria-hidden="true" />
         <div className="cin-static-stage" aria-hidden="true">
-          <CityScene />
+          <Image src="/cinematic/hero-district-v2.png" alt="" width={2048} height={2048} sizes="90vw" quality={90} priority />
         </div>
         <div className="iso-shell cin-copy cin-copy-static">
           <HeroCopy animated={false} />
         </div>
       </div>
       <div className="iso-shell cin-static-telemetry" aria-label="Network telemetry, simulated view">
-        {telemetry.map((item) => (
-          <div className="cin-callout cin-callout-static" key={item.id}>
-            <CalloutBody tag={item.tag} value={item.value} meta={item.meta} badge={item.badge} badgeAlt={item.badgeAlt} />
+        {tourStops.map((stop) => (
+          <div className="cin-stop cin-stop-static" key={stop.id}>
+            <span className="cin-stop-art" aria-hidden="true" />
+            <div className="cin-stop-body">
+              <CalloutBody tag={stop.tag} value={stop.value} meta={stop.meta} />
+              <em>{stop.landmark}</em>
+            </div>
           </div>
         ))}
       </div>
@@ -397,39 +459,10 @@ function StaticCinematic() {
   );
 }
 
-/* The city artwork renders bottom-anchored "contain" (cream sky above);
-   the room renders centred "cover". Either way the bright window / the
-   monitor screen lands at a viewport position that depends on aspect
-   ratio, so the camera's transform-origin is measured at runtime. */
-function containBottomTarget(view: typeof CITY_VIEW, vw: number, vh: number) {
-  const s = Math.min(vw / view.width, vh / view.height);
-  const x = (((vw - view.width * s) / 2 + view.targetX * s) / vw) * 100;
-  const y = ((vh - view.height * s + view.targetY * s) / vh) * 100;
-  return { x, y };
-}
-
-function coverTarget(view: typeof ROOM_VIEW, vw: number, vh: number) {
-  const s = Math.max(vw / view.width, vh / view.height);
-  const x = (((vw - view.width * s) / 2 + view.targetX * s) / vw) * 100;
-  const y = (((vh - view.height * s) / 2 + view.targetY * s) / vh) * 100;
-  return { x, y };
-}
-
 export default function SettlementCinematic() {
   const containerRef = useRef<HTMLElement>(null);
   const reducedMotion = useReducedMotion();
-  const [origins, setOrigins] = useState({ city: { x: 58, y: 55 }, room: { x: 50, y: 40 } });
-
-  useEffect(() => {
-    function measureOrigins() {
-      const vw = window.innerWidth;
-      const vh = window.innerHeight;
-      setOrigins({ city: containBottomTarget(CITY_VIEW, vw, vh), room: coverTarget(ROOM_VIEW, vw, vh) });
-    }
-    measureOrigins();
-    window.addEventListener('resize', measureOrigins);
-    return () => window.removeEventListener('resize', measureOrigins);
-  }, []);
+  const [viewport, setViewport] = useState({ vw: 1280, vh: 800 });
 
   /* Section-scoped scroll progress, driven manually so it never falls back
      to page-level measurement. */
@@ -440,6 +473,15 @@ export default function SettlementCinematic() {
   const pointerY = useMotionValue(0);
   const mouseX = useSpring(pointerX, { stiffness: 42, damping: 15 });
   const mouseY = useSpring(pointerY, { stiffness: 42, damping: 15 });
+
+  useEffect(() => {
+    function measure() {
+      setViewport({ vw: window.innerWidth, vh: window.innerHeight });
+    }
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, []);
 
   useEffect(() => {
     const node = containerRef.current;
@@ -469,45 +511,32 @@ export default function SettlementCinematic() {
     };
   }, [scrollYProgress]);
 
-  /* Act I — hero copy holds, then lifts away as the dive begins. */
-  const heroOpacity = useTransform(scrollYProgress, [0, 0.07, 0.15], [1, 1, 0]);
-  const heroY = useTransform(scrollYProgress, [0.06, 0.15], [0, -72]);
-  const heroPointerEvents = useTransform(scrollYProgress, (value) => (value > 0.12 ? 'none' : 'auto'));
+  const camera = useMemo(() => buildCamera(viewport.vw, viewport.vh), [viewport]);
+
+  /* Act I — hero copy holds, then lifts away as the tour begins. */
+  const heroOpacity = useTransform(scrollYProgress, [0, 0.06, 0.13], [1, 1, 0]);
+  const heroY = useTransform(scrollYProgress, [0.05, 0.13], [0, -72]);
+  const heroPointerEvents = useTransform(scrollYProgress, (value) => (value > 0.1 ? 'none' : 'auto'));
   const hintOpacity = useTransform(scrollYProgress, [0, 0.05], [1, 0]);
 
-  /* The city: hold, then dive into the bright window. The target point
-     stays pinned by transform-origin, so a translate ramp glides it to
-     the viewport centre as the camera closes in. */
-  const cityScale = useTransform(scrollYProgress, [0, 0.1, 0.36], [1, 1.04, 7.4]);
-  const cityOpacity = useTransform(scrollYProgress, [0.3, 0.37], [1, 0]);
-  const cityX = useTransform(scrollYProgress, [0.12, 0.34], ['0%', `${(50 - origins.city.x).toFixed(2)}%`]);
-  const cityY = useTransform(scrollYProgress, [0.12, 0.34], ['0%', `${(50 - origins.city.y).toFixed(2)}%`]);
+  /* Act II — the landmark tour. */
+  const islandX = useTransform(scrollYProgress, camera.p, camera.x);
+  const islandY = useTransform(scrollYProgress, camera.p, camera.y);
+  const islandScale = useTransform(scrollYProgress, camera.p, camera.scale);
+  const islandRotate = useTransform(scrollYProgress, camera.p, camera.rotate);
+  const islandOpacity = useTransform(scrollYProgress, [0.7, 0.77], [1, 0]);
 
-  /* The room: arrive through the window, then push in until the monitor
-     screen fills the rectangular frame. */
-  const roomScale = useTransform(scrollYProgress, [0.31, 0.4, 0.62], [0.82, 1, 2.15]);
-  const roomOpacity = useTransform(scrollYProgress, [0.31, 0.38, 0.56, 0.63], [0, 1, 1, 0]);
-  const roomX = useTransform(scrollYProgress, [0.4, 0.58], ['0%', `${(50 - origins.room.x).toFixed(2)}%`]);
-  const roomY = useTransform(scrollYProgress, [0.4, 0.58], ['0%', `${(50 - origins.room.y).toFixed(2)}%`]);
-
-  /* The rectangular frame the screen settles into. */
-  const frameOpacity = useTransform(scrollYProgress, [0.44, 0.5, 0.62, 0.68], [0, 1, 1, 0]);
-  const frameScale = useTransform(scrollYProgress, [0.44, 0.62], [1.1, 1]);
-
-  /* Screen-light burst as the monitor fills the viewport. */
-  const flashOpacity = useTransform(scrollYProgress, [0.56, 0.64, 0.72, 0.8], [0, 0.95, 0.4, 0]);
-
-  /* The product act. */
-  const visionOpacity = useTransform(scrollYProgress, [0.64, 0.72], [0, 1]);
-  const visionScale = useTransform(scrollYProgress, [0.64, 0.76], [0.94, 1]);
-  const visionY = useTransform(scrollYProgress, [0.64, 0.74], [40, 0]);
+  /* Act III — screen-light burst, the product act, the melt. */
+  const flashOpacity = useTransform(scrollYProgress, [0.66, 0.74, 0.8, 0.87], [0, 0.95, 0.4, 0]);
+  const visionOpacity = useTransform(scrollYProgress, [0.72, 0.8], [0, 1]);
+  const visionScale = useTransform(scrollYProgress, [0.72, 0.84], [0.94, 1]);
+  const visionY = useTransform(scrollYProgress, [0.72, 0.82], [40, 0]);
   const visionPointerEvents = useTransform(scrollYProgress, (value) =>
-    value > 0.66 && value < 0.87 ? 'auto' : 'none',
+    value > 0.74 && value < 0.87 ? 'auto' : 'none',
   );
 
-  /* The metrics band docks at the foot of the act and melts with it. */
-  const bandOpacity = useTransform(scrollYProgress, [0.66, 0.72], [0, 1]);
-  const bandY = useTransform(scrollYProgress, [0.66, 0.74, 0.9, 1], [46, 0, 0, 420]);
+  const bandOpacity = useTransform(scrollYProgress, [0.73, 0.79], [0, 1]);
+  const bandY = useTransform(scrollYProgress, [0.73, 0.8, 0.9, 1], [46, 0, 0, 420]);
   const bandScaleY = useTransform(scrollYProgress, [0.9, 1], [1, 2.2]);
   const bandBlur = useTransform(scrollYProgress, [0.9, 1], [0, 10]);
   const bandFilter = useMotionTemplate`blur(${bandBlur}px)`;
@@ -521,7 +550,7 @@ export default function SettlementCinematic() {
   function enterEngine() {
     const node = containerRef.current;
     if (!node) return;
-    window.scrollTo({ top: node.offsetTop + node.offsetHeight * 0.7, behavior: 'smooth' });
+    window.scrollTo({ top: node.offsetTop + node.offsetHeight * 0.2, behavior: 'smooth' });
   }
 
   function trackPointer(event: React.PointerEvent<HTMLDivElement>) {
@@ -536,37 +565,28 @@ export default function SettlementCinematic() {
         <div className="cin-orb cin-orb-gold" aria-hidden="true" />
         <div className="cin-orb cin-orb-mint" aria-hidden="true" />
 
-        {/* The city, diving toward one bright window. */}
+        {/* The landmark island under the swinging camera. */}
         <motion.div
           className="cin-scene-layer"
           style={{
-            scale: cityScale,
-            opacity: cityOpacity,
-            x: cityX,
-            y: cityY,
-            transformOrigin: `${origins.city.x}% ${origins.city.y}%`,
+            x: islandX,
+            y: islandY,
+            scale: islandScale,
+            rotate: islandRotate,
+            opacity: islandOpacity,
           }}
         >
-          <CityScene />
-          <span
-            className="cin-city-beacon"
-            style={{ left: `${origins.city.x}%`, top: `${origins.city.y}%` }}
-            aria-hidden="true"
-          />
-        </motion.div>
-
-        {/* Inside the window: the boy at his desk. */}
-        <motion.div
-          className="cin-scene-layer"
-          style={{
-            scale: roomScale,
-            opacity: roomOpacity,
-            x: roomX,
-            y: roomY,
-            transformOrigin: `${origins.room.x}% ${origins.room.y}%`,
-          }}
-        >
-          <RoomScene />
+          <div className="cin-island">
+            <Image
+              src="/cinematic/hero-district-v2.png"
+              alt="Floating island carrying the Petronas Towers, Marina Bay Sands, Monas, and Wat Arun around a gold coin ring"
+              width={2048}
+              height={2048}
+              sizes="(max-width: 880px) 160vw, 100vh"
+              quality={90}
+              priority
+            />
+          </div>
         </motion.div>
 
         {/* Floating currency tokens with mouse + scroll parallax. */}
@@ -584,26 +604,9 @@ export default function SettlementCinematic() {
 
         <div className="cin-vignette" aria-hidden="true" />
 
-        {/* The rectangular frame the monitor screen settles into. */}
-        <motion.div
-          className="cin-scan"
-          style={{ opacity: frameOpacity, scale: frameScale }}
-          aria-hidden="true"
-        >
-          <span className="cin-scan-corner is-tl" /><span className="cin-scan-corner is-tr" />
-          <span className="cin-scan-corner is-bl" /><span className="cin-scan-corner is-br" />
-        </motion.div>
-
-        {telemetry.map((item) => (
-          <Callout
-            key={item.id}
-            progress={scrollYProgress}
-            enter={item.enter}
-            exit={item.exit}
-            className={item.className}
-          >
-            <CalloutBody tag={item.tag} value={item.value} meta={item.meta} badge={item.badge} badgeAlt={item.badgeAlt} />
-          </Callout>
+        {/* The four tour stops with their telemetry plaques. */}
+        {tourStops.map((stop) => (
+          <StopCallout key={stop.id} progress={scrollYProgress} islandRotate={islandRotate} stop={stop} />
         ))}
 
         {/* Act I — hero copy. */}

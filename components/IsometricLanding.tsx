@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ArrowDownRight,
   ArrowRight,
@@ -64,7 +64,7 @@ const flowSteps = [
     number: '01',
     title: 'Collect or upload',
     description: 'Create a pay link, upload an accepted invoice, or fund USD into the operating account.',
-    image: '/cinematic/flow-collect-v2.png',
+    image: '/cinematic/flow-collect-v3.png',
     imageAlt: 'Collect isometric typography with an invoice, pay link, and dollar coins',
     stat: 'Pay link or invoice',
   },
@@ -73,7 +73,7 @@ const flowSteps = [
     number: '02',
     title: 'Review quotes',
     description: 'KYB, recipient status, route, fee, treasury floor, and evidence labels appear before signature.',
-    image: '/cinematic/flow-review-quotes-v2.png',
+    image: '/cinematic/flow-review-quotes-v3.png',
     imageAlt: 'Review quotes isometric typography with FX quote cards, checklist, and approval stamp',
     stat: 'Human approval',
   },
@@ -82,7 +82,7 @@ const flowSteps = [
     number: '03',
     title: 'Settle in one signature',
     description: 'The prepared payment either completes as approved or stops safely before funds move.',
-    image: '/cinematic/flow-settle-v2.png',
+    image: '/cinematic/flow-settle-v3.png',
     imageAlt: 'Settle isometric typography with a coin passing an approval gate and a signing pen',
     stat: lockedCopy.speed,
   },
@@ -91,7 +91,7 @@ const flowSteps = [
     number: '04',
     title: 'Deliver locally',
     description: 'Pay a verified supplier or sweep value into the recipient ladder where the corridor allows it.',
-    image: '/cinematic/flow-deliver-v2.png',
+    image: '/cinematic/flow-deliver-v3.png',
     imageAlt: 'Deliver isometric typography with a truck bringing a peso coin to a local shop',
     stat: lockedCopy.fee,
   },
@@ -100,7 +100,7 @@ const flowSteps = [
     number: '05',
     title: 'Anchor the proof',
     description: 'Receipts, encrypted documents, and daily audit evidence remain available for review.',
-    image: '/cinematic/flow-proof-v2.png',
+    image: '/cinematic/flow-proof-v3.png',
     imageAlt: 'Proof isometric typography with an archive vault, sealed certificate, and shield badge',
     stat: 'Walrus + Sui audit',
   },
@@ -305,7 +305,7 @@ const walrusProofs = [
 
 const walrusSlides = [
   {
-    image: '/isometric/walrus-receipt-v2.png',
+    image: '/isometric/walrus-receipt-v3.png',
     label: '01 / Walrus receipt',
     tab: 'Audit',
     title: 'Permanent audit proof',
@@ -313,7 +313,7 @@ const walrusSlides = [
     facts: ['On-chain receipt', 'Daily audit batch', 'Regulator-verifiable'],
   },
   {
-    image: '/isometric/memwal-agent-v2.png',
+    image: '/isometric/memwal-agent-v3.png',
     label: '02 / MemWal',
     tab: 'AI',
     title: 'The AI copilot remembers',
@@ -455,39 +455,11 @@ export default function IsometricLanding() {
   const [yieldBenchmarks, setYieldBenchmarks] = useState(fallbackYieldBenchmarks);
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [activeTool, setActiveTool] = useState<(typeof phaseOneTools)[number] | null>(null);
-  const [revealedRows, setRevealedRows] = useState(0);
-  const comparisonRef = useRef<HTMLElement>(null);
-
   useEffect(() => {
     const interval = window.setInterval(() => {
       setActiveWalrus((current) => (current + 1) % walrusSlides.length);
     }, 7000);
     return () => window.clearInterval(interval);
-  }, []);
-
-  /* Comparison table: pinned while scroll uncovers the rows one by one,
-     with two extra beats after the last row before the section releases. */
-  useEffect(() => {
-    const node = comparisonRef.current;
-    if (!node) return;
-    const totalRows = comparisonRows.length + 1; // + live yield row
-    const beats = totalRows + 2;
-
-    function update() {
-      const rect = node!.getBoundingClientRect();
-      const range = Math.max(node!.offsetHeight - window.innerHeight, 1);
-      const progress = Math.min(Math.max(-rect.top / range, 0), 1);
-      const count = Math.min(Math.max(Math.ceil(progress * beats), 0), totalRows);
-      setRevealedRows((prev) => (prev === count ? prev : count));
-    }
-
-    update();
-    window.addEventListener('scroll', update, { passive: true });
-    window.addEventListener('resize', update);
-    return () => {
-      window.removeEventListener('scroll', update);
-      window.removeEventListener('resize', update);
-    };
   }, []);
 
   useEffect(() => {
@@ -622,57 +594,55 @@ export default function IsometricLanding() {
         </div>
       </section>
 
-      <section id="comparison" className="iso-section iso-comparison cin-compare" ref={comparisonRef}>
-        <div className="cin-compare-pin">
-          <div className="cin-drop" style={{ top: 26, right: '4%' }} aria-hidden="true">
-            <FloatingToken src="/cinematic/token-thb.png" alt="Thai baht token" size={104} float="cin-float-slow" />
-          </div>
-          <div className="iso-shell">
-            <div className="iso-section-heading iso-heading-split">
-              <div>
-                <p className="iso-kicker">Comparison</p>
-                <h2 className="iso-section-title">
-                  Built for business.
-                  <span>Designed to move.</span>
-                </h2>
-              </div>
-              <p>
-                Splash makes internal account movement free, charges when value exits to local rails, and adds
-                programmable settlement, approval-led AI, and private audit proof.
-              </p>
+      <section id="comparison" className="iso-section iso-comparison">
+        <div className="cin-drop" style={{ top: 26, right: '4%' }} aria-hidden="true">
+          <FloatingToken src="/cinematic/token-thb.png" alt="Thai baht token" size={104} float="cin-float-slow" />
+        </div>
+        <div className="iso-shell">
+          <div className="iso-section-heading iso-heading-split">
+            <div>
+              <p className="iso-kicker">Comparison</p>
+              <h2 className="iso-section-title">
+                Built for business.
+                <span>Designed to move.</span>
+              </h2>
             </div>
+            <p>
+              Splash makes internal account movement free, charges when value exits to local rails, and adds
+              programmable settlement, approval-led AI, and private audit proof.
+            </p>
+          </div>
 
-            <div className="iso-comparison-wrap">
-              <table className="iso-comparison-table">
-                <thead>
-                  <tr>
-                    <th>Feature</th>
-                    <th>Bank</th>
-                    <th>Broker</th>
-                    <th>Wise</th>
-                    <th className="is-splash">Splash</th>
+          <div className="iso-comparison-wrap">
+            <table className="iso-comparison-table">
+              <thead>
+                <tr>
+                  <th>Feature</th>
+                  <th>Bank</th>
+                  <th>Broker</th>
+                  <th>Wise</th>
+                  <th className="is-splash">Splash</th>
+                </tr>
+              </thead>
+              <tbody>
+                {liveComparisonRows.map((row) => (
+                  <tr key={row.feature}>
+                    <th scope="row">{row.feature}</th>
+                    <td>{row.bank}</td>
+                    <td>{row.broker}</td>
+                    <td>{row.wise}</td>
+                    <td className="is-splash"><Check aria-hidden="true" /> {row.splash}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {liveComparisonRows.map((row, index) => (
-                    <tr key={row.feature} className={index < revealedRows ? 'is-uncovered' : ''}>
-                      <th scope="row">{row.feature}</th>
-                      <td>{row.bank}</td>
-                      <td>{row.broker}</td>
-                      <td>{row.wise}</td>
-                      <td className="is-splash"><Check aria-hidden="true" /> {row.splash}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <div className="iso-yield-live">
-                <i aria-hidden="true" />
-                <strong>Reference yield benchmark</strong>
-                <span>
-                  FDIC national savings - IBKR Pro cash - Wise USD Interest - Splash treasury projection
-                  {yieldBenchmarks.asOf ? ` - refreshed ${new Date(yieldBenchmarks.asOf).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
-                </span>
-              </div>
+                ))}
+              </tbody>
+            </table>
+            <div className="iso-yield-live">
+              <i aria-hidden="true" />
+              <strong>Reference yield benchmark</strong>
+              <span>
+                FDIC national savings - IBKR Pro cash - Wise USD Interest - Splash treasury projection
+                {yieldBenchmarks.asOf ? ` - refreshed ${new Date(yieldBenchmarks.asOf).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
+              </span>
             </div>
           </div>
         </div>
@@ -760,7 +730,7 @@ export default function IsometricLanding() {
               <small>Current checkpoint</small>
               <strong>{activeFlow.stat}</strong>
             </div>
-            <div className={`iso-flow-image ${activeFlow.id === 'intake' ? 'iso-flow-image-white iso-flow-image-fund' : ''}`}>
+            <div className="iso-flow-image">
               <Image
                 key={activeFlow.id}
                 src={activeFlow.image}
@@ -934,7 +904,7 @@ export default function IsometricLanding() {
 
           <div className="iso-corridor-stage">
             <Image
-              src="/cinematic/corridor-bridge-v2.png"
+              src="/cinematic/corridor-bridge-v3.png"
               alt="Two isometric city platforms, Kuala Lumpur and Manila, connected by a golden bridge of flowing coins"
               width={2752}
               height={1536}
