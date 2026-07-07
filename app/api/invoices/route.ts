@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
+import { requireCustomerRequest } from '@/lib/server/customer-auth';
 import { readJsonBody } from '@/lib/server/http';
 import { createInvoice, listInvoices } from '@/lib/server/operations';
 import { sealAdapter } from '@/lib/server/seal';
@@ -18,11 +19,17 @@ const createInvoiceSchema = z.object({
   documentBase64: z.string().optional(),
 });
 
-export async function GET() {
+export async function GET(request: Request) {
+  const auth = await requireCustomerRequest(request);
+  if (auth.response) return auth.response;
+
   return NextResponse.json({ invoices: listInvoices() });
 }
 
 export async function POST(request: Request) {
+  const auth = await requireCustomerRequest(request);
+  if (auth.response) return auth.response;
+
   const parsed = createInvoiceSchema.safeParse(await readJsonBody(request));
   if (!parsed.success) {
     return NextResponse.json({ error: 'Invalid invoice', details: parsed.error.flatten() }, { status: 400 });

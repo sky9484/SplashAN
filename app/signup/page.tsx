@@ -17,6 +17,7 @@ export default function SignUpPage() {
   const [accepted, setAccepted] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
 
   const strength = [password.length >= 8, /[A-Z]/.test(password), /\d/.test(password)].filter(Boolean).length;
   const canSubmit = company.trim().length > 1 && email.includes('@') && strength === 3 && accepted && !submitting;
@@ -25,9 +26,30 @@ export default function SignUpPage() {
     event.preventDefault();
     if (!canSubmit) return;
     setSubmitting(true);
-    await new Promise((resolve) => setTimeout(resolve, 600));
-    toast.success('Business profile created');
-    router.push('/settings/kyb');
+    setError('');
+
+    try {
+      const response = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ company, email, region, password, accepted }),
+      });
+      const body = await response.json().catch(() => ({})) as { error?: string };
+
+      if (!response.ok) {
+        throw new Error(body.error ?? 'Unable to create the workspace. Review the details and try again.');
+      }
+
+      toast.success('Business profile created');
+      router.push('/settings/kyb');
+      router.refresh();
+    } catch (reason) {
+      const message = reason instanceof Error ? reason.message : 'Unable to create the workspace. Review the details and try again.';
+      setError(message);
+      toast.error(message);
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -124,6 +146,8 @@ export default function SignUpPage() {
           <input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} />
           <span>I agree to the Splash terms and confirm I am authorized to register this business.</span>
         </label>
+
+        {error ? <p className="iso-auth-error" role="alert">{error}</p> : null}
 
         <button type="submit" disabled={!canSubmit} className="iso-auth-submit">
           {submitting ? 'Creating workspace...' : 'Create business workspace'}

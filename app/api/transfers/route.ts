@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server';
 
+import { requireCustomerRequest } from '@/lib/server/customer-auth';
 import { operations, readSweepJob } from '@/lib/server/operations';
 
 export async function GET(request: Request) {
+  const auth = await requireCustomerRequest(request);
+  if (auth.response) return auth.response;
+
   const { searchParams } = new URL(request.url);
   const filter = searchParams.get('filter') ?? 'all';
   const page = Math.max(1, Number.parseInt(searchParams.get('page') ?? '1', 10));

@@ -1,4 +1,6 @@
 import { runOxwalAgent, stringifyAgentJson, type OxwalAgentRequest } from '../../../lib/agent/oxwal';
+import { requireCustomerRequest } from '@/lib/server/customer-auth';
+import { readJsonBody } from '@/lib/server/http';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -11,12 +13,10 @@ type OxwalRouteBody = {
 };
 
 export async function POST(request: Request) {
-  let body: OxwalRouteBody;
-  try {
-    body = (await request.json()) as OxwalRouteBody;
-  } catch {
-    return new Response(JSON.stringify({ error: 'Invalid JSON body' }), { status: 400 });
-  }
+  const auth = await requireCustomerRequest(request);
+  if (auth.response) return auth.response;
+
+  const body = (await readJsonBody(request)) as OxwalRouteBody;
 
   const message = (body.message ?? '').trim();
   if (!message) {

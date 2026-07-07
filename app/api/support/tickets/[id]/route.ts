@@ -1,11 +1,15 @@
 import { NextResponse } from 'next/server';
 
+import { requireCustomerRequest } from '@/lib/server/customer-auth';
 import { readJsonBody } from '@/lib/server/http';
 import { readSupportTicket, updateSupportTicket } from '@/lib/server/support';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await requireCustomerRequest(request);
+  if (auth.response) return auth.response;
+
   const { id } = await params;
   const ticket = readSupportTicket(id);
 
@@ -17,6 +21,9 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await requireCustomerRequest(request);
+  if (auth.response) return auth.response;
+
   const { id } = await params;
   const body = await readJsonBody(request);
   const message = String(body.message ?? '').trim();

@@ -6,6 +6,7 @@
 
 import { NextResponse } from 'next/server';
 
+import { requireCustomerRequest } from '@/lib/server/customer-auth';
 import { getCopilotSuggestions } from '@/lib/server/copilot';
 import { listInvoices } from '@/lib/server/operations';
 
@@ -13,6 +14,9 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
+  const auth = await requireCustomerRequest(request);
+  if (auth.response) return auth.response;
+
   const user = new URL(request.url).searchParams.get('user') ?? 'patterns';
   const suggestions = await getCopilotSuggestions(user);
   const openInvoices = listInvoices().filter((invoice) => invoice.status !== 'paid' && invoice.status !== 'settled');

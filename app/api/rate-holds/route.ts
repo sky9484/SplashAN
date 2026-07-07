@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { getCorridorFeeBps } from '@/lib/fx/corridors';
+import { requireCustomerRequest } from '@/lib/server/customer-auth';
 import { readJsonBody } from '@/lib/server/http';
 import { createRateHold, listRateHolds, readRateHold } from '@/lib/server/operations';
 
@@ -14,6 +15,9 @@ const createSchema = z.object({
 });
 
 export async function GET(request: Request) {
+  const auth = await requireCustomerRequest(request);
+  if (auth.response) return auth.response;
+
   const holdId = new URL(request.url).searchParams.get('id');
   if (holdId) {
     const hold = readRateHold(holdId);
@@ -25,6 +29,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const auth = await requireCustomerRequest(request);
+  if (auth.response) return auth.response;
+
   const parsed = createSchema.safeParse(await readJsonBody(request));
   if (!parsed.success) {
     return NextResponse.json({ error: 'A valid corridor and rate are required' }, { status: 400 });

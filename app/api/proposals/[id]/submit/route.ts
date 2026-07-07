@@ -2,6 +2,8 @@ import { z } from 'zod';
 
 import type { ComplianceResult, OrgPolicy, ProposalKind, UserRole } from '@/lib/agent/types';
 import { getOxwalProposalStore } from '@/lib/agent/oxwal';
+import { requireCustomerRequest } from '@/lib/server/customer-auth';
+import { readJsonBody } from '@/lib/server/http';
 import { authorizeProposalSubmission } from '@/lib/safety/submit-guard';
 
 const userRoles: UserRole[] = ['OWNER', 'FINANCE_ADMIN', 'MAKER', 'APPROVER', 'VIEWER', 'AUDITOR', 'DEVELOPER'];
@@ -76,8 +78,11 @@ function json(data: unknown, status = 200) {
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await requireCustomerRequest(request);
+  if (auth.response) return auth.response;
+
   const { id } = await params;
-  const parsed = submitSchema.safeParse(await request.json().catch(() => null));
+  const parsed = submitSchema.safeParse(await readJsonBody(request));
   if (!parsed.success) return json({ error: 'Invalid proposal submission' }, 400);
 
   const store = getOxwalProposalStore();

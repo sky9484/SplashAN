@@ -36,9 +36,21 @@ SUMSUB_BASE_URL=https://api.sumsub.com
 ADMIN_EMAIL=staff@splash.finance
 ADMIN_PASSWORD=
 ADMIN_SESSION_SECRET=
+
+CUSTOMER_EMAIL=demo@splash.finance
+CUSTOMER_PASSWORD=
+CUSTOMER_ORGANIZATION=Splash Demo Ltd
+CUSTOMER_SESSION_SECRET=
+CUSTOMER_SELF_SIGNUP_ENABLED=false
+CUSTOMER_RECOVERY_EMAIL=support@splash.finance
 ```
 
 Use a real coin type for `USDC_TYPE` after publishing or selecting a testnet USDC-compatible coin. The default SUI type is useful for local/test transactions only.
+In production, set `CUSTOMER_EMAIL`, `CUSTOMER_PASSWORD`, and
+`CUSTOMER_SESSION_SECRET`; leave `CUSTOMER_SELF_SIGNUP_ENABLED=false` unless
+customer signup is backed by a real provisioning and persistence flow. Set
+`CUSTOMER_RECOVERY_EMAIL` to the verified support inbox used for locked-out
+workspace operators.
 
 ## Development
 

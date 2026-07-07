@@ -1,13 +1,20 @@
 import { NextResponse } from 'next/server';
 
+import { requireCustomerRequest } from '@/lib/server/customer-auth';
 import { readJsonBody } from '@/lib/server/http';
 import { createRecipient, listRecipients, type RecipientRecord, type RecipientTier } from '@/lib/server/operations';
 
-export async function GET() {
+export async function GET(request: Request) {
+  const auth = await requireCustomerRequest(request);
+  if (auth.response) return auth.response;
+
   return NextResponse.json(listRecipients());
 }
 
 export async function POST(request: Request) {
+  const auth = await requireCustomerRequest(request);
+  if (auth.response) return auth.response;
+
   const body = await readJsonBody(request);
   const name = String(body.name ?? '').trim();
   const account = String(body.account ?? '').trim();

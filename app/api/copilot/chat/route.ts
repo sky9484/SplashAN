@@ -18,6 +18,8 @@
  */
 
 import { recallMemories, rememberFact, memwalConfigured, type RecalledMemory } from '@/lib/server/memwal';
+import { requireCustomerRequest } from '@/lib/server/customer-auth';
+import { readJsonBody } from '@/lib/server/http';
 import { getTreasuryRate } from '@/lib/server/usdy';
 import { getLedger } from '@/lib/server/treasury';
 import { suggestTreasuryAction } from '@/lib/server/copilot';
@@ -109,12 +111,10 @@ function buildSystemPrompt(memories: RecalledMemory[]): string {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export async function POST(request: Request) {
-  let body: ChatRequest;
-  try {
-    body = (await request.json()) as ChatRequest;
-  } catch {
-    return new Response(JSON.stringify({ error: 'Invalid JSON body' }), { status: 400 });
-  }
+  const auth = await requireCustomerRequest(request);
+  if (auth.response) return auth.response;
+
+  const body = (await readJsonBody(request)) as ChatRequest;
 
   const message = (body.message ?? '').trim();
   if (!message) {

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 
+import { requireCustomerRequest } from '@/lib/server/customer-auth';
 import { findLatestKybCase } from '@/lib/server/kyb';
 
 export const dynamic = 'force-dynamic';
@@ -30,6 +31,9 @@ function toPublicCase(record: NonNullable<ReturnType<typeof findLatestKybCase>>)
 }
 
 export async function GET(request: Request) {
+  const auth = await requireCustomerRequest(request);
+  if (auth.response) return auth.response;
+
   const { searchParams } = new URL(request.url);
   const businessName = searchParams.get('businessName') ?? undefined;
   const registrationNumber = searchParams.get('registrationNumber') ?? undefined;

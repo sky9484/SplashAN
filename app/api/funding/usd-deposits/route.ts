@@ -5,6 +5,7 @@ import {
   assertFundingWebhookSecret,
   confirmUsdProviderDeposit,
 } from '@/lib/server/funding-intake';
+import { readJsonBody } from '@/lib/server/http';
 
 const usdDepositSchema = z.object({
   sessionId: z.string().trim().min(1),
@@ -16,7 +17,7 @@ const usdDepositSchema = z.object({
 export async function POST(request: Request) {
   try {
     assertFundingWebhookSecret(request.headers.get('x-funding-webhook-secret'));
-    const parsed = usdDepositSchema.safeParse(await request.json());
+    const parsed = usdDepositSchema.safeParse(await readJsonBody(request));
     if (!parsed.success) return NextResponse.json({ error: 'Invalid USD deposit event' }, { status: 400 });
     return NextResponse.json({ session: confirmUsdProviderDeposit(parsed.data) });
   } catch (error) {

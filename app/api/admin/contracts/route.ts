@@ -11,6 +11,7 @@ import {
   saveContractConfig,
   validateContractConfig,
 } from '@/lib/server/contract-config';
+import { readJsonBody } from '@/lib/server/http';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,12 +45,7 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: 'Staff authentication required' }, { status: 401 });
   }
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'Request body must be valid JSON' }, { status: 400 });
-  }
+  const body = await readJsonBody(request);
 
   const input = (body && typeof body === 'object' ? (body as Record<string, unknown>) : {}) as Partial<ContractConfig>;
   const sanitized: Partial<ContractConfig> = {};

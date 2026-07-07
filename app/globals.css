@@ -2661,6 +2661,128 @@ body {
   transform: translateX(4px);
 }
 
+.iso-client-proof {
+  position: relative;
+  overflow: hidden;
+  border-top: 1px solid var(--iso-line);
+  background:
+    radial-gradient(circle at 84% 16%, rgba(159, 207, 199, .28), transparent 22%),
+    linear-gradient(180deg, #eef4f5, #f7fafb 52%, var(--iso-paper));
+}
+
+.iso-client-proof-layout {
+  display: grid;
+  grid-template-columns: .9fr 1.1fr;
+  align-items: center;
+  gap: 56px;
+}
+
+.iso-feedback-quote {
+  position: relative;
+  padding: 36px 38px 38px;
+  border-left: 5px solid var(--iso-gold);
+  color: var(--iso-ink);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, .76), rgba(232, 242, 242, .58));
+  box-shadow: 8px 10px 0 rgba(12, 62, 72, .09);
+}
+
+.iso-feedback-quote::before {
+  position: absolute;
+  top: 10px;
+  right: 26px;
+  color: rgba(12, 62, 72, .09);
+  font-family: var(--font-serif), Georgia, serif;
+  font-size: 124px;
+  font-weight: 900;
+  line-height: 1;
+  content: "\201C";
+}
+
+.iso-feedback-quote blockquote {
+  position: relative;
+  z-index: 1;
+  max-width: 660px;
+  margin: 22px 0 0;
+  color: var(--iso-teal-dark);
+  font-size: clamp(32px, 4.15vw, 58px);
+  font-weight: 950;
+  line-height: 1.04;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+}
+
+.iso-feedback-quote > p:not(.iso-kicker) {
+  position: relative;
+  z-index: 1;
+  max-width: 590px;
+  margin-top: 24px;
+  color: rgba(12, 62, 72, .66);
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.7;
+}
+
+.iso-benefit-stack {
+  min-width: 0;
+}
+
+.iso-benefit-stack .iso-section-title {
+  max-width: 760px;
+}
+
+.iso-benefit-grid {
+  display: grid;
+  gap: 13px;
+  margin-top: 30px;
+}
+
+.iso-benefit-card {
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  align-items: start;
+  gap: 15px;
+  border: 1px solid rgba(12, 62, 72, .17);
+  border-radius: 8px;
+  padding: 18px;
+  color: var(--iso-ink);
+  background: rgba(253, 254, 255, .86);
+  box-shadow: 5px 6px 0 rgba(12, 62, 72, .08);
+}
+
+.iso-benefit-icon {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 1px solid rgba(12, 62, 72, .16);
+  border-radius: 8px;
+  color: var(--iso-teal-dark);
+  background: linear-gradient(180deg, rgba(239, 196, 111, .86), rgba(159, 207, 199, .72));
+}
+
+.iso-benefit-icon svg {
+  width: 22px;
+  height: 22px;
+  stroke-width: 2.2;
+}
+
+.iso-benefit-card h3 {
+  margin: 0;
+  color: var(--iso-ink);
+  font-size: 19px;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.iso-benefit-card p {
+  margin-top: 6px;
+  color: rgba(12, 62, 72, .62);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.65;
+}
+
 .iso-final {
   padding-top: 36px;
   background: var(--iso-paper);
@@ -2863,12 +2985,17 @@ body {
   .iso-walrus-layout,
   .iso-corridor-layout,
   .iso-copilot-layout,
-  .iso-readiness-layout {
+  .iso-readiness-layout,
+  .iso-client-proof-layout {
     grid-template-columns: 1fr;
   }
 
   .iso-heading-split {
     gap: 24px;
+  }
+
+  .iso-client-proof-layout {
+    gap: 36px;
   }
 
   .iso-heading-split > p {
@@ -3161,6 +3288,62 @@ body {
 
   .iso-section-title {
     font-size: clamp(48px, 15vw, 68px);
+  }
+
+  .iso-client-proof-layout {
+    gap: 28px;
+  }
+
+  .iso-feedback-quote {
+    border-left-width: 4px;
+    padding: 26px 22px 28px;
+    box-shadow: 5px 6px 0 rgba(12, 62, 72, .08);
+  }
+
+  .iso-feedback-quote::before {
+    top: 8px;
+    right: 14px;
+    font-size: 82px;
+  }
+
+  .iso-feedback-quote blockquote {
+    margin-top: 18px;
+    font-size: clamp(28px, 10vw, 42px);
+    line-height: 1.06;
+  }
+
+  .iso-feedback-quote > p:not(.iso-kicker) {
+    margin-top: 18px;
+    font-size: 12px;
+  }
+
+  .iso-benefit-grid {
+    gap: 10px;
+    margin-top: 20px;
+  }
+
+  .iso-benefit-card {
+    grid-template-columns: 40px 1fr;
+    gap: 12px;
+    padding: 14px;
+  }
+
+  .iso-benefit-icon {
+    width: 38px;
+    height: 38px;
+  }
+
+  .iso-benefit-icon svg {
+    width: 19px;
+    height: 19px;
+  }
+
+  .iso-benefit-card h3 {
+    font-size: 16px;
+  }
+
+  .iso-benefit-card p {
+    font-size: 10px;
   }
 
   .iso-section-heading {
@@ -3870,6 +4053,17 @@ body {
   opacity: .42;
 }
 
+.iso-auth-error {
+  border: 1px solid rgba(158, 73, 48, .24);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: #9b4e32;
+  background: rgba(227, 151, 116, .14);
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
 .iso-auth-submit svg {
   width: 15px;
   height: 15px;
@@ -4059,6 +4253,7 @@ body {
   line-height: 1.6;
 }
 
+.iso-auth-success a,
 .iso-auth-success button {
   display: inline-flex;
   align-items: center;
@@ -4066,6 +4261,10 @@ body {
   color: var(--iso-teal);
   font-size: 10px;
   font-weight: 850;
+}
+
+.iso-auth-success a:hover {
+  color: var(--iso-teal-dark);
 }
 
 .iso-auth-success button svg {
@@ -4881,8 +5080,9 @@ body {
 .iso-walrus { order: 8; }
 .iso-corridors { order: 9; }
 .iso-readiness { order: 10; }
-.iso-final { order: 11; }
-.iso-footer { order: 12; }
+.iso-client-proof { order: 11; }
+.iso-final { order: 12; }
+.iso-footer { order: 13; }
 .iso-tool-modal,
 .iso-back-to-top { order: 99; }
 
@@ -5988,6 +6188,7 @@ button.iso-product-row {
 .iso-copilot { order: 6; }
 .iso-walrus { order: 7; }
 .iso-products { order: 8; }
+.iso-client-proof { order: 11; }
 
 /* Keep the signature engine compact enough to scan without losing the flow. */
 .dash-flow {

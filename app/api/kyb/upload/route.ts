@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'crypto';
 import { NextResponse } from 'next/server';
 
+import { requireCustomerRequest } from '@/lib/server/customer-auth';
 import { recordKybSubmission, type KybDocumentRecord } from '@/lib/server/kyb';
 
 export const dynamic = 'force-dynamic';
@@ -8,6 +9,9 @@ export const dynamic = 'force-dynamic';
 const ALLOWED_DOC_KINDS = new Set<KybDocumentRecord['kind']>(['COMPANY_DOCUMENT', 'DIRECTOR_ID']);
 
 export async function POST(request: Request) {
+  const auth = await requireCustomerRequest(request);
+  if (auth.response) return auth.response;
+
   const formData = await request.formData();
   const files = formData.getAll('documents').filter((item): item is File => item instanceof File);
   const legalName = String(formData.get('businessName') ?? '');

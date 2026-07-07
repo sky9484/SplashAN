@@ -7,38 +7,69 @@ import { toast } from 'sonner';
 
 import IsometricAuthShell from '@/components/auth/IsometricAuthShell';
 
+type RecoveryResponse = {
+  message?: string;
+  recoveryEmail?: string;
+  error?: string;
+};
+
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
-  const [sent, setSent] = useState(false);
+  const [recovery, setRecovery] = useState<RecoveryResponse | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitting(true);
-    await new Promise((resolve) => setTimeout(resolve, 600));
-    setSubmitting(false);
-    setSent(true);
-    toast.success('Reset link sent');
+    setError('');
+
+    try {
+      const response = await fetch('/api/auth/recovery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const body = await response.json().catch(() => ({})) as RecoveryResponse;
+
+      if (!response.ok) {
+        throw new Error(body.error ?? 'Recovery instructions are unavailable. Try again or contact support.');
+      }
+
+      setRecovery(body);
+      toast.success('Recovery instructions ready');
+    } catch (reason) {
+      const message = reason instanceof Error ? reason.message : 'Recovery instructions are unavailable. Try again or contact support.';
+      setError(message);
+      toast.error(message);
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
     <IsometricAuthShell
       eyebrow="Account recovery"
-      title={sent ? 'Check your inbox.' : 'Reset your password.'}
-      description={sent
-        ? `We sent password recovery instructions to ${email}.`
-        : 'Enter your business email and we will send a secure recovery link.'}
+      title={recovery ? 'Verify through support.' : 'Recover workspace access.'}
+      description={recovery
+        ? 'For treasury safety, workspace recovery is handled by verified support instead of an automated reset link.'
+        : 'Enter your business email and we will show the secure recovery path for your workspace.'}
       art="/isometric/treasury.svg"
       artAlt="Isometric smart treasury"
       visualTitle="Secure by default"
       visualCopy="Recover access without compromising your treasury."
     >
-      {sent ? (
+      {recovery ? (
         <section className="iso-auth-success">
           <CheckCircle2 aria-hidden="true" />
-          <h2>Recovery email sent</h2>
-          <p>The link expires in 30 minutes. Check spam or request another email if it does not arrive.</p>
-          <button type="button" onClick={() => setSent(false)}>
+          <h2>Recovery instructions ready</h2>
+          <p>{recovery.message}</p>
+          {recovery.recoveryEmail ? (
+            <Link href={`mailto:${recovery.recoveryEmail}?subject=Splash workspace recovery&body=Business email: ${encodeURIComponent(email)}`}>
+              Contact {recovery.recoveryEmail}
+            </Link>
+          ) : null}
+          <button type="button" onClick={() => { setRecovery(null); setError(''); }}>
             <ArrowLeft aria-hidden="true" /> Use another email
           </button>
         </section>
@@ -60,9 +91,10 @@ export default function ForgotPasswordPage() {
             </div>
           </label>
           <button type="submit" disabled={!email.includes('@') || submitting} className="iso-auth-submit">
-            {submitting ? 'Sending reset link...' : 'Send secure reset link'}
+            {submitting ? 'Checking recovery path...' : 'Show recovery path'}
             {!submitting ? <ArrowRight aria-hidden="true" /> : null}
           </button>
+          {error ? <p className="iso-auth-error" role="alert">{error}</p> : null}
         </form>
       )}
 
