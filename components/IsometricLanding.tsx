@@ -938,7 +938,7 @@ export default function IsometricLanding() {
 
       <section id="readiness" className="iso-section iso-readiness">
         <div className="cin-drop" style={{ top: 34, right: '6%' }} aria-hidden="true">
-          <FloatingToken src="/cinematic/token-mmk-v1.png" alt="Myanmar kyat token" size={112} float="cin-float-drift" />
+          <FloatingToken src="/cinematic/token-vnd-v1.png" alt="Vietnamese dong token" size={112} float="cin-float-drift" />
         </div>
         <div className="iso-shell iso-readiness-layout">
           <div className="iso-readiness-copy">

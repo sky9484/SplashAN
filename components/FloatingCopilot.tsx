@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { Bot, ChevronDown, Sparkles, X } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -275,8 +276,8 @@ export default function FloatingCopilot() {
           aria-label="Drag 0xWal chat"
         >
           <div className="flex items-center gap-2.5">
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#efc46f]/25 ring-1 ring-[#efc46f]/40">
-              <Bot size={14} className="text-[#efc46f]" />
+            <div className="grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-full bg-[radial-gradient(circle_at_50%_35%,#eaf6f1,#cfe8e0)] ring-1 ring-[#efc46f]/40">
+              <Image src="/cinematic/agent-bot-cut.png" alt="" width={512} height={512} className="h-6 w-auto" />
             </div>
             <div>
               <div className="text-xs font-bold text-white">0xWal</div>
@@ -385,44 +386,59 @@ export default function FloatingCopilot() {
         </div>
       </div>
 
-      {/* ── Floating trigger button ── */}
-      <button
-        type="button"
-        onClick={() => {
-          setNudge(null);
-          setOpen((v) => !v);
-        }}
-        aria-label={open ? 'Close 0xWal' : 'Open 0xWal'}
-        className={cn(
-          'fixed bottom-4 right-4 z-50 flex items-center gap-2.5 rounded-full py-3 text-white shadow-[0_12px_30px_rgba(8,54,64,0.3)] transition-all duration-200 hover:shadow-[0_16px_38px_rgba(8,54,64,0.36)]',
-          open ? 'bg-[#0c3e48] px-3.5' : 'bg-[#0c3e48] px-4 hover:brightness-110'
-        )}
-      >
-        {/* Bot icon */}
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#efc46f]/25 ring-1 ring-[#efc46f]/40">
-          <Bot size={15} className="text-[#efc46f]" />
-        </div>
-
-        {/* Label (only when closed) */}
+      {/* ── Floating trigger: the 0xWal robot mascot ── */}
+      <div className="fixed bottom-4 right-4 z-50 flex items-end gap-2.5">
+        {/* Nudge bubble (closed only) */}
         {!open && nudge && (
-          <span className="text-sm font-semibold tracking-tight">
+          <span className="mb-2 animate-[copilot-nudge_.3s_ease] rounded-2xl rounded-br-sm bg-[#0c3e48] px-3.5 py-2 text-sm font-semibold tracking-tight text-white shadow-[0_10px_24px_rgba(8,54,64,0.3)]">
             {nudge}
           </span>
         )}
 
-        {/* Collapse icon (only when open) */}
-        {open && <ChevronDown size={16} className="text-white/70" />}
+        <button
+          type="button"
+          onClick={() => {
+            setNudge(null);
+            setOpen((v) => !v);
+          }}
+          aria-label={open ? 'Close 0xWal' : 'Open 0xWal'}
+          className={cn(
+            'group relative grid h-16 w-16 place-items-center rounded-full ring-1 transition-all duration-200 hover:-translate-y-1',
+            'bg-[radial-gradient(circle_at_50%_35%,#eaf6f1,#cfe8e0)] ring-[#0c3e48]/12',
+            'shadow-[0_14px_30px_rgba(8,54,64,0.32)] hover:shadow-[0_20px_40px_rgba(8,54,64,0.4)]'
+          )}
+        >
+          {/* Robot mascot — floats gently, tips forward on hover */}
+          <Image
+            src="/cinematic/agent-bot-cut.png"
+            alt=""
+            width={512}
+            height={512}
+            priority
+            className={cn(
+              'h-[54px] w-auto origin-bottom drop-shadow-[0_4px_6px_rgba(8,54,64,0.28)] transition-transform duration-200',
+              open ? 'scale-90' : 'animate-[copilot-bob_3s_ease-in-out_infinite] group-hover:-rotate-6'
+            )}
+          />
 
-        {/* Live pulse dot (only when closed) */}
-        {!open && (
-          <span className="absolute -right-0.5 -top-0.5">
-            <span className="relative flex h-3 w-3">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#efc46f] opacity-60" />
-              <span className="relative inline-flex h-3 w-3 rounded-full bg-[#efc46f]" />
+          {/* Collapse chevron badge (open only) */}
+          {open && (
+            <span className="absolute -bottom-1 -right-1 grid h-6 w-6 place-items-center rounded-full bg-[#0c3e48] text-white ring-2 ring-[#eaf6f1]">
+              <ChevronDown size={14} />
             </span>
-          </span>
-        )}
-      </button>
+          )}
+
+          {/* Live pulse dot (closed only) */}
+          {!open && (
+            <span className="absolute right-1 top-1">
+              <span className="relative flex h-3 w-3">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#efc46f] opacity-60" />
+                <span className="relative inline-flex h-3 w-3 rounded-full bg-[#efc46f] ring-2 ring-white/70" />
+              </span>
+            </span>
+          )}
+        </button>
+      </div>
     </>
   );
 }
