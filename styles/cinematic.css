@@ -258,20 +258,39 @@
 
 /* ── Act II · telemetry callouts + scan frame ─────────────────────── */
 
+/* Telemetry chips: ticket-style readouts with a gold seam, corner
+   brackets, and a live pinging tag dot. */
 .cin-callout {
+  position: relative;
   position: absolute;
   z-index: 5;
   display: grid;
-  gap: 4px;
-  max-width: 250px;
-  border-left: 3px solid var(--cin-teal);
-  border-radius: 0 10px 10px 0;
-  padding: 12px 16px;
-  background: rgba(255, 253, 249, .94);
-  box-shadow: 0 18px 40px rgba(8, 54, 64, .13);
+  gap: 6px;
+  max-width: 270px;
+  border: 1px solid rgba(12, 62, 72, .18);
+  border-radius: 6px;
+  padding: 15px 18px 13px;
+  background: linear-gradient(180deg, #fffefb 0%, #fdf6ea 100%);
+  box-shadow:
+    6px 6px 0 rgba(8, 54, 64, .88),
+    0 26px 46px rgba(8, 54, 64, .14);
+}
+
+.cin-callout::before {
+  position: absolute;
+  top: -1px;
+  right: 14px;
+  left: 14px;
+  height: 3px;
+  content: "";
+  border-radius: 0 0 3px 3px;
+  background: linear-gradient(90deg, var(--cin-gold), rgba(239, 196, 111, .25));
 }
 
 .cin-callout i {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   color: var(--cin-teal);
   font-family: var(--font-mono), monospace;
   font-style: normal;
@@ -281,18 +300,52 @@
   text-transform: uppercase;
 }
 
+.cin-callout i::before {
+  content: "";
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--cin-gold);
+  box-shadow: 0 0 0 0 rgba(242, 185, 75, .65);
+  animation: cin-ping 2.2s cubic-bezier(.3, .7, .4, 1) infinite;
+}
+
 .cin-callout strong {
   color: var(--cin-ink);
-  font-size: 14px;
-  font-weight: 850;
-  letter-spacing: -.01em;
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: -.015em;
 }
 
 .cin-callout small {
-  color: rgba(12, 62, 72, .64);
+  color: rgba(12, 62, 72, .66);
   font-family: var(--font-mono), monospace;
-  font-size: 10.5px;
-  line-height: 1.45;
+  font-size: 10px;
+  line-height: 1.5;
+  border-top: 1px dashed rgba(12, 62, 72, .18);
+  padding-top: 7px;
+  margin-top: 2px;
+}
+
+/* Corner brackets, like a viewfinder locking on. */
+.cin-callout > b {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border: 0 solid var(--cin-teal-dark);
+  pointer-events: none;
+}
+
+.cin-callout > b:nth-of-type(1) { top: 4px; left: 4px; border-top-width: 2px; border-left-width: 2px; }
+.cin-callout > b:nth-of-type(2) { top: 4px; right: 4px; border-top-width: 2px; border-right-width: 2px; }
+.cin-callout > b:nth-of-type(3) { bottom: 4px; left: 4px; border-bottom-width: 2px; border-left-width: 2px; }
+.cin-callout > b:nth-of-type(4) { right: 4px; bottom: 4px; border-bottom-width: 2px; border-right-width: 2px; }
+
+@keyframes cin-ping {
+  0% { box-shadow: 0 0 0 0 rgba(242, 185, 75, .65); }
+  70% { box-shadow: 0 0 0 14px rgba(242, 185, 75, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(242, 185, 75, 0); }
 }
 
 .cin-callout::after {
@@ -811,10 +864,11 @@
 /* ── Responsive ───────────────────────────────────────────────────── */
 
 @media (max-width: 1180px) {
+  .cin-callout { max-width: 246px; }
   .cin-callout-a { left: 4%; }
-  .cin-callout-b { right: 3%; }
+  .cin-callout-b { right: 5%; }
   .cin-callout-c { left: 5%; }
-  .cin-callout-d { right: 4%; }
+  .cin-callout-d { right: 5%; }
   .cin-token-usd { right: 6%; }
 }
 
@@ -996,16 +1050,19 @@
   opacity: 1;
 }
 
-/* ── How it works: art covers its box; caption reads as a card ──────
+/* ── How it works: image and caption read as ONE framed card ────────
       Scoped under .iso-flow: globals.css declares same-name rules after
-      this file is imported, so bare selectors would lose the tie. ──── */
+      this file is imported, so bare selectors would lose the tie. The
+      art keeps its native cream backdrop; contain + breathing room so
+      it is never blown up past its resolution. ─────────────────────── */
 
 .iso-flow .iso-flow-image {
   position: relative;
   overflow: hidden;
   aspect-ratio: 4 / 3;
-  border: 2px solid rgba(255, 250, 244, .16);
-  border-radius: 18px;
+  border: 2px solid rgba(255, 250, 244, .18);
+  border-bottom: 0;
+  border-radius: 18px 18px 0 0;
   padding: 0;
   background: #fff8ef;
 }
@@ -1014,19 +1071,23 @@
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  padding: 3.5%;
 }
 
 .iso-flow .iso-flow-caption {
+  position: static;
   display: flex;
   gap: 14px;
   align-items: flex-start;
-  margin-top: 16px;
-  border: 1px solid rgba(12, 62, 72, .12);
-  border-radius: 14px;
+  width: auto;
+  margin: 0;
+  border: 2px solid rgba(255, 250, 244, .18);
+  border-top: 2px dashed rgba(12, 62, 72, .22);
+  border-radius: 0 0 18px 18px;
   padding: 16px 18px;
   background: #fffdf9;
-  box-shadow: 5px 5px 0 rgba(4, 28, 34, .55);
+  box-shadow: 0 18px 34px rgba(4, 28, 34, .35);
 }
 
 .iso-flow .iso-flow-caption > span {
@@ -1394,7 +1455,27 @@
   .cin-loading-mark,
   .cin-loading-ring,
   .cin-loading-bar i,
-  .cin-partner-logo.is-popping {
+  .cin-partner-logo.is-popping,
+  .cin-callout i::before {
     animation: none;
   }
+}
+
+/* ── Type scale: section titles from Comparison down, −10px ────────── */
+
+.iso-section .iso-section-title {
+  font-size: clamp(46px, 6vw, 86px);
+}
+
+.iso-final-copy .iso-section-title {
+  font-size: clamp(38px, 5.3vw, 72px);
+}
+
+.iso-walrus .iso-section-title {
+  font-size: clamp(30px, 3.4vw, 52px);
+}
+
+/* Tabs step up to fill the removed intro line's rhythm. */
+.iso-flow .iso-flow-tabs {
+  margin-top: 30px;
 }

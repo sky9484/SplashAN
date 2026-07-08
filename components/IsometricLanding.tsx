@@ -717,10 +717,6 @@ export default function IsometricLanding() {
               Five steps.
               <span>No limbo.</span>
             </h2>
-            <p className="iso-flow-intro">
-              Follow value from invoice or USD intake, through controls, settlement, local delivery, and proof.
-            </p>
-
             <div className="iso-flow-tabs" role="tablist" aria-label="Settlement flow">
               {flowSteps.map((step) => {
                 const active = activeFlow.id === step.id;

@@ -15,7 +15,7 @@ import {
 
 import { lockedCopy } from '@/content/claims';
 
-const HERO_IMG = '/cinematic/hero-district-v3.png';
+const HERO_IMG = '/cinematic/hero-district-v4.png';
 
 const EASE_OUT_EXPO = [0.16, 1, 0.3, 1] as const;
 
@@ -116,6 +116,7 @@ function CalloutBody({
           <Image src={badge} alt={badgeAlt ?? ''} width={1024} height={1024} sizes="72px" loading="eager" />
         </span>
       ) : null}
+      <b aria-hidden="true" /><b aria-hidden="true" /><b aria-hidden="true" /><b aria-hidden="true" />
       <i>{tag}</i>
       <strong>{value}</strong>
       <small>{meta}</small>
@@ -419,7 +420,7 @@ export default function SettlementCinematic() {
               <div className="cin-object-glow" aria-hidden="true" />
               <Image
                 src={HERO_IMG}
-                alt="Isometric Splash headquarters district with a signed tower, conveyor roads, delivery trucks, and surrounding offices"
+                alt="Isometric Splash headquarters campus on a floating platform: columned SPLASH building, Petronas towers, a glass tower, and a golden ring road with coin trucks"
                 width={2752}
                 height={1536}
                 sizes="(max-width: 880px) 140vw, 1700px"
