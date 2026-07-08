@@ -589,7 +589,9 @@
 
 .iso-flow,
 .iso-comparison,
-.iso-corridors {
+.iso-corridors,
+.iso-operating,
+.iso-readiness {
   position: relative;
 }
 
@@ -947,39 +949,52 @@
    Later-round additions kept through the hero revert
    ═══════════════════════════════════════════════════════════════════ */
 
-/* ── Partners: logo-first cards, centred; hover reveals centred text ─ */
+/* ── Partners: logo-first cards, dead-centred; hover reveals text ────
+      Scoped under .iso-partner-rail so it beats globals.css
+      .iso-partner-item (a 58px|1fr two-column grid that shoves the logo
+      into a narrow left column). Single centred column here. ───────── */
 
-.cin-partner {
+.iso-partner-rail .cin-partner {
   position: relative;
-  padding: 24px 14px;
+  display: grid;
+  grid-template-columns: 1fr;
+  place-items: center;
+  min-height: 0;
+  gap: 0;
+  border: 1px solid rgba(12, 62, 72, .12);
+  border-radius: 14px;
+  padding: 26px 14px;
+  background: #fffdf9;
 }
 
-.cin-partner-logo {
+.iso-partner-rail .cin-partner-logo {
   display: grid;
   place-items: center;
-  height: 64px;
-  margin-bottom: 0;
+  width: 100%;
+  height: 60px;
+  margin: 0;
   transition: opacity .3s ease, transform .3s ease, filter .3s ease;
 }
 
-.cin-partner-logo img {
+.iso-partner-rail .cin-partner-logo img {
   display: block;
   margin: 0 auto;
-  max-width: 78%;
-  max-height: 54px;
+  max-width: 76%;
+  max-height: 52px;
   width: auto;
   height: auto;
   object-fit: contain;
+  object-position: center;
 }
 
-.cin-partner:hover .cin-partner-logo,
-.cin-partner:focus-visible .cin-partner-logo {
+.iso-partner-rail .cin-partner:hover .cin-partner-logo,
+.iso-partner-rail .cin-partner:focus-visible .cin-partner-logo {
   opacity: .07;
   transform: scale(.9);
   filter: blur(1px);
 }
 
-.cin-partner-reveal {
+.iso-partner-rail .cin-partner-reveal {
   position: absolute;
   inset: 0;
   display: grid;
@@ -992,14 +1007,14 @@
   text-align: center;
 }
 
-.cin-partner-reveal strong {
+.iso-partner-rail .cin-partner-reveal strong {
   color: var(--iso-teal-dark);
   font-size: 15px;
   font-weight: 900;
   letter-spacing: -.01em;
 }
 
-.cin-partner-reveal small {
+.iso-partner-rail .cin-partner-reveal small {
   color: var(--iso-teal);
   font-family: var(--font-mono), monospace;
   font-size: 9.5px;
@@ -1008,8 +1023,8 @@
   text-transform: uppercase;
 }
 
-.cin-partner:hover .cin-partner-reveal,
-.cin-partner:focus-visible .cin-partner-reveal {
+.iso-partner-rail .cin-partner:hover .cin-partner-reveal,
+.iso-partner-rail .cin-partner:focus-visible .cin-partner-reveal {
   opacity: 1;
   transform: translateY(0);
 }
@@ -1030,96 +1045,86 @@
   filter: drop-shadow(0 6px 10px rgba(0, 0, 0, .3));
 }
 
-/* Carousel slides stay mounted and eager-loaded (lazy remounts left
-   slides 01/02 blank), crossfading between tabs. */
-.iso-walrus .iso-walrus-slide-art {
-  position: relative;
-}
-
+/* Carousel: all three slides stay mounted and eager-loaded (lazy
+   remounts left 01/02 blank), crossfading between tabs. The wrapper
+   KEEPS its globals.css box (position:absolute; inset:18px 18px 120px
+   inside the 650px carousel) — do NOT switch it to relative, that
+   collapses it to 0 height and the slides vanish. Each slide is layered
+   absolutely inside that box and fades on .is-active. */
 .iso-walrus .iso-walrus-slide-art img {
   position: absolute;
   inset: 0;
+  z-index: 2;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  padding: 30px 30px 0;
+  object-fit: contain;
   opacity: 0;
   transition: opacity .55s ease;
+  animation: none;
 }
 
 .iso-walrus .iso-walrus-slide-art img.is-active {
   opacity: 1;
 }
 
-/* ── How it works: image and caption read as ONE framed card ────────
-      Scoped under .iso-flow: globals.css declares same-name rules after
-      this file is imported, so bare selectors would lose the tie. The
-      art keeps its native cream backdrop; contain + breathing room so
-      it is never blown up past its resolution. ─────────────────────── */
+/* ── How it works: image + caption are ONE cream card ───────────────
+      Scoped under .iso-flow to beat globals.css (imported early, so its
+      own later rules win ties). The whole visual becomes a single cream
+      card lifting off the dark section: the artwork fills the top at its
+      native 1200x896 ratio (object-fit cover on a matching box → it only
+      ever downscales, so no blow-up / quality loss), the stat floats on
+      it, and the caption is the card's joined footer. Card cream is
+      sampled from the art's own backdrop (#fcefdd) so it reads seamless
+      on every screen size. ─────────────────────────────────────────── */
+
+.iso-flow .iso-flow-visual {
+  display: flex;
+  flex-direction: column;
+  align-self: start;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid rgba(8, 54, 64, .22);
+  border-radius: 20px;
+  padding: 0;
+  background: #fcefdd;
+  box-shadow:
+    0 30px 60px rgba(0, 0, 0, .34),
+    0 6px 0 rgba(0, 0, 0, .14);
+}
+
+.iso-flow .iso-flow-visual::after {
+  content: none;
+}
 
 .iso-flow .iso-flow-image {
   position: relative;
-  overflow: hidden;
-  aspect-ratio: 4 / 3;
-  border: 2px solid rgba(255, 250, 244, .18);
-  border-bottom: 0;
-  border-radius: 18px 18px 0 0;
+  z-index: 1;
+  display: block;
+  aspect-ratio: 1200 / 896;
+  width: 100%;
+  min-height: 0;
   padding: 0;
-  background: #fff8ef;
+  border-radius: 0;
+  background: #fcefdd;
 }
 
 .iso-flow .iso-flow-image img {
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: contain;
-  padding: 3.5%;
+  max-height: none;
+  object-fit: cover;
+  object-position: center;
+  filter: none;
+  animation: iso-reveal .35s ease both;
 }
 
-.iso-flow .iso-flow-caption {
-  position: static;
-  display: flex;
-  gap: 14px;
-  align-items: flex-start;
-  width: auto;
-  margin: 0;
-  border: 2px solid rgba(255, 250, 244, .18);
-  border-top: 2px dashed rgba(12, 62, 72, .22);
-  border-radius: 0 0 18px 18px;
-  padding: 16px 18px;
-  background: #fffdf9;
-  box-shadow: 0 18px 34px rgba(4, 28, 34, .35);
-}
-
-.iso-flow .iso-flow-caption > span {
-  display: grid;
-  place-items: center;
-  min-width: 38px;
-  height: 38px;
-  border-radius: 10px;
-  color: var(--iso-teal-dark, #083640);
-  background: #efc46f;
-  box-shadow: 2px 2px 0 rgba(8, 54, 64, .9);
-  font-family: var(--font-mono), monospace;
-  font-size: 12px;
-  font-weight: 900;
-}
-
-.iso-flow .iso-flow-caption strong {
-  display: block;
-  color: #0c3e48;
-  font-size: 15.5px;
-  font-weight: 850;
-  letter-spacing: -.01em;
-}
-
-.iso-flow .iso-flow-caption p {
-  margin: 5px 0 0;
-  color: rgba(12, 62, 72, .68);
-  font-size: 12.5px;
-  line-height: 1.6;
-}
-
+/* Checkpoint chip floats on the artwork, top-right of the card. */
 .iso-flow .iso-flow-stat {
+  z-index: 4;
+  top: 16px;
+  right: 16px;
   border: 0;
   border-radius: 10px;
   color: #083640;
@@ -1133,6 +1138,52 @@
 
 .iso-flow .iso-flow-stat strong {
   color: #083640;
+}
+
+/* Caption = the card's footer strip, same cream, hairline seam. */
+.iso-flow .iso-flow-caption {
+  position: static;
+  z-index: 1;
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  width: auto;
+  margin: 0;
+  border: 0;
+  border-top: 1px dashed rgba(8, 54, 64, .28);
+  border-radius: 0;
+  padding: 18px 20px 20px;
+  background: #fcefdd;
+  box-shadow: none;
+}
+
+.iso-flow .iso-flow-caption > span {
+  display: grid;
+  place-items: center;
+  min-width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  color: var(--iso-teal-dark, #083640);
+  background: #efc46f;
+  box-shadow: 2px 2px 0 rgba(8, 54, 64, .9);
+  font-family: var(--font-mono), monospace;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.iso-flow .iso-flow-caption strong {
+  display: block;
+  color: #0c3e48;
+  font-size: 16px;
+  font-weight: 850;
+  letter-spacing: -.01em;
+}
+
+.iso-flow .iso-flow-caption p {
+  margin: 5px 0 0;
+  color: rgba(12, 62, 72, .72);
+  font-size: 13px;
+  line-height: 1.55;
 }
 
 /* ── User feedback: the settlement-receipt testimonial ────────────── */

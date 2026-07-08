@@ -670,6 +670,9 @@ export default function IsometricLanding() {
       </section>
 
       <section id="operating-layer" className="iso-section iso-operating">
+        <div className="cin-drop" style={{ top: 30, right: '5%' }} aria-hidden="true">
+          <FloatingToken src="/cinematic/token-idr-v1.png" alt="Indonesian rupiah token" size={108} float="cin-float-slow" />
+        </div>
         <div className="iso-shell">
           <div className="iso-section-heading iso-heading-split">
             <div>
@@ -934,6 +937,9 @@ export default function IsometricLanding() {
       </section>
 
       <section id="readiness" className="iso-section iso-readiness">
+        <div className="cin-drop" style={{ top: 34, right: '6%' }} aria-hidden="true">
+          <FloatingToken src="/cinematic/token-mmk-v1.png" alt="Myanmar kyat token" size={112} float="cin-float-drift" />
+        </div>
         <div className="iso-shell iso-readiness-layout">
           <div className="iso-readiness-copy">
             <p className="iso-kicker">Scale</p>
