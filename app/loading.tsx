@@ -9,10 +9,10 @@ export default function Loading() {
         <span className="cin-loading-ring" aria-hidden="true" />
         <span className="cin-loading-ring is-late" aria-hidden="true" />
         <Image
-          src="/splash-mark.png"
+          src="/splash-main-icon.png"
           alt=""
-          width={512}
-          height={512}
+          width={841}
+          height={823}
           className="cin-loading-mark"
           priority
         />

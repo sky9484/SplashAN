@@ -1,11 +1,12 @@
 /* ═══════════════════════════════════════════════════════════════════
    Settlement Cinematic  (.cin-*)
-   Scroll-pinned dive: city of towers → one bright window → the boy at
-   his desk → into the monitor screen → the product act → ice-melt into
-   the partners rail. Scenes are SVG so the camera can push in 7x and
-   stay sharp. Layers (z): backdrop 0 · scenes 2 · tokens 3 · vignette 4
-   · telemetry + frame 5 · copy 6 · flash + drips 7 · vision + band 8.
-   Only transform/opacity/filter animate.
+   Scroll-pinned hero → telemetry scan → push-through → product vision,
+   on the bright brand stage: paper cream, teal ink, gold. The main
+   object is the enhanced isometric SEA network artwork; satellites are
+   isometric currency tokens (USD · MYR · Sui). Type and buttons reuse
+   the landing's own iso-* classes. Layers (z): backdrop 0 · object 2 ·
+   tokens 3 · edge glow 4 · telemetry 5 · copy 6 · flash 7 · vision 8.
+   Only transform/opacity animate.
    ═══════════════════════════════════════════════════════════════════ */
 
 .cin-section {
@@ -19,7 +20,7 @@
   --cin-line: rgba(12, 62, 72, .16);
   position: relative;
   order: 1; /* .iso-landing lays sections out with flex order */
-  height: 680vh;
+  height: 520vh;
   color: var(--cin-ink);
   background: linear-gradient(180deg, #fffdf8 0%, var(--cin-paper) 30%, #fbf3e7 70%, var(--cin-paper-deep) 100%);
 }
@@ -58,6 +59,18 @@
   background: radial-gradient(circle, rgba(159, 207, 199, .5), transparent 70%);
 }
 
+.cin-grid {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-image:
+    linear-gradient(rgba(12, 62, 72, .06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(12, 62, 72, .06) 1px, transparent 1px);
+  background-size: 68px 68px;
+  -webkit-mask-image: radial-gradient(ellipse 90% 75% at 55% 45%, rgba(0, 0, 0, .9), transparent 78%);
+  mask-image: radial-gradient(ellipse 90% 75% at 55% 45%, rgba(0, 0, 0, .9), transparent 78%);
+}
+
 .cin-vignette {
   position: absolute;
   inset: 0;
@@ -68,37 +81,37 @@
     radial-gradient(ellipse 120% 95% at 50% 46%, transparent 56%, rgba(226, 206, 180, .32) 100%);
 }
 
-/* ── The landmark island under the swinging camera ────────────────── */
+/* ── The network artwork + floating currency tokens ───────────────── */
 
-.cin-scene-layer {
+.cin-object-layer {
   position: absolute;
   inset: 0;
   z-index: 2;
-  pointer-events: none;
-  will-change: transform, opacity;
-}
-
-.cin-island {
-  position: absolute;
-  inset: 0;
   display: grid;
   place-items: center;
+  pointer-events: none;
 }
 
-.cin-island img {
-  width: min(100vh, 100vw);
-  height: min(100vh, 100vw);
-  object-fit: contain;
-  filter: drop-shadow(0 46px 64px rgba(12, 62, 72, .24));
-  animation: cin-hover 10s ease-in-out infinite;
+.cin-object {
+  position: relative;
+  width: min(62vw, 940px);
 }
 
-@keyframes cin-hover {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-10px); }
+.cin-object img {
+  width: 100%;
+  height: auto;
+  filter: drop-shadow(0 42px 60px rgba(12, 62, 72, .2));
 }
 
-/* ── Floating currency tokens ─────────────────────────────────────── */
+.cin-object-glow {
+  position: absolute;
+  inset: -14%;
+  z-index: -1;
+  background:
+    radial-gradient(circle at 52% 46%, rgba(239, 196, 111, .22), transparent 55%),
+    radial-gradient(circle at 44% 62%, rgba(159, 207, 199, .18), transparent 60%);
+  filter: blur(8px);
+}
 
 .cin-float {
   animation: cin-float 9s ease-in-out infinite;
@@ -176,6 +189,22 @@
   to { transform: perspective(600px) rotateY(1800deg); }
 }
 
+/* Loading state: soft shimmer until the artwork decodes. */
+.cin-object-poster {
+  position: absolute;
+  inset: 16% 8%;
+  border-radius: 26px;
+  background:
+    radial-gradient(circle at 50% 45%, rgba(239, 196, 111, .25), transparent 55%),
+    radial-gradient(circle at 48% 62%, rgba(159, 207, 199, .22), transparent 60%);
+  animation: cin-breathe 2.4s ease-in-out infinite;
+}
+
+@keyframes cin-breathe {
+  0%, 100% { opacity: .45; transform: scale(.97); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
 /* ── Act I · hero copy (type + buttons come from iso-*) ───────────── */
 
 .cin-copy-layer {
@@ -186,18 +215,7 @@
   align-items: center;
 }
 
-/* Soft cream veil so the headline stays readable over the skyline. */
-.cin-copy-layer::before {
-  position: absolute;
-  inset: 0;
-  content: "";
-  pointer-events: none;
-  background: radial-gradient(ellipse 62% 78% at 26% 44%, rgba(255, 253, 248, .94), rgba(255, 253, 248, .6) 52%, transparent 74%);
-}
-
 .cin-copy {
-  position: relative;
-  z-index: 1;
   width: 100%;
   padding-top: 60px;
 }
@@ -208,10 +226,6 @@
   max-width: 640px;
   margin-top: clamp(10px, 2vh, 22px);
   font-size: clamp(44px, min(7.2vw, 11vh), 120px);
-  color: var(--cin-ink);
-  text-shadow:
-    3px 3px 0 rgba(239, 196, 111, .9),
-    6px 6px 0 rgba(8, 54, 64, .14);
 }
 
 .cin-copy .iso-hero-description {
@@ -233,118 +247,140 @@
     padding-top: 72px;
   }
 
+  .cin-object {
+    width: min(56vw, 720px);
+  }
+
   .cin-token-usd { --token-size: 130px; }
   .cin-token-myr { --token-size: 110px; }
   .cin-token-sui { --token-size: 150px; }
 }
 
-/* ── Act II · the tour stops: generated telemetry plaques ─────────── */
+/* ── Act II · telemetry callouts + scan frame ─────────────────────── */
 
-.cin-stop {
+.cin-callout {
   position: absolute;
   z-index: 5;
-  width: min(378px, 86vw);
-  aspect-ratio: 1264 / 848;
-  filter: drop-shadow(0 26px 40px rgba(8, 54, 64, .32));
-  will-change: transform, opacity;
-}
-
-.cin-stop-art {
-  position: absolute;
-  inset: 0;
-  background: url('/cinematic/callout-panel.png') center / contain no-repeat;
-}
-
-.cin-stop-art.is-flipped {
-  transform: scaleX(-1);
-}
-
-.cin-stop-body {
-  position: relative;
-  z-index: 1;
   display: grid;
   gap: 4px;
-  padding: 16% 19% 17% 20%;
+  max-width: 250px;
+  border-left: 3px solid var(--cin-teal);
+  border-radius: 0 10px 10px 0;
+  padding: 12px 16px;
+  background: rgba(255, 253, 249, .94);
+  box-shadow: 0 18px 40px rgba(8, 54, 64, .13);
 }
 
-.cin-stop-body i {
-  color: #ffd98a;
+.cin-callout i {
+  color: var(--cin-teal);
   font-family: var(--font-mono), monospace;
   font-style: normal;
-  font-size: 8.5px;
+  font-size: 9px;
   font-weight: 800;
-  letter-spacing: .16em;
+  letter-spacing: .18em;
   text-transform: uppercase;
 }
 
-.cin-stop-body strong {
-  color: #ffffff;
-  font-size: 17px;
-  font-weight: 900;
+.cin-callout strong {
+  color: var(--cin-ink);
+  font-size: 14px;
+  font-weight: 850;
   letter-spacing: -.01em;
-  line-height: 1.15;
-  text-shadow: 0 2px 8px rgba(4, 28, 34, .5);
 }
 
-.cin-stop-body small {
-  color: #c9e8df;
+.cin-callout small {
+  color: rgba(12, 62, 72, .64);
   font-family: var(--font-mono), monospace;
-  font-size: 9px;
+  font-size: 10.5px;
   line-height: 1.45;
 }
 
-.cin-stop-body em {
-  margin-top: 3px;
-  color: rgba(255, 255, 255, .5);
+.cin-callout::after {
+  position: absolute;
+  top: 50%;
+  width: 46px;
+  height: 1px;
+  content: "";
+}
+
+.cin-callout-a { top: 19%; left: 9%; }
+.cin-callout-b { top: 23%; right: 7%; }
+.cin-callout-c { bottom: 25%; left: 11%; }
+.cin-callout-d { bottom: 20%; right: 9%; }
+
+.cin-callout-a::after,
+.cin-callout-c::after {
+  right: -46px;
+  background: linear-gradient(90deg, rgba(13, 99, 112, .6), transparent);
+}
+
+.cin-callout-b::after,
+.cin-callout-d::after {
+  left: -46px;
+  background: linear-gradient(270deg, rgba(13, 99, 112, .6), transparent);
+}
+
+.cin-scan {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  width: min(66vmin, 680px);
+  height: min(44vmin, 440px);
+  margin: auto;
+  pointer-events: none;
+  border: 1px dashed rgba(12, 62, 72, .38);
+}
+
+.cin-scan-corner {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border: 0 solid var(--cin-teal-dark);
+}
+
+.cin-scan-corner.is-tl { top: -2px; left: -2px; border-top-width: 2px; border-left-width: 2px; }
+.cin-scan-corner.is-tr { top: -2px; right: -2px; border-top-width: 2px; border-right-width: 2px; }
+.cin-scan-corner.is-bl { bottom: -2px; left: -2px; border-bottom-width: 2px; border-left-width: 2px; }
+.cin-scan-corner.is-br { bottom: -2px; right: -2px; border-bottom-width: 2px; border-right-width: 2px; }
+
+.cin-callout-badge {
+  position: absolute;
+  top: -30px;
+  right: -22px;
+  width: 64px;
+  pointer-events: none;
+}
+
+.cin-callout-badge img {
+  width: 100%;
+  height: auto;
+  filter: drop-shadow(0 10px 14px rgba(12, 62, 72, .25));
+  animation: cin-float 7s ease-in-out infinite;
+}
+
+.cin-status {
+  position: absolute;
+  right: 0;
+  bottom: 26px;
+  left: 0;
+  z-index: 5;
+  color: rgba(12, 62, 72, .5);
   font-family: var(--font-mono), monospace;
-  font-style: normal;
-  font-size: 8.5px;
+  font-size: 9.5px;
   font-weight: 700;
-  letter-spacing: .14em;
+  letter-spacing: .16em;
+  text-align: center;
   text-transform: uppercase;
 }
 
-/* Pulsing gold locator dot, mirroring the plaque's pin side. */
-.cin-stop-ping {
-  position: absolute;
-  bottom: -6px;
-  left: 13%;
-  width: 13px;
-  height: 13px;
-  border-radius: 50%;
-  background: #f2b94b;
-  box-shadow: 0 0 0 0 rgba(242, 185, 75, .65);
-  animation: cin-ping 2.1s cubic-bezier(.3, .7, .4, 1) infinite;
-}
-
-.cin-stop.is-left .cin-stop-ping {
-  right: 13%;
-  left: auto;
-}
-
-@keyframes cin-ping {
-  0% { box-shadow: 0 0 0 0 rgba(242, 185, 75, .65); }
-  70% { box-shadow: 0 0 0 20px rgba(242, 185, 75, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(242, 185, 75, 0); }
-}
-
-.cin-stop.is-left .cin-stop-body {
-  padding: 16% 20% 17% 21%;
-}
-
-.cin-stop-fee { top: 15%; left: 6%; }
-.cin-stop-corridor { top: 14%; right: 5%; }
-.cin-stop-treasury { top: 17%; right: 7%; }
-.cin-stop-agent { top: 16%; left: 5%; }
-
-/* ── Screen-light burst + product act + melt ──────────────────────── */
+/* ── Act III · gold light burst + product vision ──────────────────── */
 
 .cin-flash {
   position: absolute;
   inset: 0;
   z-index: 7;
   pointer-events: none;
-  background: radial-gradient(circle at 50% 46%, rgba(238, 250, 245, .95), rgba(239, 196, 111, .4) 42%, transparent 70%);
+  background: radial-gradient(circle at 50% 50%, rgba(239, 196, 111, .6), rgba(255, 250, 244, .42) 38%, transparent 68%);
 }
 
 .cin-vision {
@@ -446,42 +482,6 @@
   pointer-events: auto;
 }
 
-/* Melt wrappers: each act piece melts independently, origin-top. */
-.cin-melt-center {
-  display: flex;
-  justify-content: center;
-}
-
-.cin-melt-drips {
-  position: absolute;
-  inset: 0;
-  z-index: 7;
-  pointer-events: none;
-}
-
-.cin-melt-drip {
-  position: absolute;
-  top: 40%;
-  width: 13px;
-  border-radius: 0 0 12px 12px;
-  background: linear-gradient(180deg, rgba(239, 196, 111, .05), var(--cin-gold) 30%, #e0a53c);
-}
-
-/* The metrics band docked at the foot of the product act. */
-.cin-band {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 8;
-  will-change: transform, opacity;
-}
-
-.cin-band .iso-marquee,
-.cin-marquee {
-  position: static;
-}
-
 /* ── Scroll hint ──────────────────────────────────────────────────── */
 
 .cin-hint {
@@ -540,6 +540,11 @@
   position: relative;
 }
 
+/* The metrics marquee doubles as the bridge band into the next section. */
+.iso-marquee.is-static {
+  position: static;
+  order: 1; /* directly after .cin-section, before .iso-partner-rail (2) */
+}
 
 /* ── Scroll reveals (transform-only; class added by JS, so no-JS users
       see everything immediately) ──────────────────────────────────── */
@@ -717,14 +722,7 @@
 .cin-static-stage {
   position: absolute;
   inset: 0;
-  display: grid;
-  place-items: center;
   opacity: .5;
-}
-
-.cin-static-stage img {
-  width: min(88vh, 92vw);
-  height: auto;
 }
 
 .cin-copy-static {
@@ -739,9 +737,12 @@
   padding-block: 24px 56px;
 }
 
-.cin-stop-static {
+.cin-callout-static {
   position: static;
-  width: 100%;
+}
+
+.cin-callout-static::after {
+  content: none;
 }
 
 .cin-vision-static {
@@ -751,16 +752,14 @@
   pointer-events: auto;
 }
 
-/* ── Infrastructure & Partners: logo-first cards. Hover dims the logo
-      and reveals the centred name + role. Click still balloon-pops. ── */
+/* ── Infrastructure & Partners: cards + balloon-pop ───────────────── */
 
 .cin-partner {
-  position: relative;
   display: block;
   width: 100%;
   border: 1px solid rgba(12, 62, 72, .12);
   border-radius: 14px;
-  padding: 22px 14px;
+  padding: 18px 14px 15px;
   background: #fffdf9;
   font: inherit;
   color: inherit;
@@ -783,13 +782,137 @@
 .cin-partner-logo {
   display: grid;
   place-items: center;
-  height: 62px;
+  height: 54px;
+  margin-bottom: 10px;
+}
+
+.cin-partner-logo img {
+  max-width: 84%;
+  max-height: 44px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+
+.cin-partner-logo.is-popping {
+  animation: cin-balloon 2.3s cubic-bezier(.4, .9, .5, 1) both;
+}
+
+@keyframes cin-balloon {
+  0% { transform: scale(1); opacity: 1; }
+  42% { transform: scale(1.22); opacity: 1; }
+  56% { transform: scale(1.48); opacity: 1; }
+  59% { transform: scale(1.75); opacity: 0; }
+  60% { transform: translateY(46px) scale(.5); opacity: 0; }
+  76% { opacity: 1; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+/* ── Responsive ───────────────────────────────────────────────────── */
+
+@media (max-width: 1180px) {
+  .cin-callout-a { left: 4%; }
+  .cin-callout-b { right: 3%; }
+  .cin-callout-c { left: 5%; }
+  .cin-callout-d { right: 4%; }
+  .cin-token-usd { right: 6%; }
+}
+
+@media (max-width: 880px) {
+  .cin-section {
+    height: 430vh;
+  }
+
+  .cin-copy {
+    padding-top: 88px;
+  }
+
+  .cin-object {
+    width: 96vw;
+    opacity: .5;
+  }
+
+  .cin-token-usd { top: 11%; right: 4%; --token-size: 110px; }
+  .cin-token-myr { bottom: 6%; left: 3%; --token-size: 96px; }
+  .cin-token-sui { bottom: 9%; right: 3%; --token-size: 130px; }
+
+  .cin-callout {
+    max-width: 190px;
+    padding: 10px 12px;
+  }
+
+  .cin-callout strong { font-size: 12.5px; }
+  .cin-callout small { font-size: 9.5px; }
+  .cin-callout::after { content: none; }
+
+  .cin-callout-a { top: 13%; left: 5%; }
+  .cin-callout-b { top: 13%; right: 4%; }
+  .cin-callout-c { bottom: 17%; left: 5%; }
+  .cin-callout-d { bottom: 11%; right: 4%; }
+
+  .cin-scan {
+    width: min(88vw, 400px);
+    height: min(58vw, 270px);
+  }
+
+  .cin-scan-caption { font-size: 8.5px; }
+  .cin-status { display: none; }
+  .cin-hint { right: 20px; bottom: 20px; }
+  .cin-vision-lede { font-size: 15px; }
+  .cin-vision-strip { letter-spacing: .2em; }
+}
+
+@media (max-width: 880px) {
+  .cin-callout-badge {
+    top: -22px;
+    right: -12px;
+    width: 46px;
+  }
+
+  .cin-token-usd { top: 10%; right: 5%; }
+  .cin-token-myr { bottom: 6%; left: 4%; }
+
+  .cin-drop {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cin-hint-wheel::before,
+  .cin-float,
+  .cin-object-poster,
+  .cin-callout-badge img,
+  .cin-token-button.is-spinning,
+  .cin-vision-mark,
+  .cin-partner-logo.is-popping {
+    animation: none;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Later-round additions kept through the hero revert
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── Partners: logo-first cards, centred; hover reveals centred text ─ */
+
+.cin-partner {
+  position: relative;
+  padding: 24px 14px;
+}
+
+.cin-partner-logo {
+  display: grid;
+  place-items: center;
+  height: 64px;
+  margin-bottom: 0;
   transition: opacity .3s ease, transform .3s ease, filter .3s ease;
 }
 
 .cin-partner-logo img {
-  max-width: 86%;
-  max-height: 52px;
+  display: block;
+  margin: 0 auto;
+  max-width: 78%;
+  max-height: 54px;
   width: auto;
   height: auto;
   object-fit: contain;
@@ -837,21 +960,7 @@
   transform: translateY(0);
 }
 
-.cin-partner-logo.is-popping {
-  animation: cin-balloon 2.3s cubic-bezier(.4, .9, .5, 1) both;
-}
-
-@keyframes cin-balloon {
-  0% { transform: scale(1); opacity: 1; }
-  42% { transform: scale(1.22); opacity: 1; }
-  56% { transform: scale(1.48); opacity: 1; }
-  59% { transform: scale(1.75); opacity: 0; }
-  60% { transform: translateY(46px) scale(.5); opacity: 0; }
-  76% { opacity: 1; }
-  100% { transform: translateY(0) scale(1); opacity: 1; }
-}
-
-/* ── Walrus: calmer scale, so the section fits its story ──────────── */
+/* ── Walrus section: calmer scale + isometric wordmark art ─────────── */
 
 .iso-walrus .iso-section-title {
   font-size: clamp(30px, 3.4vw, 52px);
@@ -861,11 +970,108 @@
   padding-block: clamp(72px, 10vh, 110px);
 }
 
-.iso-walrus-wordmark {
-  width: 96px;
+.iso-walrus-brandmark {
+  width: 54px;
   height: auto;
-  filter: brightness(0) invert(1); /* teal wordmark → white on the dark panel */
-  opacity: .92;
+  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, .3));
+}
+
+/* Carousel slides stay mounted and eager-loaded (lazy remounts left
+   slides 01/02 blank), crossfading between tabs. */
+.iso-walrus .iso-walrus-slide-art {
+  position: relative;
+}
+
+.iso-walrus .iso-walrus-slide-art img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity .55s ease;
+}
+
+.iso-walrus .iso-walrus-slide-art img.is-active {
+  opacity: 1;
+}
+
+/* ── How it works: art covers its box; caption reads as a card ──────
+      Scoped under .iso-flow: globals.css declares same-name rules after
+      this file is imported, so bare selectors would lose the tie. ──── */
+
+.iso-flow .iso-flow-image {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 4 / 3;
+  border: 2px solid rgba(255, 250, 244, .16);
+  border-radius: 18px;
+  padding: 0;
+  background: #fff8ef;
+}
+
+.iso-flow .iso-flow-image img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.iso-flow .iso-flow-caption {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  margin-top: 16px;
+  border: 1px solid rgba(12, 62, 72, .12);
+  border-radius: 14px;
+  padding: 16px 18px;
+  background: #fffdf9;
+  box-shadow: 5px 5px 0 rgba(4, 28, 34, .55);
+}
+
+.iso-flow .iso-flow-caption > span {
+  display: grid;
+  place-items: center;
+  min-width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  color: var(--iso-teal-dark, #083640);
+  background: #efc46f;
+  box-shadow: 2px 2px 0 rgba(8, 54, 64, .9);
+  font-family: var(--font-mono), monospace;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.iso-flow .iso-flow-caption strong {
+  display: block;
+  color: #0c3e48;
+  font-size: 15.5px;
+  font-weight: 850;
+  letter-spacing: -.01em;
+}
+
+.iso-flow .iso-flow-caption p {
+  margin: 5px 0 0;
+  color: rgba(12, 62, 72, .68);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.iso-flow .iso-flow-stat {
+  border: 0;
+  border-radius: 10px;
+  color: #083640;
+  background: #efc46f;
+  box-shadow: 3px 3px 0 rgba(8, 54, 64, .9);
+}
+
+.iso-flow .iso-flow-stat small {
+  color: rgba(8, 54, 64, .7);
+}
+
+.iso-flow .iso-flow-stat strong {
+  color: #083640;
 }
 
 /* ── User feedback: the settlement-receipt testimonial ────────────── */
@@ -1060,7 +1266,13 @@
   }
 }
 
-/* ── Brand slots: crisp original mark, no tagline ─────────────────── */
+/* ── Brand slots: splash-main-icon everywhere, no tagline ──────────── */
+
+.iso-header-brand-icon {
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
+}
 
 .iso-header-wordmark strong {
   font-size: 19px;
@@ -1073,8 +1285,8 @@
 }
 
 .cin-footer-logo img {
-  width: 46px;
-  height: 46px;
+  width: 48px;
+  height: 48px;
   object-fit: contain;
 }
 
@@ -1108,8 +1320,8 @@
 }
 
 .cin-loading-mark {
-  width: 64px;
-  height: 64px;
+  width: 68px;
+  height: 68px;
   object-fit: contain;
   animation: cin-loading-bob 2.2s ease-in-out infinite;
   filter: drop-shadow(0 12px 18px rgba(12, 62, 72, .22));
@@ -1181,65 +1393,8 @@
 @media (prefers-reduced-motion: reduce) {
   .cin-loading-mark,
   .cin-loading-ring,
-  .cin-loading-bar i {
-    animation: none;
-  }
-}
-
-/* ── Responsive ───────────────────────────────────────────────────── */
-
-@media (max-width: 1180px) {
-  .cin-stop { width: min(300px, 82vw); }
-  .cin-token-usd { right: 6%; }
-}
-
-@media (max-width: 880px) {
-  .cin-section {
-    height: 560vh;
-  }
-
-  .cin-copy {
-    padding-top: 88px;
-  }
-
-  .cin-token-usd { top: 11%; right: 4%; --token-size: 110px; }
-  .cin-token-myr { bottom: 6%; left: 3%; --token-size: 96px; }
-  .cin-token-sui { bottom: 9%; right: 3%; --token-size: 130px; }
-
-  .cin-stop {
-    width: min(272px, 86vw);
-  }
-
-  .cin-stop-body strong { font-size: 16px; }
-  .cin-stop-body small { font-size: 9px; }
-
-  .cin-stop-fee { top: 9%; left: 4%; }
-  .cin-stop-corridor { top: 9%; right: 4%; }
-  .cin-stop-treasury { top: 10%; right: 4%; }
-  .cin-stop-agent { top: 9%; left: 4%; }
-
-  .cin-hint { right: 20px; bottom: 20px; }
-  .cin-vision-lede { font-size: 15px; }
-  .cin-melt-drip { width: 8px; }
-}
-
-@media (max-width: 880px) {
-  .cin-token-usd { top: 10%; right: 5%; }
-  .cin-token-myr { bottom: 6%; left: 4%; }
-
-  .cin-drop {
-    display: none;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .cin-hint-wheel::before,
-  .cin-float,
-  .cin-token-button.is-spinning,
-  .cin-vision-mark,
-  .cin-partner-logo.is-popping,
-  .cin-island img,
-  .cin-stop-ping {
+  .cin-loading-bar i,
+  .cin-partner-logo.is-popping {
     animation: none;
   }
 }

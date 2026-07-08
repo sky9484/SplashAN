@@ -64,7 +64,7 @@ const flowSteps = [
     number: '01',
     title: 'Collect or upload',
     description: 'Create a pay link, upload an accepted invoice, or fund USD into the operating account.',
-    image: '/cinematic/flow-collect-v3.png',
+    image: '/cinematic/flow-collect-v4.png',
     imageAlt: 'Collect isometric typography with an invoice, pay link, and dollar coins',
     stat: 'Pay link or invoice',
   },
@@ -73,7 +73,7 @@ const flowSteps = [
     number: '02',
     title: 'Review quotes',
     description: 'KYB, recipient status, route, fee, treasury floor, and evidence labels appear before signature.',
-    image: '/cinematic/flow-review-quotes-v3.png',
+    image: '/cinematic/flow-review-quotes-v4.png',
     imageAlt: 'Review quotes isometric typography with FX quote cards, checklist, and approval stamp',
     stat: 'Human approval',
   },
@@ -82,7 +82,7 @@ const flowSteps = [
     number: '03',
     title: 'Settle in one signature',
     description: 'The prepared payment either completes as approved or stops safely before funds move.',
-    image: '/cinematic/flow-settle-v3.png',
+    image: '/cinematic/flow-settle-v4.png',
     imageAlt: 'Settle isometric typography with a coin passing an approval gate and a signing pen',
     stat: lockedCopy.speed,
   },
@@ -91,7 +91,7 @@ const flowSteps = [
     number: '04',
     title: 'Deliver locally',
     description: 'Pay a verified supplier or sweep value into the recipient ladder where the corridor allows it.',
-    image: '/cinematic/flow-deliver-v3.png',
+    image: '/cinematic/flow-deliver-v4.png',
     imageAlt: 'Deliver isometric typography with a truck bringing a peso coin to a local shop',
     stat: lockedCopy.fee,
   },
@@ -100,10 +100,19 @@ const flowSteps = [
     number: '05',
     title: 'Anchor the proof',
     description: 'Receipts, encrypted documents, and daily audit evidence remain available for review.',
-    image: '/cinematic/flow-proof-v3.png',
+    image: '/cinematic/flow-proof-v4.png',
     imageAlt: 'Proof isometric typography with an archive vault, sealed certificate, and shield badge',
     stat: 'Walrus + Sui audit',
   },
+];
+
+const marqueeItems = [
+  ['1 live testnet', 'MY to PH corridor'],
+  ['Modeled routes', 'expand with controls'],
+  ['~400ms', 'Sui settlement finality'],
+  ['From 0.80%', 'starting edge fee'],
+  ['Human approved', 'AI recommendations'],
+  ['Stored proof', 'Walrus + Sui audit'],
 ];
 
 const clientProofPoints = [
@@ -130,7 +139,7 @@ const partnerRail: Array<{ src: string; name: string; role: string; logoClass?: 
   { src: '/partners/pyth.png', name: 'Pyth', role: 'FX and peg data' },
   { src: '/deepbook-mark.png', name: 'DeepBook', role: 'amount-sized liquidity', logoClass: 'iso-deepbook-logo' },
   { src: '/sumsub-logo.png', name: 'Sumsub', role: 'KYB and KYC' },
-  { src: '/partners/walrus.png', name: 'Walrus', role: 'permanent records' },
+  { src: '/isometric/walrus-logo.png', name: 'Walrus', role: 'permanent records' },
   { src: '/sui-logo-blue.svg', name: 'Sui', role: 'settlement network' },
 ];
 
@@ -305,7 +314,7 @@ const walrusProofs = [
 
 const walrusSlides = [
   {
-    image: '/isometric/walrus-receipt-v3.png',
+    image: '/isometric/walrus-receipt-v4.png',
     label: '01 / Walrus receipt',
     tab: 'Audit',
     title: 'Permanent audit proof',
@@ -313,7 +322,7 @@ const walrusSlides = [
     facts: ['On-chain receipt', 'Daily audit batch', 'Regulator-verifiable'],
   },
   {
-    image: '/isometric/memwal-agent-v3.png',
+    image: '/isometric/memwal-agent-v4.png',
     label: '02 / MemWal',
     tab: 'AI',
     title: 'The AI copilot remembers',
@@ -550,7 +559,7 @@ export default function IsometricLanding() {
       <header className={`iso-header ${showBackToTop ? 'is-scrolled' : ''}`}>
         <div className="iso-shell iso-header-inner">
           <Link href="/" className="iso-brand" aria-label="Splash Finance home">
-            <Image src="/splash-mark.png" alt="" width={512} height={512} className="iso-header-brand-icon" priority />
+            <Image src="/splash-main-icon.png" alt="" width={841} height={823} className="iso-header-brand-icon" priority />
             <span className="iso-header-wordmark">
               <strong>Splash</strong>
             </span>
@@ -579,6 +588,18 @@ export default function IsometricLanding() {
       </header>
 
       <SettlementCinematic />
+
+      <div className="iso-marquee is-static" aria-label="Platform metrics">
+        <div className="iso-marquee-track">
+          {[...marqueeItems, ...marqueeItems].map(([value, label], index) => (
+            <div className="iso-marquee-item" key={`${value}-${index}`}>
+              <strong>{value}</strong>
+              <span>{label}</span>
+              <i aria-hidden="true">◆</i>
+            </div>
+          ))}
+        </div>
+      </div>
 
       <section className="iso-partner-rail" aria-label="Infrastructure partners and benchmarks">
         <div className="iso-shell">
@@ -798,7 +819,7 @@ export default function IsometricLanding() {
         <div className="iso-shell iso-walrus-layout">
           <div className="iso-walrus-copy">
             <div className="iso-walrus-brand">
-              <Image src="/partners/walrus.png" alt="Walrus" width={96} height={34} className="iso-walrus-wordmark" />
+              <Image src="/isometric/walrus-logo.png" alt="Walrus" width={54} height={54} className="iso-walrus-brandmark" />
               <span>Permanent records on Walrus</span>
             </div>
             <h2 className="iso-section-title iso-section-title-light">
@@ -826,14 +847,17 @@ export default function IsometricLanding() {
 
           <div className="iso-walrus-carousel" aria-label="Walrus, MemWal, and Seal showcase">
             <div className="iso-walrus-slide-art">
-              <Image
-                key={walrusSlide.image}
-                src={walrusSlide.image}
-                alt={`${walrusSlide.title} isometric typography illustration`}
-                width={1536}
-                height={1024}
-                priority={activeWalrus === 0}
-              />
+              {walrusSlides.map((slide, index) => (
+                <Image
+                  key={slide.image}
+                  src={slide.image}
+                  alt={`${slide.title} isometric typography illustration`}
+                  width={1536}
+                  height={1024}
+                  loading="eager"
+                  className={activeWalrus === index ? 'is-active' : ''}
+                />
+              ))}
             </div>
             <div className="iso-walrus-slide-copy" aria-live="polite">
               <span>{walrusSlide.label}</span>
@@ -1131,7 +1155,7 @@ export default function IsometricLanding() {
         <div className="iso-shell cin-footer-grid">
           <div className="cin-footer-brand">
             <span className="cin-footer-logo">
-              <Image src="/splash-mark.png" alt="" width={512} height={512} />
+              <Image src="/splash-main-icon.png" alt="" width={841} height={823} />
               <strong>Splash</strong>
             </span>
             <p>USD-first settlement infrastructure for Southeast Asian finance teams.</p>
