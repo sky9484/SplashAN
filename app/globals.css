@@ -4497,7 +4497,9 @@ body {
   border: 1px solid var(--fintech-line);
   border-radius: 16px;
   background-color: rgba(255, 253, 249, .93);
-  box-shadow: 0 15px 42px rgba(9, 45, 54, .055);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, .75) inset,
+    0 15px 42px rgba(9, 45, 54, .055);
   backdrop-filter: blur(14px);
 }
 
@@ -4509,10 +4511,29 @@ body {
   border-radius: 16px;
   background-color: rgba(255, 253, 249, .93);
   box-shadow:
+    0 1px 0 rgba(255, 255, 255, .7) inset,
     6px 7px 0 rgba(12, 62, 72, .10),
     0 22px 44px rgba(8, 54, 64, .07);
   transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease;
 }
+
+/* Premium "brand rail" — a hairline gold spine along the card's top edge.
+   Subtle at rest so a 4-up stat row reads as a cohesive set; brightens on
+   hover for a quiet micro-interaction. Accent cards keep it fully lit. */
+.dash-block::after {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  content: "";
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(239, 196, 111, .5) 20%, rgba(239, 196, 111, .85) 50%, rgba(239, 196, 111, .5) 80%, transparent);
+  opacity: .38;
+  transition: opacity .22s ease;
+}
+.dash-block:hover::after,
+.dash-block-accent::after { opacity: 1; }
 
 .dash-block-interactive:hover {
   transform: translateY(-4px);
@@ -5536,6 +5557,31 @@ button.iso-product-row {
   border-radius: 11px;
   border-color: rgba(16, 63, 72, .18);
   background: rgba(255, 253, 247, .92);
+  transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
+}
+
+.fintech-dashboard-main input:focus,
+.fintech-dashboard-main select:focus,
+.fintech-dashboard-main textarea:focus,
+.fintech-dashboard-main input:focus-visible,
+.fintech-dashboard-main select:focus-visible,
+.fintech-dashboard-main textarea:focus-visible {
+  outline: none;
+  border-color: rgba(13, 99, 112, .65);
+  background: #fffdf9;
+  box-shadow: 0 0 0 3px rgba(111, 205, 190, .3);
+}
+
+.fintech-dashboard-main thead th {
+  padding-top: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--fintech-line);
+  color: var(--fintech-teal);
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .09em;
+  text-transform: uppercase;
 }
 
 .fintech-dashboard-main tbody tr {

@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { Bot, ChevronDown, Sparkles, X } from 'lucide-react';
+import { ChevronDown, Sparkles, X } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { streamCopilot } from '../lib/copilot-client';
 import OxWalComposer, { type OxWalComposerChip } from './oxwal/OxWalComposer';
@@ -59,11 +59,40 @@ const FALLBACK_REPLIES = [
   'All systems clear — no AML flags, no compliance issues. What can I help with?',
 ];
 
+// Warm small talk — 0xWal is a personable desk assistant, not a rigid FAQ.
+const SMALL_TALK: { keywords: string[]; reply: string }[] = [
+  { keywords: ['how are you', 'how r u', 'how do you feel', 'how you doing', 'how is your day', "how's your day", 'you good', 'you okay', 'you ok'],
+    reply: "Running smooth and fully synced, thanks for asking! Watching the corridors and ready to help. How are things on your side?" },
+  { keywords: ['good morning', 'good afternoon', 'good evening', 'hello', 'hey', 'howdy'],
+    reply: "Hey! Good to see you. Want to check a corridor, draft a batch, or look at treasury?" },
+  { keywords: ['weather', 'raining', 'sunny'],
+    reply: "I can't check the sky from in here, but I hope it's clear where you are. The PHP corridor looks healthy — want a rate check?" },
+  { keywords: ['thank', 'thx', 'appreciate', 'cheers'],
+    reply: "Anytime! Anything else on the payment desk I can line up for you?" },
+  { keywords: ['joke', 'make me laugh', 'funny'],
+    reply: "Why did the payment cross the corridor? To settle on the other side — in about four minutes. 😄 Anything I can help you move?" },
+];
+
+// Content generation or external web lookups fall outside the Splash desk.
+const OUT_OF_SCOPE = [
+  'write me', 'write a', 'write an', 'draft an email', 'draft a email', 'compose', 'generate a video', 'make a video',
+  'write a poem', 'write a story', 'write a song', 'essay', 'blog post', 'marketing copy', 'social post', 'tweet for',
+  'caption for', 'cover letter', 'resume for', 'news', 'headline', 'stock price', 'bitcoin price', 'crypto price',
+  'who won', 'score of', 'population of', 'capital of', 'weather in', 'weather forecast', 'search google', 'google the',
+  'wikipedia', 'latest movie', 'football', 'election',
+];
+
 function matchCompactResponse(
   input: string,
   fallbackRef: React.MutableRefObject<number>
 ): string {
   const q = String(input ?? '').toLowerCase();
+  if (OUT_OF_SCOPE.some((k) => q.includes(k))) {
+    return "That's outside what I can help with — I'm focused on your Splash payment desk, and I can't browse the web or draft documents. But I can help with corridors, FX timing, batch payouts, Smart Treasury, or compliance. Where would you like to start?";
+  }
+  for (const { keywords, reply } of SMALL_TALK) {
+    if (keywords.some((k) => q.includes(k))) return reply;
+  }
   for (const { keywords, reply } of COMPACT_RESPONSES) {
     if (keywords.some((k) => q.includes(k))) return reply;
   }
@@ -293,7 +322,7 @@ export default function FloatingCopilot() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <span className="flex items-center gap-1 text-[10px] text-white/30">
+            <span className="flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.12em] text-white/35">
               <Sparkles size={9} /> Claude
             </span>
             <button
@@ -305,6 +334,25 @@ export default function FloatingCopilot() {
               <X size={16} />
             </button>
           </div>
+        </div>
+
+        {/* Live desk ticker — signals a fintech terminal, not a generic chat */}
+        <div className="grid shrink-0 grid-cols-3 divide-x divide-[#0c3e48]/10 border-b border-[#0c3e48]/10 bg-[#f4efe4]">
+          {[
+            { k: 'Corridor', v: 'USD→PHP', s: 'Testnet' },
+            { k: 'Edge fee', v: '0.80%', s: 'From' },
+            { k: 'Treasury', v: 'USDY', s: 'Variable' },
+          ].map((cell) => (
+            <div key={cell.k} className="px-3 py-2">
+              <div className="font-mono text-[8px] font-bold uppercase tracking-[0.14em] text-[#0d6370]">
+                {cell.k}
+              </div>
+              <div className="mt-0.5 text-[12px] font-black leading-none text-[#0c3e48]">{cell.v}</div>
+              <div className="mt-0.5 font-mono text-[7px] uppercase tracking-[0.1em] text-[#0c3e48]/45">
+                {cell.s}
+              </div>
+            </div>
+          ))}
         </div>
 
         {/* Messages */}
@@ -322,30 +370,30 @@ export default function FloatingCopilot() {
                 className={cn('flex gap-2', msg.role === 'user' ? 'flex-row-reverse' : '')}
               >
                 {msg.role === 'assistant' && (
-                  <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#E39774]/15">
-                    <Bot size={11} className="text-[#C97A56]" />
+                  <div className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center overflow-hidden rounded-full bg-[radial-gradient(circle_at_50%_35%,#eaf6f1,#cfe8e0)] ring-1 ring-[#0d6370]/25">
+                    <Image src="/cinematic/agent-bot-cut.png" alt="" width={512} height={512} className="h-4 w-auto" />
                   </div>
                 )}
                 <div
                   className={cn(
-                    'max-w-[82%] rounded-2xl px-3 py-2 text-[11px] leading-[1.45]',
+                    'max-w-[82%] px-3 py-2 text-[11px] leading-[1.5]',
                     msg.role === 'assistant'
-                      ? 'border border-[#0c3e48]/8 bg-white text-[#0c3e48] shadow-sm'
-                      : 'bg-[#0c3e48] text-white'
+                      ? 'rounded-xl rounded-tl-sm border border-[#0c3e48]/10 border-l-2 border-l-[#0d6370] bg-[#fffdf9] text-[#0c3e48] shadow-[2px_2px_0_rgba(8,54,64,0.06)]'
+                      : 'rounded-xl rounded-tr-sm bg-[#0c3e48] text-white shadow-[2px_2px_0_rgba(8,54,64,0.18)]'
                   )}
                 >
                   {isStreamingThis ? (
                     <span className="whitespace-pre-wrap">
                       {msg.text}
-                      <span className="ml-0.5 inline-block h-2.5 w-0.5 animate-pulse bg-[#326273]/50" />
+                      <span className="ml-0.5 inline-block h-2.5 w-0.5 animate-pulse bg-[#0d6370]/60" />
                     </span>
                   ) : (
                     <span className="whitespace-pre-wrap">{msg.text}</span>
                   )}
                   <div
                     className={cn(
-                      'mt-0.5 text-[9px]',
-                      msg.role === 'assistant' ? 'text-[#326273]/35' : 'text-white/40'
+                      'mt-1 font-mono text-[8px] uppercase tracking-[0.1em]',
+                      msg.role === 'assistant' ? 'text-[#0d6370]/40' : 'text-white/40'
                     )}
                   >
                     {msg.time}
@@ -358,13 +406,13 @@ export default function FloatingCopilot() {
           {/* Thinking dots */}
           {thinking && (
             <div className="flex gap-2">
-              <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#E39774]/15">
-                <Bot size={11} className="text-[#C97A56]" />
+              <div className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center overflow-hidden rounded-full bg-[radial-gradient(circle_at_50%_35%,#eaf6f1,#cfe8e0)] ring-1 ring-[#0d6370]/25">
+                <Image src="/cinematic/agent-bot-cut.png" alt="" width={512} height={512} className="h-4 w-auto" />
               </div>
-              <div className="flex items-center gap-1.5 rounded-2xl bg-[#F6F0ED] px-3 py-2.5">
-                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#326273]/40 [animation-delay:0ms]" />
-                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#326273]/40 [animation-delay:150ms]" />
-                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#326273]/40 [animation-delay:300ms]" />
+              <div className="flex items-center gap-1.5 rounded-xl rounded-tl-sm border border-[#0c3e48]/10 bg-[#f4efe4] px-3 py-2.5">
+                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#0d6370]/50 [animation-delay:0ms]" />
+                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#0d6370]/50 [animation-delay:150ms]" />
+                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#0d6370]/50 [animation-delay:300ms]" />
               </div>
             </div>
           )}

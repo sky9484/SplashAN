@@ -60,9 +60,47 @@ const FALLBACKS = [
 
 const TREASURY_KEYWORDS = ['treasury', 'yield', 'apy', 'earn', 'deposit', 'compound', 'interest'];
 
+// Warm small talk — 0xWal is a personable desk assistant, not a rigid FAQ.
+const SMALL_TALK: { keywords: string[]; reply: string }[] = [
+  { keywords: ['how are you', 'how r u', 'how are u', 'how do you feel', 'how you doing', 'how is your day', "how's your day", 'you good', 'you okay', 'you ok'],
+    reply: "Running smooth and fully synced, thank you for asking! Watching the corridors and ready to help. How are things on your side?" },
+  { keywords: ['good morning', 'good afternoon', 'good evening', 'hello', 'hi ', 'hey', 'yo ', 'howdy'],
+    reply: "Hey! Good to see you. I'm 0xWal, your Splash desk copilot. Want to check a corridor, draft a batch, or look at treasury?" },
+  { keywords: ['weather', 'raining', 'sunny', 'hot today', 'cold today'],
+    reply: "I can't check the sky from in here, but I hope it's clear where you are. Meanwhile the PHP corridor is looking healthy — want a rate check?" },
+  { keywords: ['thank', 'thx', 'appreciate', 'cheers'],
+    reply: "Anytime! That's what I'm here for. Anything else on the payment desk I can line up for you?" },
+  { keywords: ['joke', 'make me laugh', 'funny'],
+    reply: "Why did the payment cross the corridor? To settle on the other side — in about four minutes. 😄 Now, anything I can actually help you move?" },
+  { keywords: ['bored', 'how is life', "how's life", 'what are you up to', 'sup'],
+    reply: "Just here keeping an eye on FX timing and idle balances — my idea of a good time. Want me to surface anything worth acting on?" },
+];
+
+// Requests that fall outside the Splash desk — content generation or external
+// web lookups. 0xWal politely declines these and steers back.
+const OUT_OF_SCOPE = {
+  contentGen: ['write me', 'write a', 'write an', 'draft an email', 'draft a email', 'compose', 'generate a video', 'make a video', 'write a poem', 'write a story', 'write a song', 'essay', 'blog post', 'marketing copy', 'social post', 'tweet for', 'caption for', 'cover letter', 'resume for'],
+  external: ['news', 'headline', 'stock price', 'share price', 'bitcoin price', 'btc price', 'ethereum price', 'crypto price', 'who won', 'score of', 'population of', 'capital of', 'weather in', 'weather forecast', 'search google', 'google the', 'look up online', 'wikipedia', 'latest movie', 'football', 'election'],
+};
+
+function outOfScopeDecline(q: string): string | null {
+  const isContent = OUT_OF_SCOPE.contentGen.some((k) => q.includes(k));
+  const isExternal = OUT_OF_SCOPE.external.some((k) => q.includes(k));
+  if (!isContent && !isExternal) return null;
+  return (
+    "That's outside what I can help with — I'm focused on your Splash payment desk, and I can't browse the web or draft documents. " +
+    'But I can help with corridors, FX timing, batch payouts, Smart Treasury, or compliance. Where would you like to start?'
+  );
+}
+
 async function groundedReply(message: string, memories: RecalledMemory[]): Promise<string> {
   const q = message.toLowerCase();
   let base = '';
+  const declined = outOfScopeDecline(q);
+  const smallTalk = SMALL_TALK.find(({ keywords }) => keywords.some((k) => q.includes(k)));
+  // Small talk and out-of-scope declines answer directly — no memory preamble.
+  if (declined) return declined;
+  if (smallTalk) return smallTalk.reply;
   if (TREASURY_KEYWORDS.some((k) => q.includes(k))) {
     // Floating USDY rate + a data-grounded treasury suggestion from the live ledger.
     const rate = getTreasuryRate();
@@ -104,7 +142,22 @@ function buildSystemPrompt(memories: RecalledMemory[]): string {
     'The Available balance is USDC at 0% but instant; withdrawals from Smart Treasury take T+1–T+3 business days. ' +
     'Never describe the yield as fixed, and never call DeFi-lending yield "Treasury yield" (it is genuine T-bill yield via USDY). ' +
     'Be concise, concrete, and action-oriented. You only suggest — the user must authorize any execution. ' +
-    'Never invent account numbers or PII.' + memoryBlock
+    'Never invent account numbers or PII.\n\n' +
+    'CONVERSATION STYLE — be a warm, personable desk assistant, not a rigid FAQ. ' +
+    'Happily engage in brief small talk: greetings, "how are you", how your day or week is going, ' +
+    'wellbeing, a friendly word, light humour, or a passing comment about the weather. Keep it short and human, ' +
+    'then gently steer back to how you can help with the payment desk. You have no window and no live web access, ' +
+    'so for weather or anything real-world, answer conversationally ("I can\'t check the sky from here, but I hope ' +
+    'it\'s clear where you are") — never invent a forecast, number, or fact.\n\n' +
+    'SCOPE — you are the Splash desk copilot, not a general-purpose assistant. POLITELY DECLINE and redirect when asked to: ' +
+    '(1) write or generate standalone content — emails, letters, essays, marketing copy, social posts, poems, stories, ' +
+    'scripts, videos, or images; ' +
+    '(2) look up external real-world information that is not part of the Splash ecosystem — news, sports, weather forecasts, ' +
+    'stock or crypto prices, other companies, public figures, general trivia, or anything that would require searching the web. ' +
+    'For those, say something like: "That is outside what I can help with — I am focused on your Splash payment desk. ' +
+    'I can\'t browse the web or draft documents, but I can help with corridors, FX timing, batches, treasury, or compliance." ' +
+    'Then offer a relevant Splash next step. Do not attempt the out-of-scope task even partially. ' +
+    'Small talk and questions about the Splash product, your own status, or how the platform works are always in scope.' + memoryBlock
   );
 }
 
