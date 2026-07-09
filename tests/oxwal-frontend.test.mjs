@@ -145,8 +145,12 @@ test('landing keeps restored isometric shell with upgraded truth copy', async ()
   assert.doesNotMatch(landing, /Early Pay/);
   assert.match(landing, /One testnet corridor\. Modeled expansion routes\./);
   assert.match(landing, /claims\.footerLegal\.claim/);
-  assert.match(composer, /Ask anything/);
-  assert.match(composer, /AudioLines/);
+  // Composer is now a payment-desk command bar (not a ChatGPT pill): no
+  // "High" effort dropdown, a branded "Prepare" action, and a functional
+  // file-attach that prepares a batch for human approval.
+  assert.match(composer, /Prepare batch/);
+  assert.match(composer, /onFilePrepared/);
+  assert.doesNotMatch(composer, /priorityLabel|bg-black/);
   assert.match(floating, /OxWalComposer/);
   assert.match(invoiceLoop, /What should 0xWal inspect\?/);
   assert.match(claims, /footerLegal/);
