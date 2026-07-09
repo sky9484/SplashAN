@@ -52,7 +52,7 @@ const faqJsonLd = {
       name: "What does a payout cost?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Corridor fees start from a 0.80% edge fee. Simple payouts ride Sui's zero-fee stablecoin rail and programmable settlement is gas-sponsored — you never hold SUI.",
+        text: "Corridor fees start from a 0.80% edge fee. Simple USD payouts ride Sui's zero-fee rail and programmable settlement is gas-sponsored — you never hold SUI.",
       },
     },
     {

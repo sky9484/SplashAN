@@ -704,7 +704,7 @@ export default function IsometricLanding({
 
           <div className="iso-loops-foot">
             <p className="iso-gasless-note">
-              <strong>Where the fees live:</strong> simple payouts ride Sui&apos;s zero-fee stablecoin
+              <strong>Where the fees live:</strong> simple USD payouts ride Sui&apos;s zero-fee
               rail; programmable settlement is gas-sponsored. You never hold SUI.
             </p>
             <Link href="/working-capital" className="iso-button iso-button-small">
@@ -1391,7 +1391,7 @@ export default function IsometricLanding({
           <div className="iso-shell cin-footer-bar-inner">
             <span>© 2026 Splash Financial Labuan Ltd.</span>
             <span className="cin-footer-tick">
-              USD → PHP · {lockedCopy.speed} · {lockedCopy.fee} · zero-fee stablecoin rail, gas-sponsored settlement — you never hold SUI
+              USD → PHP · {lockedCopy.speed} · {lockedCopy.fee} · zero-fee USD rail on Sui, gas-sponsored settlement — you never hold SUI
             </span>
           </div>
         </div>

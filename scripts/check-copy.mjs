@@ -116,6 +116,26 @@ for (const root of roots) {
   }
 }
 
+// ── Soft warnings (non-fatal) ──────────────────────────────────────────────
+// USD-first stance: "stablecoin" is fine as a settlement mechanism but must
+// never be the headline value in customer-facing components. Flag drift so
+// it stays visible; do not fail the build.
+const warnings = [];
+for (const file of await filesUnder('components')) {
+  const text = await readFile(file, 'utf8');
+  const total = (text.match(/stablecoin/gi) ?? []).length;
+  // Ignore code, not copy: camelCase/Pascal identifiers (StablecoinAsset,
+  // stablecoinAssets), property access (.stablecoin…), and the quoted
+  // discriminant ('stablecoin'). Flag only standalone prose mentions.
+  const identifiers = (text.match(/[.'"]stablecoin|stablecoin[A-Za-z]|Stablecoin/g) ?? []).length;
+  const prose = total - identifiers;
+  if (prose > 0) warnings.push(`${relative('.', file)}: ${prose} "stablecoin" mention(s) in a component — prefer USD-first copy (settlement mechanic only).`);
+}
+
+if (warnings.length > 0) {
+  console.warn('⚠ Copy warnings (non-fatal):\n' + warnings.join('\n') + '\n');
+}
+
 if (violations.length > 0) {
   console.error('Banned compliance copy found:\n' + violations.join('\n'));
   process.exit(1);

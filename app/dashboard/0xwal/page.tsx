@@ -248,7 +248,7 @@ export default function OxWalPage() {
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <span className="rounded-md border border-white/20 bg-white/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-white/70">
-                Sui Overflow / Walrus track
+                Seal &middot; Walrus audit trail
               </span>
               <span className="inline-flex items-center gap-1.5 rounded-md border border-[#D9A441]/35 bg-[#D9A441]/15 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-[#FFE6A4]">
                 <ShieldCheck className="h-3.5 w-3.5" />
