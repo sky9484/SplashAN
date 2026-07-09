@@ -1,9 +1,15 @@
 'use client';
 
+import { useRef } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { ArrowRight, Landmark, ReceiptText, Sprout } from 'lucide-react';
+import gsap from 'gsap';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import { useGSAP } from '@gsap/react';
 
 import RoadmapChip from '@/components/supply/RoadmapChip';
+
+gsap.registerPlugin(ScrollTrigger, useGSAP);
 
 const EASE_OUT_EXPO = [0.16, 1, 0.3, 1] as const;
 
@@ -68,21 +74,60 @@ const HANDOFFS = ['settlement history feeds', 'freed cash returns'];
  */
 export default function WorkingCapitalFlywheel({ variant = 'band' }: { variant?: 'band' | 'full' }) {
   const reducedMotion = useReducedMotion();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const pathRef = useRef<SVGPathElement>(null);
+
+  // Draw-on-scroll flow (full variant only): the orbit traces Settle → Supply
+  // → Save and loops back as the section scrolls through, lighting each node
+  // in turn. Reduced-motion → fully drawn, static.
+  useGSAP(() => {
+    if (variant !== 'full') return;
+    const path = pathRef.current;
+    const root = rootRef.current;
+    if (!path || !root) return;
+    const cards = gsap.utils.toArray<HTMLElement>('.iso-wheel-card', root);
+    const len = path.getTotalLength();
+    gsap.set(path, { strokeDasharray: len });
+
+    if (reducedMotion || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      gsap.set(path, { strokeDashoffset: 0 });
+      cards.forEach((c) => c.classList.add('is-lit'));
+      return;
+    }
+
+    gsap.set(path, { strokeDashoffset: len });
+    const st = ScrollTrigger.create({
+      trigger: root,
+      start: 'top 78%',
+      end: 'bottom 60%',
+      scrub: 0.6,
+      onUpdate: (self) => {
+        gsap.set(path, { strokeDashoffset: len * (1 - self.progress) });
+        const lit = Math.floor(self.progress * (cards.length + 0.4));
+        cards.forEach((c, i) => c.classList.toggle('is-lit', i < lit));
+      },
+    });
+    return () => st.kill();
+  }, { scope: rootRef, dependencies: [variant, reducedMotion] });
 
   return (
     <motion.div
+      ref={rootRef}
       className={`iso-wheel is-${variant}`}
       variants={riseParent}
       initial="hidden"
       whileInView="shown"
       viewport={{ once: true, margin: '-80px' }}
     >
-      {/* Loop-back conveyor: value exits Save ready to Settle again. */}
+      {/* Loop-back conveyor: value exits Save ready to Settle again. The band
+          variant keeps the ambient CSS dash; the full variant is drawn on
+          scroll by GSAP (see useGSAP above). */}
       <svg className="iso-wheel-orbit" viewBox="0 0 1160 84" aria-hidden="true" preserveAspectRatio="none">
         <path
+          ref={pathRef}
           d="M 1096 76 C 1128 76 1148 58 1148 34 C 1148 12 1128 4 1096 4 L 64 4 C 32 4 12 12 12 34 C 12 58 32 76 64 76"
           fill="none"
-          className={reducedMotion ? '' : 'is-flowing'}
+          className={variant === 'band' && !reducedMotion ? 'is-flowing' : ''}
         />
         <text x="580" y="24" textAnchor="middle">ready to settle again</text>
       </svg>

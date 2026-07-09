@@ -1322,6 +1322,13 @@ body {
   stroke-width: 2;
   stroke-dasharray: 7 9;
 }
+/* Full variant is drawn on scroll (GSAP) — a solid, slightly bolder coral-ink
+   line so the traced flow reads. GSAP overrides stroke-dasharray inline. */
+.iso-wheel.is-full .iso-wheel-orbit path {
+  stroke: rgba(155, 78, 50, .5);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
 .iso-wheel-orbit path.is-flowing { animation: iso-loops-flow 2.6s linear infinite; }
 .iso-wheel-orbit text {
   fill: rgba(12, 62, 72, .55);
@@ -1350,8 +1357,15 @@ body {
   padding: 20px;
   background: rgba(255, 251, 245, .82);
   box-shadow: 7px 8px 0 rgba(12, 62, 72, .1);
+  transition: box-shadow .4s ease, border-color .4s ease, transform .4s ease;
 }
 .iso-wheel-card.is-settle { border-top: 3px solid var(--iso-teal); }
+/* GSAP draw-on-scroll lights each node as the flow reaches it (--coral). */
+.iso-wheel-card.is-lit {
+  border-color: rgba(227, 151, 116, .7);
+  box-shadow: 8px 10px 0 rgba(227, 151, 116, .28), 0 0 0 3px rgba(227, 151, 116, .14);
+}
+.iso-wheel-card.is-lit .iso-wheel-live i { box-shadow: 0 0 0 4px rgba(227, 151, 116, .2); }
 .iso-wheel-card.is-supply {
   border: 1px solid rgba(227, 151, 116, .6);
   border-top: 3px solid var(--coral);

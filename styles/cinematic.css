@@ -615,6 +615,29 @@
   will-change: auto;
 }
 
+/* Per-card stagger inside the revealed shell (transform-only, so a card can
+   never freeze invisible). The section reveal lifts the block; these lift
+   each card in sequence as it settles. Honors reduced-motion below. */
+.cin-reveal :is(.iso-loops-grid, .iso-supply-grid, .iso-ctrl-grid, .iso-layer-grid) > * {
+  transform: translateY(16px);
+  transition: transform .6s cubic-bezier(.16, 1, .3, 1);
+}
+.cin-reveal.is-inview :is(.iso-loops-grid, .iso-supply-grid, .iso-ctrl-grid, .iso-layer-grid) > * {
+  transform: none;
+}
+.cin-reveal.is-inview :is(.iso-loops-grid, .iso-supply-grid, .iso-ctrl-grid, .iso-layer-grid) > *:nth-child(1) { transition-delay: .06s; }
+.cin-reveal.is-inview :is(.iso-loops-grid, .iso-supply-grid, .iso-ctrl-grid, .iso-layer-grid) > *:nth-child(2) { transition-delay: .14s; }
+.cin-reveal.is-inview :is(.iso-loops-grid, .iso-supply-grid, .iso-ctrl-grid, .iso-layer-grid) > *:nth-child(3) { transition-delay: .22s; }
+.cin-reveal.is-inview :is(.iso-loops-grid, .iso-supply-grid, .iso-ctrl-grid, .iso-layer-grid) > *:nth-child(4) { transition-delay: .30s; }
+.cin-reveal.is-inview :is(.iso-loops-grid, .iso-supply-grid, .iso-ctrl-grid, .iso-layer-grid) > *:nth-child(5) { transition-delay: .38s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cin-reveal :is(.iso-loops-grid, .iso-supply-grid, .iso-ctrl-grid, .iso-layer-grid) > * {
+    transform: none;
+    transition: none;
+  }
+}
+
 /* ── Comparison table: Splash column gets the gold isometric chip ──── */
 
 .iso-comparison-table thead th.is-splash {
