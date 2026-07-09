@@ -325,6 +325,13 @@ body {
   --iso-mint: #9fcfc7;
   --iso-gold: #efc46f;
   --iso-line: rgba(12, 62, 72, .16);
+  /* Text brand — "the numbers are the brand".
+     Display headlines stay loud; everything below them obeys these floors:
+     - no text smaller than 10px (micro-labels), data values >= 12px, body >= 13px
+     - ink never drops below 66% alpha for text; alphas under .3 are for borders/decoration only */
+  --iso-text-secondary: rgba(12, 62, 72, .78);
+  --iso-text-muted: rgba(12, 62, 72, .7);
+  --iso-text-label: rgba(12, 62, 72, .66);
   min-height: 100svh;
   /* clip (not hidden): hidden makes this the scroll container and breaks
      position: sticky inside the cinematic hero. */
@@ -397,9 +404,9 @@ body {
 }
 
 .iso-brand small {
-  color: rgba(12, 62, 72, .55);
+  color: rgba(12, 62, 72, .68);
   font-family: var(--font-mono), monospace;
-  font-size: 8px;
+  font-size: 11px;
   letter-spacing: .04em;
   text-transform: uppercase;
 }
@@ -433,14 +440,14 @@ body {
 
 .iso-nav a span {
   color: var(--iso-ink);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 860;
   line-height: 1.1;
 }
 
 .iso-nav a small {
-  color: rgba(12, 62, 72, .48);
-  font-size: 8px;
+  color: rgba(12, 62, 72, .62);
+  font-size: 11px;
   font-weight: 720;
   line-height: 1.15;
 }
@@ -470,8 +477,8 @@ body {
 }
 
 .iso-header-status small {
-  color: rgba(12, 62, 72, .48);
-  font-size: 8px;
+  color: rgba(12, 62, 72, .62);
+  font-size: 11px;
   font-weight: 850;
   letter-spacing: .1em;
   text-transform: uppercase;
@@ -479,7 +486,7 @@ body {
 
 .iso-header-status strong {
   color: var(--iso-teal-dark);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 900;
 }
 
@@ -524,7 +531,7 @@ body {
   min-height: 38px;
   padding-inline: 15px;
   box-shadow: 0 3px 0 #06272e, 0 10px 18px rgba(8, 54, 64, .13);
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .iso-button-ghost {
@@ -614,7 +621,7 @@ body {
   gap: 10px;
   color: var(--iso-teal);
   font-family: var(--font-mono), monospace;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: .18em;
   text-transform: uppercase;
@@ -684,9 +691,9 @@ body {
   flex-wrap: wrap;
   gap: 10px 20px;
   margin-top: 30px;
-  color: rgba(12, 62, 72, .62);
+  color: rgba(12, 62, 72, .72);
   font-family: var(--font-mono), monospace;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
 }
@@ -753,7 +760,7 @@ body {
   background: linear-gradient(180deg, #fff9ee 0%, #f0dfc3 100%);
   box-shadow: 0 8px 0 #c5ac83, 0 13px 18px rgba(8, 54, 64, .13);
   font-family: var(--font-mono), monospace;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 900;
   letter-spacing: .12em;
   text-transform: uppercase;
@@ -833,7 +840,7 @@ body {
 .iso-flow-stat small {
   color: #a76f24;
   font-family: var(--font-mono), monospace;
-  font-size: 8px;
+  font-size: 11px;
   font-weight: 900;
   letter-spacing: .15em;
 }
@@ -844,9 +851,9 @@ body {
 }
 
 .iso-floating-note small {
-  color: rgba(12, 62, 72, .58);
+  color: rgba(12, 62, 72, .7);
   font-family: var(--font-mono), monospace;
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .iso-marquee {
@@ -873,9 +880,9 @@ body {
   justify-content: center;
   gap: 9px;
   padding: 15px 28px;
-  color: rgba(255, 250, 241, .7);
+  color: rgba(255, 250, 241, .78);
   font-family: var(--font-mono), monospace;
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: .08em;
   text-transform: uppercase;
 }
@@ -889,7 +896,7 @@ body {
   margin-left: auto;
   color: var(--iso-mint);
   font-style: normal;
-  font-size: 7px;
+  font-size: 10px;
 }
 
 .iso-partner-rail {
@@ -914,15 +921,15 @@ body {
 .iso-partner-intro span {
   color: var(--iso-teal);
   font-family: var(--font-mono), monospace;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 900;
   letter-spacing: .14em;
   text-transform: uppercase;
 }
 
 .iso-partner-intro p {
-  color: rgba(12, 62, 72, .58);
-  font-size: 11px;
+  color: rgba(12, 62, 72, .7);
+  font-size: 13px;
   font-weight: 650;
 }
 
@@ -967,14 +974,14 @@ body {
 }
 
 .iso-partner-item strong {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 900;
 }
 
 .iso-partner-item small {
-  color: rgba(12, 62, 72, .5);
+  color: rgba(12, 62, 72, .64);
   font-family: var(--font-mono), monospace;
-  font-size: 6px;
+  font-size: 10px;
   font-weight: 750;
   line-height: 1.4;
   text-transform: uppercase;
@@ -1002,7 +1009,7 @@ body {
 .iso-readiness-copy > p,
 .iso-final-copy > p,
 .iso-flow-intro {
-  color: rgba(12, 62, 72, .66);
+  color: rgba(12, 62, 72, .74);
   font-size: 15px;
   font-weight: 560;
   line-height: 1.7;
@@ -1070,16 +1077,16 @@ body {
 
 .iso-progress-top span {
   color: var(--iso-teal);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 950;
 }
 
 .iso-progress-top small {
   border-radius: 5px;
   padding: 5px 7px;
-  color: rgba(12, 62, 72, .62);
+  color: rgba(12, 62, 72, .72);
   background: rgba(12, 62, 72, .07);
-  font-size: 6px;
+  font-size: 10px;
   font-weight: 850;
   letter-spacing: .08em;
 }
@@ -1105,8 +1112,8 @@ body {
 
 .iso-progress-grid article > p {
   margin-top: 10px;
-  color: rgba(12, 62, 72, .62);
-  font-size: 11px;
+  color: rgba(12, 62, 72, .72);
+  font-size: 13px;
   line-height: 1.65;
 }
 
@@ -1124,7 +1131,7 @@ body {
   color: var(--iso-teal);
   background: rgba(255, 255, 255, .55);
   font-family: var(--font-mono), monospace;
-  font-size: 7px;
+  font-size: 10px;
   font-weight: 850;
   text-transform: uppercase;
 }
@@ -1171,10 +1178,10 @@ body {
 }
 
 .iso-comparison-table thead th {
-  color: rgba(12, 62, 72, .58);
+  color: rgba(12, 62, 72, .7);
   background: rgba(12, 62, 72, .045);
   font-family: var(--font-mono), monospace;
-  font-size: 8px;
+  font-size: 11px;
   font-weight: 900;
   letter-spacing: .13em;
   text-transform: uppercase;
@@ -1185,20 +1192,27 @@ body {
 }
 
 .iso-comparison-table tbody th {
-  font-size: 12px;
-  font-weight: 900;
+  color: var(--iso-ink);
+  font-size: 14.5px;
+  font-weight: 800;
+  letter-spacing: -.01em;
 }
 
 .iso-comparison-table tbody td {
-  color: rgba(12, 62, 72, .62);
+  color: rgba(12, 62, 72, .78);
   font-family: var(--font-mono), monospace;
-  font-size: 10px;
-  font-weight: 750;
+  font-size: 13px;
+  font-weight: 650;
 }
 
 .iso-comparison-table .is-splash {
+  /* Sticky: the Splash column stays visible while the rest scrolls under it. */
+  position: sticky;
+  right: 0;
+  z-index: 2;
   color: #fffaf1;
   background: var(--iso-teal);
+  box-shadow: -10px 0 18px rgba(8, 54, 64, .16);
 }
 
 .iso-comparison-table tbody .is-splash {
@@ -1206,11 +1220,17 @@ body {
 }
 
 .iso-comparison-table .is-splash svg {
-  width: 13px;
-  height: 13px;
-  margin-right: 5px;
-  vertical-align: -2px;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  margin-top: 2px;
   color: var(--iso-gold);
+}
+
+.iso-splash-cell {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 7px;
 }
 
 .iso-yield-live {
@@ -1218,10 +1238,10 @@ body {
   align-items: center;
   gap: 8px;
   padding: 11px 18px;
-  color: rgba(12, 62, 72, .58);
+  color: rgba(12, 62, 72, .7);
   background: rgba(159, 207, 199, .13);
   font-family: var(--font-mono), monospace;
-  font-size: 8px;
+  font-size: 11px;
   font-weight: 750;
 }
 
@@ -1303,9 +1323,9 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  color: rgba(12, 62, 72, .5);
+  color: rgba(12, 62, 72, .64);
   font-family: var(--font-mono), monospace;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: .14em;
   text-transform: uppercase;
@@ -1357,7 +1377,7 @@ body {
 
 .iso-layer-copy p {
   margin-top: 10px;
-  color: rgba(12, 62, 72, .65);
+  color: rgba(12, 62, 72, .74);
   font-size: 12px;
   line-height: 1.65;
 }
@@ -1369,7 +1389,7 @@ body {
   padding-left: 9px;
   color: var(--iso-teal);
   font-family: var(--font-mono), monospace;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: .08em;
   text-transform: uppercase;
@@ -1422,7 +1442,7 @@ body {
 .iso-flow-intro {
   max-width: 450px;
   margin-top: 24px;
-  color: rgba(255, 250, 241, .63);
+  color: rgba(255, 250, 241, .74);
 }
 
 .iso-flow-tabs {
@@ -1439,7 +1459,7 @@ body {
   border: 1px solid rgba(255, 250, 241, .13);
   border-radius: 8px;
   padding: 12px;
-  color: rgba(255, 250, 241, .55);
+  color: rgba(255, 250, 241, .7);
   background: rgba(255, 250, 241, .035);
   text-align: left;
   transition: transform .2s ease, color .2s ease, background .2s ease, border .2s ease;
@@ -1463,7 +1483,7 @@ body {
   background: var(--iso-gold);
   box-shadow: 3px 3px 0 rgba(0, 0, 0, .28);
   font-family: var(--font-mono), monospace;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 900;
 }
 
@@ -1496,7 +1516,7 @@ body {
 }
 
 .iso-flow-branch span {
-  color: rgba(255, 250, 241, .62);
+  color: rgba(255, 250, 241, .74);
   font-size: 12px;
   line-height: 1.55;
 }
@@ -1592,7 +1612,7 @@ body {
   color: var(--iso-teal-dark);
   background: var(--iso-gold);
   font-family: var(--font-mono), monospace;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 900;
 }
 
@@ -1603,8 +1623,8 @@ body {
 .iso-flow-caption p {
   max-width: 560px;
   margin-top: 3px;
-  color: rgba(255, 250, 241, .57);
-  font-size: 10px;
+  color: rgba(255, 250, 241, .7);
+  font-size: 12px;
   line-height: 1.5;
 }
 
@@ -1674,7 +1694,7 @@ body {
   cursor: pointer;
   color: var(--iso-teal);
   font-family: var(--font-mono), monospace;
-  font-size: 8px;
+  font-size: 11px;
   font-weight: 900;
   letter-spacing: .13em;
   text-transform: uppercase;
@@ -1776,7 +1796,7 @@ body {
 .iso-readiness-card small {
   color: var(--iso-teal);
   font-family: var(--font-mono), monospace;
-  font-size: 7px;
+  font-size: 10px;
   font-weight: 900;
   letter-spacing: .11em;
   text-transform: uppercase;
@@ -1830,8 +1850,8 @@ body {
 .iso-copilot-list small,
 .iso-readiness-list small {
   max-width: 520px;
-  color: rgba(12, 62, 72, .58);
-  font-size: 9px;
+  color: rgba(12, 62, 72, .7);
+  font-size: 12px;
   line-height: 1.55;
 }
 
@@ -1853,13 +1873,13 @@ body {
 
 .iso-scale-metrics strong {
   color: var(--iso-ink);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 950;
 }
 
 .iso-scale-metrics small {
-  color: rgba(12, 62, 72, .52);
-  font-size: 7px;
+  color: rgba(12, 62, 72, .66);
+  font-size: 10px;
   line-height: 1.4;
 }
 
@@ -1902,7 +1922,7 @@ body {
   padding-bottom: 10px;
   color: #8fd2f5;
   font-family: var(--font-mono), monospace;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 850;
   letter-spacing: .14em;
   text-transform: uppercase;
@@ -1923,7 +1943,7 @@ body {
 .iso-walrus-copy > p {
   max-width: 610px;
   margin-top: 26px;
-  color: rgba(255, 250, 241, .66);
+  color: rgba(255, 250, 241, .76);
   font-size: 15px;
   font-weight: 560;
   line-height: 1.75;
@@ -1975,7 +1995,7 @@ body {
 
 .iso-walrus-proof-list p {
   margin-top: 4px;
-  color: rgba(255, 250, 241, .55);
+  color: rgba(255, 250, 241, .7);
   font-size: 12px;
   line-height: 1.55;
 }
@@ -1985,7 +2005,7 @@ body {
   margin-top: 7px;
   color: #8fd2f5;
   font-family: var(--font-mono), monospace;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: .08em;
   text-transform: uppercase;
@@ -2055,7 +2075,7 @@ body {
 .iso-walrus-slide-copy > span {
   color: #084653;
   font-family: var(--font-mono), monospace;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 900;
   letter-spacing: .08em;
   text-transform: uppercase;
@@ -2071,7 +2091,7 @@ body {
 .iso-walrus-slide-copy p {
   max-width: 660px;
   color: rgba(7, 61, 71, .78);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 750;
   line-height: 1.45;
 }
@@ -2093,7 +2113,7 @@ body {
   color: rgba(7, 61, 71, .82);
   background: rgba(255, 250, 241, .24);
   font-family: var(--font-mono), monospace;
-  font-size: 8px;
+  font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
 }
@@ -2127,7 +2147,7 @@ body {
   padding: 8px;
   color: rgba(7, 61, 71, .58);
   background: rgba(255, 250, 241, .5);
-  font-size: 7px;
+  font-size: 10px;
   font-weight: 800;
   text-align: left;
   text-overflow: ellipsis;
@@ -2144,7 +2164,7 @@ body {
   color: #05262e;
   background: rgba(143, 210, 245, .42);
   font-family: var(--font-mono), monospace;
-  font-size: 7px;
+  font-size: 10px;
   font-weight: 900;
 }
 
@@ -2233,9 +2253,9 @@ body {
 
 .iso-vault-header small,
 .iso-vault-hash small {
-  color: rgba(12, 62, 72, .5);
+  color: rgba(12, 62, 72, .64);
   font-family: var(--font-mono), monospace;
-  font-size: 8px;
+  font-size: 11px;
   font-weight: 800;
   letter-spacing: .12em;
   text-transform: uppercase;
@@ -2252,7 +2272,7 @@ body {
   color: #fffaf1;
   background: var(--iso-teal);
   font-family: var(--font-mono), monospace;
-  font-size: 7px;
+  font-size: 10px;
   font-weight: 900;
   letter-spacing: .12em;
 }
@@ -2285,10 +2305,10 @@ body {
   border: 1px solid rgba(12, 62, 72, .14);
   border-radius: 6px;
   padding: 10px;
-  color: rgba(12, 62, 72, .65);
+  color: rgba(12, 62, 72, .74);
   background: rgba(255, 255, 255, .55);
   font-family: var(--font-mono), monospace;
-  font-size: 7px;
+  font-size: 10px;
   font-weight: 800;
   text-transform: uppercase;
 }
@@ -2306,12 +2326,12 @@ body {
   border-top: 1px solid rgba(12, 62, 72, .16);
   padding-top: 15px;
   font-family: var(--font-mono), monospace;
-  font-size: 8px;
+  font-size: 11px;
   text-transform: uppercase;
 }
 
 .iso-vault-footer span {
-  color: rgba(12, 62, 72, .52);
+  color: rgba(12, 62, 72, .66);
 }
 
 .iso-vault-footer strong {
@@ -2331,7 +2351,7 @@ body {
   background: #8fd2f5;
   box-shadow: 7px 8px 0 rgba(0, 0, 0, .25);
   font-family: var(--font-mono), monospace;
-  font-size: 8px;
+  font-size: 11px;
   font-weight: 950;
   transform: rotate(-10deg);
 }
@@ -2382,7 +2402,7 @@ body {
   background: rgba(255, 251, 245, .55);
   box-shadow: 2px 3px 0 rgba(12, 62, 72, .11);
   font-family: var(--font-mono), monospace;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 900;
 }
 
@@ -2418,7 +2438,7 @@ body {
   color: #fffaf1;
   background: var(--iso-teal);
   font-family: var(--font-mono), monospace;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 950;
   box-shadow: 3px 3px 0 var(--iso-teal-dark);
 }
@@ -2431,7 +2451,7 @@ body {
 .iso-recipient-ladder small {
   color: #a36b22;
   font-family: var(--font-mono), monospace;
-  font-size: 7px;
+  font-size: 10px;
   font-weight: 950;
   letter-spacing: .12em;
   text-transform: uppercase;
@@ -2444,8 +2464,8 @@ body {
 }
 
 .iso-recipient-ladder p {
-  color: rgba(12, 62, 72, .58);
-  font-size: 8px;
+  color: rgba(12, 62, 72, .7);
+  font-size: 11px;
   line-height: 1.5;
 }
 
@@ -2570,8 +2590,8 @@ body {
 }
 
 .iso-readiness-card p {
-  color: rgba(12, 62, 72, .58);
-  font-size: 8px;
+  color: rgba(12, 62, 72, .7);
+  font-size: 11px;
   line-height: 1.55;
 }
 
@@ -2607,9 +2627,9 @@ body {
 }
 
 .iso-product-number {
-  color: rgba(12, 62, 72, .42);
+  color: rgba(12, 62, 72, .55);
   font-family: var(--font-mono), monospace;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 900;
 }
 
@@ -2646,8 +2666,9 @@ body {
 
 .iso-product-copy small {
   max-width: 580px;
-  color: rgba(12, 62, 72, .58);
-  font-size: 11px;
+  color: rgba(12, 62, 72, .76);
+  font-size: 14px;
+  font-weight: 520;
   line-height: 1.6;
 }
 
@@ -2717,7 +2738,7 @@ body {
   z-index: 1;
   max-width: 590px;
   margin-top: 24px;
-  color: rgba(12, 62, 72, .66);
+  color: rgba(12, 62, 72, .74);
   font-size: 15px;
   font-weight: 650;
   line-height: 1.7;
@@ -2777,7 +2798,7 @@ body {
 
 .iso-benefit-card p {
   margin-top: 6px;
-  color: rgba(12, 62, 72, .62);
+  color: rgba(12, 62, 72, .72);
   font-size: 12px;
   font-weight: 650;
   line-height: 1.65;
@@ -2831,7 +2852,7 @@ body {
 .iso-final-copy > p {
   max-width: 560px;
   margin-top: 24px;
-  color: rgba(255, 250, 241, .62);
+  color: rgba(255, 250, 241, .74);
 }
 
 .iso-button-gold {
@@ -2897,8 +2918,8 @@ body {
 
 .iso-footer p,
 .iso-footer > .iso-shell > small {
-  color: rgba(12, 62, 72, .52);
-  font-size: 9px;
+  color: rgba(12, 62, 72, .66);
+  font-size: 12px;
   line-height: 1.6;
 }
 
@@ -2908,8 +2929,8 @@ body {
 }
 
 .iso-footer nav a {
-  color: rgba(12, 62, 72, .62);
-  font-size: 9px;
+  color: rgba(12, 62, 72, .72);
+  font-size: 12px;
   font-weight: 760;
 }
 
@@ -3199,7 +3220,7 @@ body {
 
   .iso-proof-line {
     gap: 8px 12px;
-    font-size: 8px;
+    font-size: 11px;
   }
 
   .iso-hero-stage {
@@ -3219,7 +3240,7 @@ body {
     bottom: 35%;
     width: 90%;
     padding-inline: 10px;
-    font-size: 6px;
+    font-size: 10px;
   }
 
   .iso-hero-engine-label::before {
@@ -3343,7 +3364,7 @@ body {
   }
 
   .iso-benefit-card p {
-    font-size: 10px;
+    font-size: 12px;
   }
 
   .iso-section-heading {
@@ -3494,7 +3515,7 @@ body {
   }
 
   .iso-vault-header strong {
-    font-size: 10px;
+    font-size: 12px;
   }
 
   .iso-vault-steps {
@@ -3509,7 +3530,7 @@ body {
   .iso-vault-chip {
     width: 46px;
     height: 46px;
-    font-size: 7px;
+    font-size: 10px;
   }
 
   .iso-corridor-stage {
@@ -3590,7 +3611,7 @@ body {
   }
 
   .iso-product-copy small {
-    font-size: 9px;
+    font-size: 12px;
   }
 
   .iso-final-panel {
@@ -3695,9 +3716,9 @@ body {
   width: max-content;
   align-items: center;
   gap: 8px;
-  color: rgba(12, 62, 72, .64);
+  color: rgba(12, 62, 72, .74);
   font-family: var(--font-mono), monospace;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 850;
   letter-spacing: .08em;
   text-transform: uppercase;
@@ -3776,7 +3797,7 @@ body {
 .iso-auth-visual-copy p {
   color: var(--iso-mint);
   font-family: var(--font-mono), monospace;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 900;
   letter-spacing: .16em;
   text-transform: uppercase;
@@ -3827,9 +3848,9 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 8px 16px;
-  color: rgba(255, 250, 241, .68);
+  color: rgba(255, 250, 241, .78);
   font-family: var(--font-mono), monospace;
-  font-size: 8px;
+  font-size: 11px;
   font-weight: 750;
   letter-spacing: .04em;
   text-transform: uppercase;
@@ -3878,7 +3899,7 @@ body {
 .iso-auth-form-heading p {
   color: var(--iso-teal);
   font-family: var(--font-mono), monospace;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 900;
   letter-spacing: .16em;
   text-transform: uppercase;
@@ -3899,7 +3920,7 @@ body {
   display: block;
   max-width: 520px;
   margin-top: 17px;
-  color: rgba(12, 62, 72, .62);
+  color: rgba(12, 62, 72, .72);
   font-size: 12px;
   font-weight: 560;
   line-height: 1.65;
@@ -3922,9 +3943,9 @@ body {
 }
 
 .iso-auth-field > span {
-  color: rgba(12, 62, 72, .58);
+  color: rgba(12, 62, 72, .7);
   font-family: var(--font-mono), monospace;
-  font-size: 8px;
+  font-size: 11px;
   font-weight: 900;
   letter-spacing: .13em;
   text-transform: uppercase;
@@ -3985,7 +4006,7 @@ body {
   height: 34px;
   place-items: center;
   border-radius: 6px;
-  color: rgba(12, 62, 72, .5);
+  color: rgba(12, 62, 72, .64);
   transform: translateY(-50%);
 }
 
@@ -4003,8 +4024,8 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  color: rgba(12, 62, 72, .58);
-  font-size: 10px;
+  color: rgba(12, 62, 72, .7);
+  font-size: 12px;
   font-weight: 650;
 }
 
@@ -4059,7 +4080,7 @@ body {
   padding: 10px 12px;
   color: #9b4e32;
   background: rgba(227, 151, 116, .14);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 750;
   line-height: 1.45;
 }
@@ -4094,7 +4115,7 @@ body {
   gap: 6px;
   color: var(--iso-teal);
   font-family: var(--font-mono), monospace;
-  font-size: 8px;
+  font-size: 11px;
   font-weight: 900;
   letter-spacing: .12em;
   text-transform: uppercase;
@@ -4112,7 +4133,7 @@ body {
   background: var(--iso-teal);
   box-shadow: 2px 3px 0 var(--iso-teal-dark);
   font-family: var(--font-mono), monospace;
-  font-size: 7px;
+  font-size: 10px;
   font-weight: 900;
   letter-spacing: .1em;
   text-transform: uppercase;
@@ -4126,8 +4147,8 @@ body {
 
 .iso-demo-card > p {
   margin-top: 8px;
-  color: rgba(12, 62, 72, .57);
-  font-size: 9px;
+  color: rgba(12, 62, 72, .68);
+  font-size: 12px;
   line-height: 1.5;
 }
 
@@ -4147,9 +4168,9 @@ body {
 }
 
 .iso-demo-values small {
-  color: rgba(12, 62, 72, .45);
+  color: rgba(12, 62, 72, .6);
   font-family: var(--font-mono), monospace;
-  font-size: 6px;
+  font-size: 10px;
   font-weight: 900;
   letter-spacing: .1em;
   text-transform: uppercase;
@@ -4158,14 +4179,14 @@ body {
 .iso-demo-values code {
   color: var(--iso-ink);
   font-family: var(--font-mono), monospace;
-  font-size: 8px;
+  font-size: 11px;
   font-weight: 800;
 }
 
 .iso-auth-switch {
   margin-top: 20px;
-  color: rgba(12, 62, 72, .57);
-  font-size: 10px;
+  color: rgba(12, 62, 72, .68);
+  font-size: 12px;
   text-align: center;
 }
 
@@ -4193,12 +4214,12 @@ body {
 .iso-password-strength small {
   grid-column: 1 / -1;
   color: rgba(12, 62, 72, .47);
-  font-size: 8px;
+  font-size: 11px;
 }
 
 .iso-auth-consent {
-  color: rgba(12, 62, 72, .58);
-  font-size: 9px;
+  color: rgba(12, 62, 72, .7);
+  font-size: 12px;
   line-height: 1.5;
 }
 
@@ -4215,15 +4236,15 @@ body {
 .iso-auth-help strong {
   width: 100%;
   color: var(--iso-ink);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 900;
 }
 
 .iso-auth-next span,
 .iso-auth-help span {
-  color: rgba(12, 62, 72, .58);
+  color: rgba(12, 62, 72, .7);
   font-family: var(--font-mono), monospace;
-  font-size: 7px;
+  font-size: 10px;
   font-weight: 750;
   text-transform: uppercase;
 }
@@ -4248,8 +4269,8 @@ body {
 }
 
 .iso-auth-success p {
-  color: rgba(12, 62, 72, .6);
-  font-size: 10px;
+  color: rgba(12, 62, 72, .72);
+  font-size: 12px;
   line-height: 1.6;
 }
 
@@ -4259,7 +4280,7 @@ body {
   align-items: center;
   gap: 7px;
   color: var(--iso-teal);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 850;
 }
 
@@ -4316,7 +4337,7 @@ body {
   }
 
   .iso-auth-back {
-    font-size: 7px;
+    font-size: 10px;
   }
 
   .iso-auth-shell {
@@ -4346,7 +4367,7 @@ body {
 
   .iso-auth-proof {
     gap: 6px 10px;
-    font-size: 6px;
+    font-size: 10px;
   }
 
   .iso-auth-form-panel {
@@ -4562,7 +4583,7 @@ body {
   padding-left: 9px;
   color: var(--fintech-teal);
   font-family: var(--font-mono), monospace;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: .14em;
   text-transform: uppercase;
@@ -4662,7 +4683,7 @@ body {
   gap: 7px;
   color: var(--fintech-teal);
   font-family: var(--font-mono), monospace;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: .08em;
   text-transform: uppercase;
@@ -4693,9 +4714,9 @@ body {
 
 .dash-flow-col-label {
   text-align: center;
-  color: rgba(12, 62, 72, .45);
+  color: rgba(12, 62, 72, .6);
   font-family: var(--font-mono), monospace;
-  font-size: 8px;
+  font-size: 11px;
   font-weight: 800;
   letter-spacing: .16em;
   text-transform: uppercase;
@@ -4748,7 +4769,7 @@ body {
   font-weight: 850;
   letter-spacing: -.01em;
 }
-.dash-flow-node-copy small { color: rgba(12, 62, 72, .55); font-size: 10px; }
+.dash-flow-node-copy small { color: rgba(12, 62, 72, .68); font-size: 12px; }
 
 .dash-flow-wires { width: 100%; height: 100%; min-height: 180px; }
 .dash-flow-wire-base { fill: none; stroke: rgba(12, 62, 72, .14); stroke-width: 1.5; }
@@ -4901,7 +4922,7 @@ body {
 .fintech-admin-trust small,
 .fintech-sidebar-signal small {
   color: rgba(18, 63, 73, .52);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 850;
   letter-spacing: .14em;
   text-transform: uppercase;
@@ -4938,7 +4959,7 @@ body {
   padding: 5px 9px;
   color: rgba(18, 63, 73, .65);
   background: rgba(255, 255, 255, .55);
-  font-size: 8px;
+  font-size: 11px;
   font-weight: 800;
   letter-spacing: .08em;
   text-transform: uppercase;
@@ -4985,8 +5006,8 @@ body {
 
 .fintech-sidebar-signal small,
 .fintech-admin-trust small {
-  color: rgba(255, 255, 255, .4);
-  font-size: 6px;
+  color: rgba(255, 255, 255, .62);
+  font-size: 11px;
 }
 
 .fintech-sidebar-signal strong,
@@ -4995,7 +5016,7 @@ body {
   align-items: center;
   gap: 6px;
   color: rgba(255, 255, 255, .82);
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .fintech-admin-trust {
@@ -5215,7 +5236,7 @@ body {
 }
 
 .iso-floating-note small {
-  color: rgba(12, 62, 72, .66);
+  color: rgba(12, 62, 72, .74);
   font-family: var(--font-mono), monospace;
   font-size: 9.5px;
   font-weight: 700;
@@ -5252,7 +5273,7 @@ body {
 .iso-flow-stack button span {
   display: block;
   color: #efb15d;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 900;
   letter-spacing: .12em;
 }
@@ -5431,8 +5452,9 @@ button.iso-product-row {
   margin: 12px 0 14px;
   color: #0d3942;
   font-size: clamp(30px, 4vw, 52px);
+  font-weight: 900;
   line-height: .95;
-  letter-spacing: -.055em;
+  letter-spacing: -.045em;
 }
 
 .iso-tool-modal-copy p {
@@ -5488,7 +5510,7 @@ button.iso-product-row {
 .iso-tool-modal-metric small {
   margin-top: 2px;
   color: rgba(18, 63, 72, .72);
-  font-size: 9px;
+  font-size: 12px;
 }
 
 @keyframes iso-arrow-coin-spin {
@@ -5578,7 +5600,7 @@ button.iso-product-row {
   border-bottom: 1px solid var(--fintech-line);
   color: var(--fintech-teal);
   font-family: var(--font-mono), monospace;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: .09em;
   text-transform: uppercase;
@@ -5694,7 +5716,7 @@ button.iso-product-row {
 .admin-login-brand small {
   margin-top: 4px;
   color: #9fc9c3;
-  font-size: 7px;
+  font-size: 10px;
   letter-spacing: .14em;
 }
 
@@ -5757,13 +5779,13 @@ button.iso-product-row {
 }
 
 .admin-login-art strong {
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .admin-login-art small {
   margin-top: 3px;
   color: #9fc9c3;
-  font-size: 8px;
+  font-size: 11px;
 }
 
 .admin-login-signals {
@@ -5798,7 +5820,7 @@ button.iso-product-row {
 .admin-login-signals span {
   margin-top: 4px;
   color: #9fc9c3;
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .admin-login-form-wrap {
@@ -5846,7 +5868,7 @@ button.iso-product-row {
 
 .admin-login-form-heading span {
   color: #d17b31;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 900;
   letter-spacing: .12em;
   text-transform: uppercase;
@@ -5916,7 +5938,7 @@ button.iso-product-row {
   border-radius: 10px;
   background: #f1e7d5;
   color: #718388;
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.5;
 }
 
@@ -5974,7 +5996,7 @@ button.iso-product-row {
   align-items: center;
   justify-content: space-between;
   color: #b8dbd6;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 900;
   letter-spacing: .14em;
 }
@@ -6198,7 +6220,7 @@ button.iso-product-row {
   margin-top: 4px;
   color: #285c6c;
   font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
-  font-size: 6px;
+  font-size: 10px;
   font-weight: 650;
   letter-spacing: .015em;
   line-height: 1;
@@ -6273,7 +6295,7 @@ button.iso-product-row {
 }
 
 .dash-flow-node-copy strong {
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .dash-flow-node-copy small {
@@ -6532,7 +6554,7 @@ button.iso-product-row {
   }
 
   .dash-flow-node-copy strong {
-    font-size: 10px;
+    font-size: 12px;
   }
 
   .dash-flow-node-copy small {
@@ -6545,12 +6567,12 @@ button.iso-product-row {
   }
 
   .dash-flow-core strong {
-    font-size: 10px;
+    font-size: 12px;
   }
 
   .dash-flow-core small {
     max-width: 66px;
-    font-size: 6px;
+    font-size: 10px;
   }
 }
 

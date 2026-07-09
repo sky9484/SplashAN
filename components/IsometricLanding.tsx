@@ -652,7 +652,7 @@ export default function IsometricLanding() {
                     <td>{row.bank}</td>
                     <td>{row.broker}</td>
                     <td>{row.wise}</td>
-                    <td className="is-splash"><Check aria-hidden="true" /> {row.splash}</td>
+                    <td className="is-splash"><span className="iso-splash-cell"><Check aria-hidden="true" /> {row.splash}</span></td>
                   </tr>
                 ))}
               </tbody>

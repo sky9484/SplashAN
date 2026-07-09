@@ -294,7 +294,7 @@
   color: var(--cin-teal);
   font-family: var(--font-mono), monospace;
   font-style: normal;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: .18em;
   text-transform: uppercase;
@@ -319,9 +319,9 @@
 }
 
 .cin-callout small {
-  color: rgba(12, 62, 72, .66);
+  color: rgba(12, 62, 72, .74);
   font-family: var(--font-mono), monospace;
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.5;
   border-top: 1px dashed rgba(12, 62, 72, .18);
   padding-top: 7px;
@@ -417,7 +417,7 @@
   bottom: 26px;
   left: 0;
   z-index: 5;
-  color: rgba(12, 62, 72, .5);
+  color: rgba(12, 62, 72, .64);
   font-family: var(--font-mono), monospace;
   font-size: 9.5px;
   font-weight: 700;
@@ -454,7 +454,7 @@
   background: var(--cin-gold);
   box-shadow: 3px 3px 0 var(--cin-teal-dark);
   font-family: var(--font-mono), monospace;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: .22em;
   text-transform: uppercase;
@@ -520,7 +520,7 @@
   background: var(--cin-gold);
   box-shadow: 3px 3px 0 var(--cin-teal-dark);
   font-family: var(--font-mono), monospace;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: .18em;
   text-transform: uppercase;
@@ -545,9 +545,9 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  color: rgba(12, 62, 72, .6);
+  color: rgba(12, 62, 72, .72);
   font-family: var(--font-mono), monospace;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: .18em;
   text-transform: uppercase;
@@ -651,7 +651,7 @@
 .cin-footer-brand p {
   max-width: 300px;
   margin-top: 16px;
-  color: rgba(12, 62, 72, .6);
+  color: rgba(12, 62, 72, .72);
   font-size: 12px;
   font-weight: 560;
   line-height: 1.65;
@@ -692,7 +692,7 @@
   margin-bottom: 7px;
   color: var(--iso-teal);
   font-family: var(--font-mono), monospace;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: .18em;
   text-transform: uppercase;
@@ -712,7 +712,7 @@
 
 .cin-footer-compliance small {
   max-width: 340px;
-  color: rgba(12, 62, 72, .55);
+  color: rgba(12, 62, 72, .68);
   font-size: 10.5px;
   line-height: 1.7;
 }
@@ -729,7 +729,7 @@
   justify-content: space-between;
   gap: 10px 24px;
   padding-block: 16px;
-  color: rgba(255, 250, 241, .68);
+  color: rgba(255, 250, 241, .78);
   font-family: var(--font-mono), monospace;
   font-size: 9.5px;
   font-weight: 700;
@@ -1283,9 +1283,9 @@
 }
 
 .cin-feedback-receipt figcaption small {
-  color: rgba(12, 62, 72, .6);
+  color: rgba(12, 62, 72, .72);
   font-family: var(--font-mono), monospace;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: .1em;
   text-transform: uppercase;
@@ -1300,7 +1300,7 @@
   background: var(--cin-gold, #efc46f);
   box-shadow: 3px 3px 0 var(--iso-teal-dark);
   font-family: var(--font-mono), monospace;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 900;
   letter-spacing: .18em;
   text-transform: uppercase;
@@ -1494,9 +1494,9 @@
 }
 
 .cin-loading-line {
-  color: rgba(12, 62, 72, .55);
+  color: rgba(12, 62, 72, .68);
   font-family: var(--font-mono), monospace;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: .22em;
   text-transform: uppercase;
