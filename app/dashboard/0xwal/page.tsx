@@ -27,6 +27,7 @@ import { toast } from 'sonner';
 import MemWalBehaviorCard from '@/components/MemWalBehaviorCard';
 import OxWalComposer, { type OxWalComposerChip } from '@/components/oxwal/OxWalComposer';
 import StatusBadge from '@/components/StatusBadge';
+import { stashBatchDraft } from '@/lib/batch-parse';
 import type { CopilotSuggestion } from '@/lib/server/copilot';
 import type { InvoiceRecord } from '@/lib/server/operations';
 
@@ -310,9 +311,10 @@ export default function OxWalPage() {
                 onChange={setPrompt}
                 onSubmit={() => runPrompt()}
                 onChipSubmit={runPrompt}
+                onFilePrepared={(batch) => { stashBatchDraft(batch); router.push('/dashboard/batch?draft=1'); }}
                 chips={invoicePromptChips}
                 disabled={uploading || extracting}
-                placeholder="Ask about extraction, Seal access, or the action desk"
+                placeholder="Ask 0xWal, or attach a payout sheet"
                 compact
                 className="max-w-none text-left [&_h2]:sr-only"
               />

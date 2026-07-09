@@ -1,10 +1,12 @@
 'use client';
 
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { ChevronDown, Sparkles, X } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { streamCopilot } from '../lib/copilot-client';
+import { stashBatchDraft, type ParsedBatch } from '../lib/batch-parse';
 import OxWalComposer, { type OxWalComposerChip } from './oxwal/OxWalComposer';
 
 // ─── Compact AI responses ─────────────────────────────────────────────────────
@@ -127,6 +129,7 @@ function formatChatTime(date: Date = new Date()): string {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function FloatingCopilot() {
+  const router = useRouter();
   const [open,      setOpen]      = useState(false);
   const [input,     setInput]     = useState('');
   const [thinking,  setThinking]  = useState(false);
@@ -144,6 +147,16 @@ export default function FloatingCopilot() {
   const inputRef          = useRef<HTMLInputElement>(null);
 
   const busy = thinking || streaming;
+
+  // Uploaded batch → hand the parsed rows to the batch desk (which reviews +
+  // routes to the Action Queue for human approval). Rows travel via
+  // sessionStorage, never the URL — recipient PII stays in the tab. 0xWal
+  // prepares only; nothing executes here.
+  function handleBatchPrepared(batch: ParsedBatch) {
+    stashBatchDraft(batch);
+    setOpen(false);
+    router.push('/dashboard/batch?draft=1');
+  }
 
   // Populate the first message on the client to keep the timestamp hydration-safe.
   useEffect(() => {
@@ -425,10 +438,10 @@ export default function FloatingCopilot() {
             onChange={setInput}
             onSubmit={() => sendMessage(input)}
             onChipSubmit={(prompt) => sendMessage(prompt)}
+            onFilePrepared={handleBatchPrepared}
             chips={QUICK_CHIPS}
             disabled={busy}
-            placeholder="Ask 0xWal anything"
-            priorityLabel="High"
+            placeholder="Ask 0xWal, or attach a payout sheet"
             inputRef={inputRef}
           />
         </div>

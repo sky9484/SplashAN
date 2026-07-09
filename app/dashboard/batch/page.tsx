@@ -10,6 +10,7 @@ import DashPageHeader from "@/components/dashboard/DashPageHeader";
 import DashStat from "@/components/dashboard/DashStat";
 import ExplorerLinks from "@/components/dashboard/ExplorerLinks";
 import SettlementEngineFlow from "@/components/dashboard/SettlementEngineFlow";
+import { takeBatchDraft } from "@/lib/batch-parse";
 
 type ComplianceResult = "PASS" | "REVIEW" | "BLOCK";
 
@@ -165,7 +166,22 @@ export default function BatchPage() {
   const [batchStatus, setBatchStatus] = useState<BatchStatus | null>(null);
 
   useEffect(() => {
-    const corridor = new URLSearchParams(window.location.search).get("corridor")?.toUpperCase();
+    const params = new URLSearchParams(window.location.search);
+
+    // Draft handed over from the 0xWal composer's file upload (prepared, not
+    // executed) — hydrate the review table so the operator can authorize.
+    if (params.get("draft") === "1") {
+      const draft = takeBatchDraft();
+      if (draft && draft.rows.length > 0) {
+        const timeout = setTimeout(() => {
+          setRows(screenRows(draft.rows));
+          toast.success(`Prepared ${draft.rows.length} rows from ${draft.fileName} — review and authorize`);
+        }, 0);
+        return () => clearTimeout(timeout);
+      }
+    }
+
+    const corridor = params.get("corridor")?.toUpperCase();
     if (!corridor) return;
     const matchingRows = sampleCsvRows.filter((row) => row.country === corridor || (corridor === "PHP" && row.country === "PH"));
     const timeout = setTimeout(() => setRows(screenRows(matchingRows)), 0);

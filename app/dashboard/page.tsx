@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   AlertTriangle,
   Bot,
@@ -17,6 +18,7 @@ import {
 import ActionCard from '@/components/oxwal/ActionCard';
 import OxWalComposer, { type OxWalComposerChip } from '@/components/oxwal/OxWalComposer';
 import MemWalBehaviorCard from '@/components/MemWalBehaviorCard';
+import { stashBatchDraft } from '@/lib/batch-parse';
 import type { ActionCardProposal } from '@/lib/agent/action-card';
 
 type ChatTurn = {
@@ -57,6 +59,7 @@ function eventToneClass(tone: DeskEvent['tone']) {
 }
 
 export default function OxwalDeskPage() {
+  const router = useRouter();
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<ChatTurn[]>([
     {
@@ -206,9 +209,10 @@ export default function OxwalDeskPage() {
             onChange={setInput}
             onSubmit={handleSubmit}
             onChipSubmit={(prompt) => void submitPrompt(prompt)}
+            onFilePrepared={(batch) => { stashBatchDraft(batch); router.push('/dashboard/batch?draft=1'); }}
             chips={quickPrompts}
             disabled={isSending}
-            placeholder="Ask 0xWal to read, prepare, or explain..."
+            placeholder="Ask 0xWal to read, prepare, or explain — or attach a payout sheet"
           />
         </section>
 
