@@ -438,8 +438,8 @@ const phaseOneTools = [
     result: 'Approval-gated treasury simulation',
     facts: ['Watch corridor inventory', 'Separate available cash', 'Approve every action'],
   },
-  // Early Pay was promoted out of this tool grid into the dedicated
-  // #supply section (§4.D) — the moat gets its own beat, not a tile.
+  // The early-payment tile was promoted out of this tool grid into the
+  // dedicated #supply section — the moat gets its own beat, not a tile.
 ];
 
 /* Ordered to match the page's narrative: how it works → compare → platform → proof → routes → scale. */
