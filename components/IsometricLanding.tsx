@@ -10,24 +10,15 @@ import {
   BrainCircuit,
   Check,
   ChevronRight,
-  CircleCheckBig,
-  Database,
   FileCheck2,
   Gauge,
-  KeyRound,
-  Layers3,
-  ReceiptText,
-  ShieldCheck,
-  Sparkles,
   TrendingUp,
   Workflow,
-  X,
 } from 'lucide-react';
 
 import FloatingToken from '@/components/landing/FloatingToken';
 import SettlementCinematic from '@/components/landing/SettlementCinematic';
 import ControlPlaneExplainer from '@/components/oxwal/ControlPlaneExplainer';
-import OnchainProof, { type OnchainProofData } from '@/components/proof/OnchainProof';
 import RoadmapChip from '@/components/supply/RoadmapChip';
 import WorkingCapitalFlywheel from '@/components/supply/WorkingCapitalFlywheel';
 import { claims, lockedCopy } from '@/content/claims';
@@ -107,33 +98,6 @@ const flowSteps = [
     image: '/cinematic/flow-proof-v4.png',
     imageAlt: 'Proof isometric typography with an archive vault, sealed certificate, and shield badge',
     stat: 'Walrus + Sui audit',
-  },
-];
-
-const marqueeItems = [
-  ['1 live testnet', 'MY to PH corridor'],
-  ['Modeled routes', 'expand with controls'],
-  ['~400ms', 'Sui settlement finality'],
-  ['From 0.80%', 'starting edge fee'],
-  ['Human approved', 'AI recommendations'],
-  ['Stored proof', 'Walrus + Sui audit'],
-];
-
-const clientProofPoints = [
-  {
-    icon: Gauge,
-    title: 'Fast transfers',
-    copy: 'Go from recipient to quote to approval in one guided flow, with Sui settlement finality measured in milliseconds.',
-  },
-  {
-    icon: ShieldCheck,
-    title: 'Safe authorization',
-    copy: 'Every payout keeps source selection, risk checks, rate holds, and human approval visible before money moves.',
-  },
-  {
-    icon: FileCheck2,
-    title: 'Audit-ready records',
-    copy: 'Invoices, receipts, payment intents, and settlement proof stay connected so audit prep is already organized.',
   },
 ];
 
@@ -295,79 +259,6 @@ const copilotLayers = [
   },
 ];
 
-const walrusProofs = [
-  {
-    icon: KeyRound,
-    title: 'Seal-ready ownership',
-    copy: 'Invoice files are access-controlled before permanent storage.',
-    meta: 'Only approved keys can decrypt',
-  },
-  {
-    icon: Database,
-    title: 'Daily audit batches',
-    copy: 'Settlement events are collected into a tamper-evident Merkle batch every day.',
-    meta: 'Seven-year retention',
-  },
-  {
-    icon: ShieldCheck,
-    title: 'Anchored on Sui',
-    copy: 'Every Walrus batch is connected to an immutable on-chain AuditAnchor.',
-    meta: 'Regulator-verifiable',
-  },
-];
-
-const walrusSlides = [
-  {
-    image: '/isometric/walrus-receipt-v4.png',
-    label: '01 / Walrus receipt',
-    tab: 'Audit',
-    title: 'Permanent audit proof',
-    copy: 'A normal payment receipt becomes immutable, independently verified, and auditable on Walrus.',
-    facts: ['On-chain receipt', 'Daily audit batch', 'Regulator-verifiable'],
-  },
-  {
-    image: '/isometric/memwal-agent-v4.png',
-    label: '02 / MemWal',
-    tab: 'AI',
-    title: 'The AI copilot remembers',
-    copy: 'An agent remembers safe behavior patterns, keeps useful memory, and suggests the next best action.',
-    facts: ['Behavior memory', 'Proactive suggestions', 'Human approval stays final'],
-  },
-  {
-    image: '/isometric/seal-vaults-sui-v3.png',
-    label: '03 / Seal',
-    tab: 'Ownership',
-    title: 'Encrypted ownership',
-    copy: 'Large sealed vaults protect owned data while permissioned verification keeps every audit possible.',
-    facts: ['Identity-based encryption', 'Owner-held access', 'Auditor access by permission'],
-  },
-];
-
-const readinessGates = [
-  {
-    icon: CircleCheckBig,
-    title: 'Payout proof',
-    copy: 'The MY-to-PH testnet path proves quote, intent, settlement, receipt, and audit evidence as one flow.',
-  },
-  {
-    icon: ShieldCheck,
-    title: 'Sweep-account launch',
-    copy: 'Phase 1 adds pay, get paid, sweep, and keep with corridor-by-corridor regulatory controls.',
-  },
-  {
-    icon: TrendingUp,
-    title: 'Closed-loop proof',
-    copy: 'Scale follows netting ratio, counterparty pull, repeat volume, and reliable external delivery.',
-  },
-];
-
-const scaleMetrics = [
-  ['Netting ratio', 'Value kept inside the loop'],
-  ['Counterparty pull', 'Pay links that recruit accounts'],
-  ['Treasury opt-in', 'Approved use of treasury tools'],
-  ['Discount capture', 'Invoice savings realized'],
-];
-
 const recipientLadder = [
   {
     number: '01',
@@ -389,67 +280,13 @@ const recipientLadder = [
   },
 ];
 
-const phaseOneTools = [
-  {
-    icon: Workflow,
-    number: '01',
-    title: 'Batch payouts',
-    copy: 'Authorize a full payout run once, then follow every recipient from quote to receipt.',
-    href: '/dashboard/batch',
-    image: '/isometric/op-batch.svg',
-    imageAlt: 'Isometric batch payout illustration',
-    metric: '128 recipients',
-    result: 'One approval, every payout traced',
-    facts: ['Pre-screen recipients', 'Label 24-72h rate holds', 'Track every receipt'],
-  },
-  {
-    icon: ReceiptText,
-    number: '02',
-    title: 'Invoice desk',
-    copy: 'Turn invoices and pay links into structured payment instructions that recruit the next counterparty.',
-    href: '/dashboard/invoices',
-    image: '/isometric/op-invoice.svg',
-    imageAlt: 'Isometric encrypted invoice illustration',
-    metric: 'Pay link to intent',
-    result: 'Get paid, then keep value in the loop',
-    facts: ['Extract payment fields', 'Invite counterparties', 'Approve before settlement'],
-  },
-  {
-    icon: FileCheck2,
-    number: '03',
-    title: 'Reconciliation & proof',
-    copy: 'Auto-match payment activity to accounting systems while private artifacts stay encrypted and verifiable.',
-    href: '/settings/kyb',
-    image: '/isometric/op-compliance.svg',
-    imageAlt: 'Isometric compliance archive illustration',
-    metric: 'Books to proof',
-    result: 'Reconciled without exposing private data',
-    facts: ['Xero + QuickBooks ready', 'Keep KYB off Walrus', 'Anchor daily audit batches'],
-  },
-  {
-    icon: Layers3,
-    number: '04',
-    title: 'Treasury controls',
-    copy: 'Model available USD, corridor inventory, and projected productive liquidity from one operating view.',
-    href: '/dashboard/treasury',
-    image: '/isometric/op-treasury.svg',
-    imageAlt: 'Isometric treasury controls illustration',
-    metric: 'Projected USDY rate',
-    result: 'Approval-gated treasury simulation',
-    facts: ['Watch corridor inventory', 'Separate available cash', 'Approve every action'],
-  },
-  // The early-payment tile was promoted out of this tool grid into the
-  // dedicated #supply section — the moat gets its own beat, not a tile.
-];
-
-/* Ordered to match the page's narrative: how it works → compare → platform → proof → routes → scale. */
 const headerNavItems = [
   { href: '#how-it-works', label: 'How it works', detail: '5 steps' },
+  { href: '#platform', label: 'Platform', detail: 'Pay + treasury' },
   { href: '#supply', label: 'Working capital', detail: 'Supply loop' },
   { href: '#corridors', label: 'Routes', detail: 'MY-PH testnet' },
   { href: '#comparison', label: 'Compare', detail: 'Fees + speed' },
   { href: '#copilot', label: '0xWal', detail: 'Prepare + approve' },
-  { href: '#walrus', label: 'Proof', detail: 'Walrus + Sui' },
 ];
 
 const supplySteps = [
@@ -515,22 +352,10 @@ const loopCards = [
   },
 ];
 
-export default function IsometricLanding({
-  proof = { packageId: '', proofTx1: '', proofTx2: '' },
-}: {
-  proof?: OnchainProofData;
-}) {
+export default function IsometricLanding() {
   const [activeFlow, setActiveFlow] = useState(flowSteps[0]);
-  const [activeWalrus, setActiveWalrus] = useState(0);
   const [yieldBenchmarks, setYieldBenchmarks] = useState(fallbackYieldBenchmarks);
   const [showBackToTop, setShowBackToTop] = useState(false);
-  const [activeTool, setActiveTool] = useState<(typeof phaseOneTools)[number] | null>(null);
-  useEffect(() => {
-    const interval = window.setInterval(() => {
-      setActiveWalrus((current) => (current + 1) % walrusSlides.length);
-    }, 7000);
-    return () => window.clearInterval(interval);
-  }, []);
 
   useEffect(() => {
     let active = true;
@@ -592,18 +417,6 @@ export default function IsometricLanding({
     return () => observer.disconnect();
   }, []);
 
-  useEffect(() => {
-    if (!activeTool) return;
-
-    function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === 'Escape') setActiveTool(null);
-    }
-
-    window.addEventListener('keydown', closeOnEscape);
-    return () => window.removeEventListener('keydown', closeOnEscape);
-  }, [activeTool]);
-
-  const walrusSlide = walrusSlides[activeWalrus];
   const liveComparisonRows = [
     ...comparisonRows,
     {
@@ -649,18 +462,6 @@ export default function IsometricLanding({
       </header>
 
       <SettlementCinematic />
-
-      <div className="iso-marquee is-static" aria-label="Platform metrics">
-        <div className="iso-marquee-track">
-          {[...marqueeItems, ...marqueeItems].map(([value, label], index) => (
-            <div className="iso-marquee-item" key={`${value}-${index}`}>
-              <strong>{value}</strong>
-              <span>{label}</span>
-              <i aria-hidden="true">◆</i>
-            </div>
-          ))}
-        </div>
-      </div>
 
       <section id="loops" className="iso-section iso-loops">
         <div className="cin-drop" style={{ top: 28, right: '4%' }} aria-hidden="true">
@@ -789,10 +590,6 @@ export default function IsometricLanding({
             </div>
           </div>
         </div>
-
-        <div className="iso-shell">
-          <OnchainProof {...proof} />
-        </div>
       </section>
 
       <section id="corridors" className="iso-section iso-corridors">
@@ -898,22 +695,22 @@ export default function IsometricLanding({
         </div>
       </section>
 
-      <section id="operating-layer" className="iso-section iso-operating">
+      <section id="platform" className="iso-section iso-operating">
         <div className="cin-drop" style={{ top: 30, right: '5%' }} aria-hidden="true">
           <FloatingToken src="/cinematic/token-idr-v1.png" alt="Indonesian rupiah token" size={108} float="cin-float-slow" />
         </div>
         <div className="iso-shell">
           <div className="iso-section-heading iso-heading-split">
             <div>
-              <p className="iso-kicker">One operating layer</p>
+              <p className="iso-kicker">The platform</p>
               <h2 className="iso-section-title">
-                Finance, with
-                <span>depth.</span>
+                Everything between invoice
+                <span>and settlement.</span>
               </h2>
             </div>
             <p>
-              Splash turns settlement primitives into clear operating tools. Funding, payout, receivables,
-              and treasury actions stay approval-gated and sandboxed until licensed rails are active.
+              One approval-gated desk for liquidity, settlement, and treasury. Funding, payout,
+              receivables, and treasury actions stay sandboxed until licensed rails are active.
             </p>
           </div>
 
@@ -1058,266 +855,6 @@ export default function IsometricLanding({
         </div>
       </section>
 
-      <section id="walrus" className="iso-section iso-walrus">
-        <div className="iso-shell iso-walrus-layout">
-          <div className="iso-walrus-copy">
-            <div className="iso-walrus-brand">
-              <Image src="/isometric/walrus-logo.png" alt="Walrus" width={54} height={54} className="iso-walrus-brandmark" />
-              <span>Permanent records on Walrus</span>
-            </div>
-            <h2 className="iso-section-title iso-section-title-light">
-              Proof that outlives
-              <span>the payment.</span>
-            </h2>
-            <p>
-              Splash stores encrypted invoices and daily settlement proofs on Walrus, then anchors every batch on Sui.
-              Your records remain durable, private, and independently verifiable.
-            </p>
-
-            <div className="iso-walrus-proof-list">
-              {walrusProofs.map(({ icon: Icon, title, copy, meta }) => (
-                <article key={title}>
-                  <div className="iso-walrus-proof-icon"><Icon aria-hidden="true" /></div>
-                  <div>
-                    <h3>{title}</h3>
-                    <p>{copy}</p>
-                    <small>{meta}</small>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </div>
-
-          <div className="iso-walrus-carousel" aria-label="Walrus, MemWal, and Seal showcase">
-            <div className="iso-walrus-slide-art">
-              {walrusSlides.map((slide, index) => (
-                <Image
-                  key={slide.image}
-                  src={slide.image}
-                  alt={`${slide.title} isometric typography illustration`}
-                  width={1536}
-                  height={1024}
-                  loading="eager"
-                  className={activeWalrus === index ? 'is-active' : ''}
-                />
-              ))}
-            </div>
-            <div className="iso-walrus-slide-copy" aria-live="polite">
-              <span>{walrusSlide.label}</span>
-              <h3>{walrusSlide.title}</h3>
-              <p>{walrusSlide.copy}</p>
-              <div>
-                {walrusSlide.facts.map((fact) => (
-                  <small key={fact}><Check aria-hidden="true" /> {fact}</small>
-                ))}
-              </div>
-            </div>
-            <div className="iso-walrus-controls" role="tablist" aria-label="Select Walrus showcase slide">
-              {walrusSlides.map((slide, index) => (
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={activeWalrus === index}
-                  aria-label={slide.title}
-                  className={activeWalrus === index ? 'is-active' : ''}
-                  onClick={() => setActiveWalrus(index)}
-                  key={slide.title}
-                >
-                  <span>0{index + 1}</span>
-                  {slide.tab}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section id="readiness" className="iso-section iso-readiness">
-        <div className="cin-drop" style={{ top: 34, right: '6%' }} aria-hidden="true">
-          <FloatingToken src="/cinematic/token-vnd-v1.png" alt="Vietnamese dong token" size={112} float="cin-float-drift" />
-        </div>
-        <div className="iso-shell iso-readiness-layout">
-          <div className="iso-readiness-copy">
-            <p className="iso-kicker">Scale</p>
-            <h2 className="iso-section-title">
-              Proof becomes
-              <span>repeatable.</span>
-            </h2>
-            <p>
-              Scale is earned, not announced. These are the gates that turn a payout prototype into a repeatable
-              closed-loop account network.
-            </p>
-            <div className="iso-readiness-list">
-              {readinessGates.map(({ icon: Icon, title, copy }) => (
-                <article key={title}>
-                  <Icon aria-hidden="true" />
-                  <span>
-                    <strong>{title}</strong>
-                    <small>{copy}</small>
-                  </span>
-                </article>
-              ))}
-            </div>
-            <div className="iso-scale-metrics" aria-label="Scale proof metrics">
-              {scaleMetrics.map(([metric, definition]) => (
-                <span key={metric}>
-                  <strong>{metric}</strong>
-                  <small>{definition}</small>
-                </span>
-              ))}
-            </div>
-          </div>
-          <div className="iso-readiness-stage">
-            <Image src="/isometric/splash-hero.svg" alt="Splash isometric global settlement engine" width={2172} height={1629} />
-            <div className="iso-readiness-card">
-              <Sparkles aria-hidden="true" />
-              <span>
-                <small>Scale unlock</small>
-                <strong>Pay + get paid + sweep + keep</strong>
-                <p>After corridor controls, reliability, netting, counterparty pull, and retention are repeatable.</p>
-              </span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section id="operations" className="iso-section iso-products">
-        <div className="iso-shell">
-          <div className="iso-section-heading iso-heading-split">
-            <div>
-              <p className="iso-kicker">Operating Desk</p>
-              <h2 className="iso-section-title">
-                More than
-                <span>a transfer.</span>
-              </h2>
-            </div>
-            <p>
-              The operating desk connects payout, receivables, reconciliation, access-controlled records, and approval-led
-              recommendations so finance teams can run the full loop.
-            </p>
-          </div>
-
-          <div className="iso-product-rail">
-            {phaseOneTools.map((tool) => {
-              const Icon = tool.icon;
-              const active = activeTool?.number === tool.number;
-              return (
-                <button
-                  type="button"
-                  className={`iso-product-row ${active ? 'is-active' : ''}`}
-                  aria-expanded={active}
-                  onClick={() => setActiveTool(tool)}
-                  key={tool.number}
-                >
-                  <span className="iso-product-number">{tool.number}</span>
-                  <span className="iso-product-icon"><Icon aria-hidden="true" /></span>
-                  <span className="iso-product-copy">
-                    <strong>{tool.title}</strong>
-                    <small>{tool.copy}</small>
-                  </span>
-                  <ChevronRight className="iso-product-chevron" aria-hidden="true" />
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      {activeTool && (
-        <div className="iso-tool-modal" role="presentation" onClick={() => setActiveTool(null)}>
-          <article
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="iso-tool-modal-title"
-            className="iso-tool-modal-panel"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <button type="button" className="iso-tool-modal-close" onClick={() => setActiveTool(null)} aria-label="Close tool preview">
-              <X aria-hidden="true" />
-            </button>
-            <div className="iso-tool-modal-art">
-              <div className="iso-tool-modal-wordmark" aria-hidden="true">
-                <span>{activeTool.number}</span>
-                <strong>{activeTool.title}</strong>
-              </div>
-              <Image src={activeTool.image} alt={activeTool.imageAlt} width={1448} height={1086} />
-              <div className="iso-tool-modal-metric">
-                <span>{activeTool.number}</span>
-                <strong>{activeTool.metric}</strong>
-                <small>{activeTool.result}</small>
-              </div>
-            </div>
-            <div className="iso-tool-modal-copy">
-              <span>Operating Desk / {activeTool.number}</span>
-              <h3 id="iso-tool-modal-title">{activeTool.title}</h3>
-              <p>{activeTool.copy}</p>
-              <div className="iso-tool-modal-facts">
-                {activeTool.facts.map((fact) => <small key={fact}><Check aria-hidden="true" /> {fact}</small>)}
-              </div>
-              <Link href={activeTool.href} className="iso-button">
-                Open {activeTool.title}
-                <ArrowRight aria-hidden="true" />
-              </Link>
-            </div>
-          </article>
-        </div>
-      )}
-
-      <section className="iso-section iso-client-proof cin-feedback" aria-labelledby="client-proof-title">
-        <div className="cin-feedback-watermark" aria-hidden="true">&ldquo;</div>
-        <div className="iso-shell">
-          <div className="iso-section-heading iso-heading-split">
-            <div>
-              <p className="iso-kicker">User feedback</p>
-              <h2 id="client-proof-title" className="iso-section-title">
-                Heard at the desks
-                <span>that move the money.</span>
-              </h2>
-            </div>
-            <p>
-              Splash turns messy back-office work into a single transfer path: choose a saved recipient,
-              approve the source, send safely, and keep the proof ready.
-            </p>
-          </div>
-
-          <div className="cin-feedback-layout">
-            <figure className="cin-feedback-receipt">
-              <header aria-hidden="true">
-                <span>Operator feedback</span>
-                <span>Desk record · 0001</span>
-              </header>
-              <blockquote>
-                &ldquo;I don&rsquo;t have time to compile every payout, chase every invoice, and gather
-                proof every time an auditor asks.&rdquo;
-              </blockquote>
-              <figcaption>
-                <span className="cin-feedback-avatar" aria-hidden="true">FT</span>
-                <span>
-                  <strong>Finance team lead</strong>
-                  <small>Cross-border SME · MY → PH corridor</small>
-                </span>
-              </figcaption>
-              <span className="cin-feedback-stamp" aria-hidden="true">Resolved by Splash</span>
-            </figure>
-
-            <div className="cin-feedback-points" aria-label="Splash transfer benefits">
-              {clientProofPoints.map(({ icon: Icon, title, copy }, index) => (
-                <article className="cin-feedback-point" key={title} style={{ transitionDelay: `${index * 90}ms` }}>
-                  <div className="cin-feedback-point-icon">
-                    <Icon aria-hidden="true" />
-                  </div>
-                  <div>
-                    <h3>{title}</h3>
-                    <p>{copy}</p>
-                  </div>
-                  <span aria-hidden="true">0{index + 1}</span>
-                </article>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
       <section className="iso-section iso-final">
         <div className="iso-shell iso-final-panel">
           <div className="iso-final-copy">
@@ -1368,15 +905,15 @@ export default function IsometricLanding({
             <strong>Product</strong>
             <a href="#how-it-works">How it works</a>
             <a href="#comparison">Compare</a>
-            <a href="#operating-layer">Platform</a>
+            <a href="#platform">Platform</a>
             <Link href="/working-capital">Working capital</Link>
             <a href="#corridors">Routes</a>
           </nav>
 
           <nav className="cin-footer-col" aria-label="Trust">
             <strong>Trust</strong>
-            <a href="#walrus">Proof &amp; audit</a>
             <Link href="/trust">Trust &amp; compliance</Link>
+            <a href="#copilot">0xWal control plane</a>
             <Link href="/login">Log in</Link>
             <Link href="/signup">Open payment desk</Link>
           </nav>

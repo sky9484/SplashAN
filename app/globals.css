@@ -1862,6 +1862,17 @@ body {
 }
 .trust-path p { color: var(--iso-text-secondary); font-size: 13.5px; line-height: 1.55; }
 
+/* Folded-in controls strip (from the former landing #readiness). */
+.trust-controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 16px; padding: 0; list-style: none; }
+.trust-controls li {
+  border: 1px solid var(--iso-line);
+  border-radius: 10px;
+  padding: 14px 16px;
+  background: rgba(255, 251, 245, .8);
+}
+.trust-controls li p { margin-top: 8px; color: var(--iso-text-secondary); font-size: 13px; line-height: 1.55; }
+@media (max-width: 760px) { .trust-controls { grid-template-columns: 1fr; } }
+
 .iso-operating {
   border-bottom: 1px solid var(--iso-line);
   background:
@@ -5725,17 +5736,14 @@ body {
 .iso-flow { order: 4; }
 .iso-corridors { order: 5; }
 .iso-comparison { order: 6; }
-.iso-operating { order: 7; }
+.iso-operating { order: 7; } /* #platform (merged operating-layer + operations) */
 .iso-supply { order: 8; }
 .iso-copilot { order: 9; }
-.iso-walrus { order: 10; }
-.iso-readiness { order: 11; }
-.iso-products { order: 12; }
-.iso-client-proof { order: 13; }
-.iso-final { order: 14; }
-.iso-footer { order: 15; }
-.iso-tool-modal,
+.iso-final { order: 10; }
+.iso-footer { order: 11; }
 .iso-back-to-top { order: 99; }
+/* Removed 2026-07-10 (mainnet-ready pruning): marquee, #walrus, #readiness,
+   #operations tool grid + modal, and the fabricated client-proof section. */
 
 .iso-stage-shadow {
   transform: translateX(16%) translateY(18%) scale(1.3) rotate(-7deg);

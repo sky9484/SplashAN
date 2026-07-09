@@ -34,6 +34,14 @@ const LICENSE_PATH = [
   { stage: 'Planned', body: 'BNM Money Services Business (Malaysia) and BSP registration (Philippines), sequenced by corridor demand.' },
 ];
 
+// Folded in from the landing's former "readiness" strip: the controls that
+// gate value movement, kept here as a compact security summary.
+const CONTROLS = [
+  { label: 'Human approval', body: 'Every payment is prepared by 0xWal and released only by a human on the Action Queue — maker-checker, with dual approval above your threshold.' },
+  { label: 'Corridor gating', body: 'Corridors arm and pause under explicit controls; settlement halts on a peg deviation or compliance flag before any value moves.' },
+  { label: 'Segregated custody', body: 'Client funds sit with licensed partners under 2-of-3 key governance — never commingled with operating balances.' },
+];
+
 export default function TrustCompliance() {
   return (
     <div className="trust-body">
@@ -89,12 +97,24 @@ export default function TrustCompliance() {
       <section className="trust-block">
         <h2><FileLock2 aria-hidden="true" /> Audit trail by construction</h2>
         <p>
-          Every settlement produces Seal-encrypted evidence stored on Walrus and anchored on Sui.
-          Records are private by default; regulators and auditors can be granted visibility on
-          authorization — decryption is a permissioned act, not a data request. This aligns with
-          Sui&apos;s regulator-visible confidential-transfer direction: confidential to the public,
-          verifiable to the people who are supposed to verify.
+          Every settlement produces a tamper-proof, Seal-encrypted audit record stored on Walrus and
+          anchored on Sui, retained for seven years. Records are private by default; regulators and
+          auditors can be granted visibility on authorization — decryption is a permissioned act, not
+          a data request. This aligns with Sui&apos;s regulator-visible confidential-transfer
+          direction: confidential to the public, verifiable to the people who are supposed to verify.
         </p>
+      </section>
+
+      <section className="trust-block">
+        <h2><ShieldCheck aria-hidden="true" /> Controls that gate every payment</h2>
+        <ul className="trust-controls">
+          {CONTROLS.map((control) => (
+            <li key={control.label}>
+              <span className="trust-chip">{control.label}</span>
+              <p>{control.body}</p>
+            </li>
+          ))}
+        </ul>
       </section>
     </div>
   );
