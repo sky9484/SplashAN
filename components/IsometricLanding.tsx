@@ -26,6 +26,7 @@ import {
 
 import FloatingToken from '@/components/landing/FloatingToken';
 import SettlementCinematic from '@/components/landing/SettlementCinematic';
+import ControlPlaneExplainer from '@/components/oxwal/ControlPlaneExplainer';
 import WorkingCapitalFlywheel from '@/components/supply/WorkingCapitalFlywheel';
 import { claims, lockedCopy } from '@/content/claims';
 
@@ -846,6 +847,23 @@ export default function IsometricLanding() {
             </div>
           </div>
         </div>
+
+        <div className="iso-shell iso-ctrl-shell">
+          <div className="iso-section-heading iso-heading-split">
+            <div>
+              <p className="iso-kicker">The control plane</p>
+              <h2 className="iso-section-title">
+                Shipped, not
+                <span>promised.</span>
+              </h2>
+            </div>
+            <p>
+              Every 0xWal recommendation runs this exact pipeline before money can move. The phase
+              names below are the engine&apos;s own state machine — inspect them in the Action Queue.
+            </p>
+          </div>
+          <ControlPlaneExplainer />
+        </div>
       </section>
 
       <section id="walrus" className="iso-section iso-walrus">
@@ -1207,13 +1225,14 @@ export default function IsometricLanding() {
             <a href="#how-it-works">How it works</a>
             <a href="#comparison">Compare</a>
             <a href="#operating-layer">Platform</a>
+            <Link href="/working-capital">Working capital</Link>
             <a href="#corridors">Routes</a>
           </nav>
 
           <nav className="cin-footer-col" aria-label="Trust">
             <strong>Trust</strong>
             <a href="#walrus">Proof &amp; audit</a>
-            <a href="#readiness">Scale controls</a>
+            <Link href="/trust">Trust &amp; compliance</Link>
             <Link href="/login">Log in</Link>
             <Link href="/signup">Open payment desk</Link>
           </nav>
