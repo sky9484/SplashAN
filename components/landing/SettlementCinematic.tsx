@@ -15,7 +15,7 @@ import {
 
 import { lockedCopy } from '@/content/claims';
 
-const HERO_IMG = '/cinematic/hero-district-v4.png';
+const HERO_IMG = '/cinematic/hero-district-v5.png';
 
 const EASE_OUT_EXPO = [0.16, 1, 0.3, 1] as const;
 
