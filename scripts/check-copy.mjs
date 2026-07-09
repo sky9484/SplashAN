@@ -68,6 +68,19 @@ function hexViolations(text) {
   return found;
 }
 
+// Explorer links must never hardcode a digest/object id: any line mentioning
+// suiscan/suivision alongside a long 0x literal fails. Dynamic templates
+// (`.../tx/${digest}`) and env-fed <OnchainProof/> stay legal.
+function explorerLiteralViolations(text) {
+  const found = [];
+  for (const line of text.split('\n')) {
+    if (/suiscan|suivision/i.test(line) && /0x[0-9a-fA-F]{16,}/.test(line)) {
+      found.push(line.trim().slice(0, 80));
+    }
+  }
+  return found;
+}
+
 async function filesUnder(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
   const files = [];
@@ -96,6 +109,9 @@ for (const root of roots) {
       for (const hex of hexViolations(text)) {
         violations.push(`${relative('.', file)}: new arbitrary hex ${hex} — use styles/tokens.css variables or extend the baseline deliberately`);
       }
+    }
+    for (const line of explorerLiteralViolations(text)) {
+      violations.push(`${relative('.', file)}: hardcoded explorer digest — route proof links through components/proof/OnchainProof (${line})`);
     }
   }
 }

@@ -27,6 +27,7 @@ import {
 import FloatingToken from '@/components/landing/FloatingToken';
 import SettlementCinematic from '@/components/landing/SettlementCinematic';
 import ControlPlaneExplainer from '@/components/oxwal/ControlPlaneExplainer';
+import OnchainProof, { type OnchainProofData } from '@/components/proof/OnchainProof';
 import WorkingCapitalFlywheel from '@/components/supply/WorkingCapitalFlywheel';
 import { claims, lockedCopy } from '@/content/claims';
 
@@ -460,7 +461,11 @@ const headerNavItems = [
   { href: '#corridors', label: 'Routes', detail: 'MY-PH testnet' },
 ];
 
-export default function IsometricLanding() {
+export default function IsometricLanding({
+  proof = { packageId: '', proofTx1: '', proofTx2: '' },
+}: {
+  proof?: OnchainProofData;
+}) {
   const [activeFlow, setActiveFlow] = useState(flowSteps[0]);
   const [activeWalrus, setActiveWalrus] = useState(0);
   const [yieldBenchmarks, setYieldBenchmarks] = useState(fallbackYieldBenchmarks);
@@ -803,6 +808,10 @@ export default function IsometricLanding() {
               </div>
             </div>
           </div>
+        </div>
+
+        <div className="iso-shell">
+          <OnchainProof {...proof} />
         </div>
       </section>
 
