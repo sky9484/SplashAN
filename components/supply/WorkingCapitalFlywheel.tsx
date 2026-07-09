@@ -71,14 +71,14 @@ export default function WorkingCapitalFlywheel({ variant = 'band' }: { variant?:
 
   return (
     <motion.div
-      className={`iso-loops-wheel is-${variant}`}
+      className={`iso-wheel is-${variant}`}
       variants={riseParent}
       initial="hidden"
       whileInView="shown"
       viewport={{ once: true, margin: '-80px' }}
     >
       {/* Loop-back conveyor: value exits Save ready to Settle again. */}
-      <svg className="iso-loops-orbit" viewBox="0 0 1160 84" aria-hidden="true" preserveAspectRatio="none">
+      <svg className="iso-wheel-orbit" viewBox="0 0 1160 84" aria-hidden="true" preserveAspectRatio="none">
         <path
           d="M 1096 76 C 1128 76 1148 58 1148 34 C 1148 12 1128 4 1096 4 L 64 4 C 32 4 12 12 12 34 C 12 58 32 76 64 76"
           fill="none"
@@ -87,16 +87,16 @@ export default function WorkingCapitalFlywheel({ variant = 'band' }: { variant?:
         <text x="580" y="24" textAnchor="middle">ready to settle again</text>
       </svg>
 
-      <div className="iso-loops-track">
+      <div className="iso-wheel-track">
         {LOOPS.map((loop, index) => (
-          <div className="iso-loops-station" key={loop.id}>
-            <motion.article variants={rise} className={`iso-loops-card is-${loop.id}`}>
-              <div className="iso-loops-card-head">
+          <div className="iso-wheel-station" key={loop.id}>
+            <motion.article variants={rise} className={`iso-wheel-card is-${loop.id}`}>
+              <div className="iso-wheel-card-head">
                 <span className="iso-loops-icon"><loop.icon aria-hidden="true" /></span>
                 {loop.status === 'roadmap' ? (
                   <RoadmapChip />
                 ) : (
-                  <span className="iso-loops-live"><i aria-hidden="true" /> Live</span>
+                  <span className="iso-wheel-live"><i aria-hidden="true" /> Live</span>
                 )}
               </div>
               <h3>
@@ -107,7 +107,7 @@ export default function WorkingCapitalFlywheel({ variant = 'band' }: { variant?:
               <small>{loop.meta}</small>
             </motion.article>
             {index < LOOPS.length - 1 ? (
-              <motion.div variants={rise} className="iso-loops-handoff" aria-hidden="true">
+              <motion.div variants={rise} className="iso-wheel-handoff" aria-hidden="true">
                 <span>{HANDOFFS[index]}</span>
                 <ArrowRight />
               </motion.div>

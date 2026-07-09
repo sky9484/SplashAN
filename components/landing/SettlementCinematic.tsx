@@ -199,9 +199,13 @@ function HeroCopy({ animated, onEnterEngine }: { animated: boolean; onEnterEngin
       <motion.p variants={animated ? rise : undefined} className="iso-kicker">
         Splash · Settlement network on Sui
       </motion.p>
-      <motion.h1 variants={animated ? rise : undefined} className="iso-display">
+      {/* Display headline (visual) — the real <h1> below carries the SEO wedge. */}
+      <motion.p variants={animated ? rise : undefined} className="iso-display" role="presentation">
         Move money.
         <span>Settle everything.</span>
+      </motion.p>
+      <motion.h1 variants={animated ? rise : undefined} className="cin-hero-h1">
+        Send USD across Southeast Asia in minutes — starting with the Philippines
       </motion.h1>
       <motion.p variants={animated ? rise : undefined} className="iso-hero-description">
         A compliance-gated B2B account network for cross-border money. Between the invoice and the

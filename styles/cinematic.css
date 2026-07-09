@@ -1549,3 +1549,157 @@
 .iso-flow .iso-flow-tabs {
   margin-top: 30px;
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   Hero SEO headline (§4.A) — the real <h1>. The big display line above
+   it is presentational; this carries the corridor/wedge keywords in the
+   hero description slot's visual weight.
+   ═══════════════════════════════════════════════════════════════════ */
+.cin-hero-h1 {
+  margin-top: 14px;
+  max-width: 560px;
+  color: var(--cin-teal-dark, #083640);
+  font-size: 17px;
+  font-weight: 850;
+  letter-spacing: -.01em;
+  line-height: 1.4;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   #loops — the three-loop reframe band (§4.B), directly after the
+   marquee. Mirrors the #operating-layer card grammar (iso-layer-card:
+   meta → art → copy, hard-offset shadow, mono meta) at band scale.
+   Supply (card 3) is the weighted coral moat.
+   ═══════════════════════════════════════════════════════════════════ */
+.iso-loops-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.16fr;
+  gap: 20px;
+}
+
+.iso-loops-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--ink) 22%, transparent);
+  border-radius: 12px;
+  padding: 20px;
+  background: color-mix(in srgb, var(--surface) 56%, transparent);
+  box-shadow: 8px 9px 0 color-mix(in srgb, var(--ink) 12%, transparent);
+  transition: transform var(--dur-slow) var(--ease-standard), box-shadow var(--dur-slow) var(--ease-standard);
+}
+.iso-loops-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 10px 12px 0 color-mix(in srgb, var(--ink) 14%, transparent);
+}
+.iso-loops-card-3 {
+  border-color: color-mix(in srgb, var(--coral) 60%, transparent);
+  background:
+    linear-gradient(160deg, color-mix(in srgb, var(--coral) 10%, transparent), transparent 46%),
+    color-mix(in srgb, var(--surface) 72%, transparent);
+  box-shadow: 8px 9px 0 color-mix(in srgb, var(--coral) 34%, transparent);
+}
+
+.iso-loops-meta {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: color-mix(in srgb, var(--ink) 64%, transparent);
+  font-family: var(--font-mono), monospace;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+.iso-loops-meta span {
+  display: grid;
+  width: 33px;
+  height: 33px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  color: var(--surface);
+  background: var(--teal);
+  box-shadow: 3px 3px 0 var(--ink);
+}
+.iso-loops-card-3 .iso-loops-meta span {
+  background: var(--coral);
+  box-shadow: 3px 3px 0 color-mix(in srgb, var(--coral) 55%, var(--ink));
+}
+.iso-loops-meta p { flex: 1; }
+.iso-loops-meta .iso-roadmap-chip { letter-spacing: .08em; }
+
+.iso-loops-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ok);
+  font-size: 10px;
+  font-style: normal;
+}
+.iso-loops-live i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ok);
+  box-shadow: 0 0 0 3px var(--ok-bg);
+}
+
+.iso-loops-art {
+  position: relative;
+  height: 190px;
+  margin-inline: -6px;
+  margin-top: var(--s3);
+}
+.iso-loops-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 18px 16px color-mix(in srgb, var(--ink) 14%, transparent));
+  transition: transform var(--dur-slow) var(--ease-standard);
+}
+.iso-loops-card:hover .iso-loops-art img { transform: translateY(-6px) scale(1.02); }
+
+.iso-loops-copy {
+  position: relative;
+  z-index: 2;
+  border-top: 1px solid var(--line);
+  margin-top: var(--s4);
+  padding-top: var(--s4);
+}
+.iso-loops-copy h3 {
+  color: var(--ink);
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: -.04em;
+}
+.iso-loops-card-3 .iso-loops-copy h3 { font-size: 24px; }
+.iso-loops-copy p {
+  margin-top: var(--s2);
+  color: color-mix(in srgb, var(--ink) 74%, transparent);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.iso-loops-copy small {
+  display: block;
+  margin-top: var(--s3);
+  color: color-mix(in srgb, var(--ink) 64%, transparent);
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 960px) {
+  .iso-loops-grid { grid-template-columns: 1fr; }
+  .iso-loops-art { height: 170px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .iso-loops-card,
+  .iso-loops-art img { transition: none; }
+}

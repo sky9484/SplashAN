@@ -28,7 +28,7 @@ import FloatingToken from '@/components/landing/FloatingToken';
 import SettlementCinematic from '@/components/landing/SettlementCinematic';
 import ControlPlaneExplainer from '@/components/oxwal/ControlPlaneExplainer';
 import OnchainProof, { type OnchainProofData } from '@/components/proof/OnchainProof';
-import WorkingCapitalFlywheel from '@/components/supply/WorkingCapitalFlywheel';
+import RoadmapChip from '@/components/supply/RoadmapChip';
 import { claims, lockedCopy } from '@/content/claims';
 
 const operatingLayers = [
@@ -453,12 +453,45 @@ const phaseOneTools = [
 
 /* Ordered to match the page's narrative: how it works → compare → platform → proof → routes → scale. */
 const headerNavItems = [
-  { href: '#working-capital', label: 'Loops', detail: 'Settle · Supply' },
   { href: '#how-it-works', label: 'How it works', detail: '5 steps' },
-  { href: '#comparison', label: 'Compare', detail: 'Fees + speed' },
-  { href: '#operating-layer', label: 'Platform', detail: 'Pay + treasury' },
-  { href: '#walrus', label: 'Proof', detail: 'Walrus + Sui' },
+  { href: '#supply', label: 'Working capital', detail: 'Supply loop' },
   { href: '#corridors', label: 'Routes', detail: 'MY-PH testnet' },
+  { href: '#comparison', label: 'Compare', detail: 'Fees + speed' },
+  { href: '#copilot', label: '0xWal', detail: 'Prepare + approve' },
+  { href: '#walrus', label: 'Proof', detail: 'Walrus + Sui' },
+];
+
+const loopCards = [
+  {
+    number: '01',
+    label: 'Settle',
+    title: 'Move it in minutes.',
+    copy: 'Collect USD, pay Southeast Asia. Every approved payout builds verified counterparties and settlement history.',
+    image: '/isometric/transfer.svg',
+    imageAlt: 'Isometric transfer illustration with coins moving between two accounts',
+    meta: 'USD → PHP · live on testnet',
+    roadmap: false,
+  },
+  {
+    number: '02',
+    label: 'Save',
+    title: 'Grow it while it waits.',
+    copy: 'Idle USD follows a projected, variable treasury posture. Your business approves every move.',
+    image: '/isometric/liquidity-pools.svg',
+    imageAlt: 'Isometric tiered liquidity pools holding coin reserves',
+    meta: 'Projected · variable · human-approved',
+    roadmap: false,
+  },
+  {
+    number: '03',
+    label: 'Supply',
+    title: 'Finance it — the moat.',
+    copy: 'Invoices would become working capital: your buyer funds early payment against a receivable both sides can verify.',
+    image: '/isometric/op-early.svg',
+    imageAlt: 'Isometric early-payment illustration with an invoice releasing coins ahead of schedule',
+    meta: 'Buyer-funded · no third-party lender',
+    roadmap: true,
+  },
 ];
 
 export default function IsometricLanding({
@@ -608,6 +641,59 @@ export default function IsometricLanding({
         </div>
       </div>
 
+      <section id="loops" className="iso-section iso-loops">
+        <div className="cin-drop" style={{ top: 28, right: '4%' }} aria-hidden="true">
+          <FloatingToken src="/cinematic/token-usd.png" alt="US dollar token" size={104} float="cin-float-slow" />
+        </div>
+        <div className="iso-shell">
+          <div className="iso-section-heading iso-heading-split">
+            <div>
+              <p className="iso-kicker">The three loops</p>
+              <h2 className="iso-section-title">
+                Move it. Grow it.
+                <span>Finance it.</span>
+              </h2>
+            </div>
+            <p>
+              Idle dollars on Sui already move for free — Splash&apos;s job is what the transfer
+              alone can&apos;t do. Settle in minutes. Save while it waits. Supply turns invoices
+              into working capital.
+            </p>
+          </div>
+
+          <div className="iso-loops-grid">
+            {loopCards.map((loop, index) => (
+              <article className={`iso-loops-card iso-loops-card-${index + 1}`} key={loop.number}>
+                <div className="iso-loops-meta">
+                  <span>{loop.number}</span>
+                  <p>{loop.label}</p>
+                  {loop.roadmap ? <RoadmapChip /> : <em className="iso-loops-live"><i aria-hidden="true" /> Live</em>}
+                </div>
+                <div className="iso-loops-art">
+                  <Image src={loop.image} alt={loop.imageAlt} width={640} height={480} />
+                </div>
+                <div className="iso-loops-copy">
+                  <h3>{loop.title}</h3>
+                  <p>{loop.copy}</p>
+                  <small>{loop.meta}</small>
+                </div>
+              </article>
+            ))}
+          </div>
+
+          <div className="iso-loops-foot">
+            <p className="iso-gasless-note">
+              <strong>Where the fees live:</strong> simple payouts ride Sui&apos;s zero-fee stablecoin
+              rail; programmable settlement is gas-sponsored. You never hold SUI.
+            </p>
+            <Link href="/working-capital" className="iso-button iso-button-small">
+              Explore the Supply loop
+              <ArrowRight aria-hidden="true" />
+            </Link>
+          </div>
+        </div>
+      </section>
+
       <section className="iso-partner-rail" aria-label="Infrastructure partners and benchmarks">
         <div className="iso-shell">
           <div className="iso-partner-intro">
@@ -622,34 +708,116 @@ export default function IsometricLanding({
         </div>
       </section>
 
-      <section id="working-capital" className="iso-section iso-loops">
-        <div className="iso-shell">
-          <div className="iso-section-heading iso-heading-split">
-            <div>
-              <p className="iso-kicker">The three loops</p>
-              <h2 className="iso-section-title">
-                Working capital,
-                <span>not just transfers.</span>
-              </h2>
+      <section id="how-it-works" className="iso-section iso-flow">
+        <div className="cin-drop" style={{ top: 34, right: '5%' }} aria-hidden="true">
+          <FloatingToken src="/cinematic/token-sgd.png" alt="Singapore dollar token" size={112} float="cin-float-drift" />
+        </div>
+        <div className="iso-shell iso-flow-layout">
+          <div className="iso-flow-copy">
+            <p className="iso-kicker">How it works</p>
+            <h2 className="iso-section-title iso-section-title-light">
+              Five steps.
+              <span>No limbo.</span>
+            </h2>
+            <div className="iso-flow-tabs" role="tablist" aria-label="Settlement flow">
+              {flowSteps.map((step) => {
+                const active = activeFlow.id === step.id;
+                return (
+                  <button
+                    key={step.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    className={active ? 'is-active' : ''}
+                    onClick={() => setActiveFlow(step)}
+                  >
+                    <span>{step.number}</span>
+                    <strong>{step.title}</strong>
+                    <ChevronRight aria-hidden="true" />
+                  </button>
+                );
+              })}
             </div>
-            <p>
-              Idle dollars on Sui already move for free — Splash&apos;s job is what the transfer alone
-              can&apos;t do: verified counterparties, programmable settlement, and invoices that would
-              work as capital.
-            </p>
+            <div className="iso-flow-branch">
+              <strong>Working-capital branch</strong>
+              <span>Accepted invoice to supplier discount offer to buyer approval to settlement proof.</span>
+            </div>
           </div>
 
-          <WorkingCapitalFlywheel variant="band" />
+          <div className="iso-flow-visual" role="tabpanel" aria-live="polite">
+            <div className="iso-flow-stat">
+              <small>Current checkpoint</small>
+              <strong>{activeFlow.stat}</strong>
+            </div>
+            <div className="iso-flow-image">
+              <Image
+                key={activeFlow.id}
+                src={activeFlow.image}
+                alt={activeFlow.imageAlt}
+                width={1448}
+                height={1086}
+                priority={activeFlow.id === 'settle'}
+              />
+            </div>
+            <div className="iso-flow-caption">
+              <span>{activeFlow.number}</span>
+              <div>
+                <strong>{activeFlow.title}</strong>
+                <p>{activeFlow.description}</p>
+              </div>
+            </div>
+          </div>
+        </div>
 
-          <div className="iso-loops-foot">
-            <p className="iso-gasless-note">
-              <strong>Where the fees live:</strong> simple payouts ride Sui&apos;s zero-fee stablecoin
-              rail; programmable settlement is gas-sponsored. You never hold SUI.
+        <div className="iso-shell">
+          <OnchainProof {...proof} />
+        </div>
+      </section>
+
+      <section id="corridors" className="iso-section iso-corridors">
+        <div className="cin-drop" style={{ bottom: 40, right: '6%' }} aria-hidden="true">
+          <FloatingToken src="/cinematic/token-php.png" alt="Philippine peso token" size={120} />
+        </div>
+        <div className="iso-shell iso-corridor-layout">
+          <div className="iso-corridor-copy">
+            <p className="iso-kicker">One testnet corridor. Modeled expansion routes.</p>
+            <h2 className="iso-section-title">
+              USD in.
+              <span>Local out.</span>
+            </h2>
+            <p>
+              The MY-to-PH corridor is the proving ground. Additional routes stay modeled until partner, liquidity,
+              and regulatory controls are ready market by market.
             </p>
-            <Link href="/working-capital" className="iso-button iso-button-small">
-              Explore the Supply loop
+            <div className="iso-route-list">
+              <span className="is-live">PHP testnet</span><span>MYR</span><span>IDR</span><span>VND</span>
+              <span>THB</span><span>SGD</span><span>EUR</span><span>GBP</span>
+            </div>
+            <div className="iso-recipient-ladder">
+              {recipientLadder.map((step) => (
+                <article key={step.number}>
+                  <span>{step.number}</span>
+                  <div>
+                    <small>{step.status}</small>
+                    <strong>{step.title}</strong>
+                    <p>{step.copy}</p>
+                  </div>
+                </article>
+              ))}
+            </div>
+            <Link href="/signup" className="iso-inline-link">
+              Open the payout desk
               <ArrowRight aria-hidden="true" />
             </Link>
+          </div>
+
+          <div className="iso-corridor-stage">
+            <Image
+              src="/cinematic/corridor-bridge-v3.png"
+              alt="Two isometric city platforms, Kuala Lumpur and Manila, connected by a golden bridge of flowing coins"
+              width={2752}
+              height={1536}
+            />
           </div>
         </div>
       </section>
@@ -746,72 +914,6 @@ export default function IsometricLanding({
               </article>
             ))}
           </div>
-        </div>
-      </section>
-
-      <section id="how-it-works" className="iso-section iso-flow">
-        <div className="cin-drop" style={{ top: 34, right: '5%' }} aria-hidden="true">
-          <FloatingToken src="/cinematic/token-sgd.png" alt="Singapore dollar token" size={112} float="cin-float-drift" />
-        </div>
-        <div className="iso-shell iso-flow-layout">
-          <div className="iso-flow-copy">
-            <p className="iso-kicker">How it works</p>
-            <h2 className="iso-section-title iso-section-title-light">
-              Five steps.
-              <span>No limbo.</span>
-            </h2>
-            <div className="iso-flow-tabs" role="tablist" aria-label="Settlement flow">
-              {flowSteps.map((step) => {
-                const active = activeFlow.id === step.id;
-                return (
-                  <button
-                    key={step.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={active}
-                    className={active ? 'is-active' : ''}
-                    onClick={() => setActiveFlow(step)}
-                  >
-                    <span>{step.number}</span>
-                    <strong>{step.title}</strong>
-                    <ChevronRight aria-hidden="true" />
-                  </button>
-                );
-              })}
-            </div>
-            <div className="iso-flow-branch">
-              <strong>Working-capital branch</strong>
-              <span>Accepted invoice to supplier discount offer to buyer approval to settlement proof.</span>
-            </div>
-          </div>
-
-          <div className="iso-flow-visual" role="tabpanel" aria-live="polite">
-            <div className="iso-flow-stat">
-              <small>Current checkpoint</small>
-              <strong>{activeFlow.stat}</strong>
-            </div>
-            <div className="iso-flow-image">
-              <Image
-                key={activeFlow.id}
-                src={activeFlow.image}
-                alt={activeFlow.imageAlt}
-                width={1448}
-                height={1086}
-                priority={activeFlow.id === 'settle'}
-              />
-            </div>
-            <div className="iso-flow-caption">
-              <span>{activeFlow.number}</span>
-              <div>
-                <strong>{activeFlow.title}</strong>
-                <p>{activeFlow.description}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="iso-shell">
-          <OnchainProof {...proof} />
         </div>
       </section>
 
@@ -945,54 +1047,6 @@ export default function IsometricLanding({
                 </button>
               ))}
             </div>
-          </div>
-        </div>
-      </section>
-
-      <section id="corridors" className="iso-section iso-corridors">
-        <div className="cin-drop" style={{ bottom: 40, right: '6%' }} aria-hidden="true">
-          <FloatingToken src="/cinematic/token-php.png" alt="Philippine peso token" size={120} />
-        </div>
-        <div className="iso-shell iso-corridor-layout">
-          <div className="iso-corridor-copy">
-            <p className="iso-kicker">One testnet corridor. Modeled expansion routes.</p>
-            <h2 className="iso-section-title">
-              USD in.
-              <span>Local out.</span>
-            </h2>
-            <p>
-              The MY-to-PH corridor is the proving ground. Additional routes stay modeled until partner, liquidity,
-              and regulatory controls are ready market by market.
-            </p>
-            <div className="iso-route-list">
-              <span className="is-live">PHP testnet</span><span>MYR</span><span>IDR</span><span>VND</span>
-              <span>THB</span><span>SGD</span><span>EUR</span><span>GBP</span>
-            </div>
-            <div className="iso-recipient-ladder">
-              {recipientLadder.map((step) => (
-                <article key={step.number}>
-                  <span>{step.number}</span>
-                  <div>
-                    <small>{step.status}</small>
-                    <strong>{step.title}</strong>
-                    <p>{step.copy}</p>
-                  </div>
-                </article>
-              ))}
-            </div>
-            <Link href="/signup" className="iso-inline-link">
-              Open the payout desk
-              <ArrowRight aria-hidden="true" />
-            </Link>
-          </div>
-
-          <div className="iso-corridor-stage">
-            <Image
-              src="/cinematic/corridor-bridge-v3.png"
-              alt="Two isometric city platforms, Kuala Lumpur and Manila, connected by a golden bridge of flowing coins"
-              width={2752}
-              height={1536}
-            />
           </div>
         </div>
       </section>
