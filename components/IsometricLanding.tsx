@@ -29,6 +29,7 @@ import SettlementCinematic from '@/components/landing/SettlementCinematic';
 import ControlPlaneExplainer from '@/components/oxwal/ControlPlaneExplainer';
 import OnchainProof, { type OnchainProofData } from '@/components/proof/OnchainProof';
 import RoadmapChip from '@/components/supply/RoadmapChip';
+import WorkingCapitalFlywheel from '@/components/supply/WorkingCapitalFlywheel';
 import { claims, lockedCopy } from '@/content/claims';
 
 const operatingLayers = [
@@ -437,18 +438,8 @@ const phaseOneTools = [
     result: 'Approval-gated treasury simulation',
     facts: ['Watch corridor inventory', 'Separate available cash', 'Approve every action'],
   },
-  {
-    icon: TrendingUp,
-    number: '05',
-    title: 'Early Pay',
-    copy: 'Let suppliers offer a discount on buyer-accepted invoices, then prepare settlement for approval.',
-    href: '/dashboard/invoices',
-    image: '/isometric/op-invoice.svg',
-    imageAlt: 'Isometric early payment invoice illustration',
-    metric: 'Supplier offer',
-    result: 'Buyer approval stays final',
-    facts: ['Buyer-signed invoice', 'Supplier sets discount', '0xWal prepares only'],
-  },
+  // Early Pay was promoted out of this tool grid into the dedicated
+  // #supply section (§4.D) — the moat gets its own beat, not a tile.
 ];
 
 /* Ordered to match the page's narrative: how it works → compare → platform → proof → routes → scale. */
@@ -459,6 +450,36 @@ const headerNavItems = [
   { href: '#comparison', label: 'Compare', detail: 'Fees + speed' },
   { href: '#copilot', label: '0xWal', detail: 'Prepare + approve' },
   { href: '#walrus', label: 'Proof', detail: 'Walrus + Sui' },
+];
+
+const supplySteps = [
+  {
+    number: '01',
+    label: 'Receivable',
+    title: 'A buyer-accepted invoice.',
+    copy: 'Issued between two KYB-verified businesses and anchored to the same audit spine as every payout — an invoice that carries its own settlement history.',
+    image: '/isometric/op-invoice.svg',
+    imageAlt: 'Isometric invoice ledger with a verified stamp',
+    meta: 'Verified counterparties',
+  },
+  {
+    number: '02',
+    label: 'Early offer',
+    title: 'Buyer funds early payment.',
+    copy: 'Your buyer offers to pay the 90-day invoice now. You choose per invoice: the full amount on the due date, or a small discount today.',
+    image: '/isometric/op-early.svg',
+    imageAlt: 'Isometric early-payment illustration releasing coins ahead of schedule',
+    meta: 'Buyer-funded · no third-party lender',
+  },
+  {
+    number: '03',
+    label: 'Settlement',
+    title: 'Same rail, same proof.',
+    copy: 'The early payment would settle over Splash like any payout — approval-gated, with Seal-encrypted evidence anchored on Walrus and Sui.',
+    image: '/isometric/payment-intent.svg',
+    imageAlt: 'Isometric payment intent flowing through an approval checkpoint',
+    meta: 'Approval-gated · audit-anchored',
+  },
 ];
 
 const loopCards = [
@@ -913,6 +934,66 @@ export default function IsometricLanding({
                 </div>
               </article>
             ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="supply" className="iso-section iso-supply">
+        <div className="cin-drop" style={{ top: 32, right: '4%' }} aria-hidden="true">
+          <FloatingToken src="/cinematic/token-php.png" alt="Philippine peso token" size={106} float="cin-float-drift" />
+        </div>
+        <div className="iso-shell">
+          <div className="iso-section-heading iso-heading-split">
+            <div>
+              <p className="iso-kicker">Supply · The moat</p>
+              <h2 className="iso-section-title">
+                Your invoices are
+                <span>working capital.</span>
+              </h2>
+              <div className="iso-supply-chip"><RoadmapChip detail="coming capability, subject to licensing" /></div>
+            </div>
+            <p>
+              A Receivable would be an invoice that remembers how it gets paid — quotes, approvals,
+              receipts, proof. History a lender would charge you to underwrite, your buyer can
+              simply read.
+            </p>
+          </div>
+
+          <div className="iso-supply-grid">
+            {supplySteps.map((step, index) => (
+              <article className={`iso-supply-card iso-supply-card-${index + 1}`} key={step.number}>
+                <div className="iso-supply-meta">
+                  <span>{step.number}</span>
+                  <p>{step.label}</p>
+                </div>
+                <div className="iso-supply-art">
+                  <Image src={step.image} alt={step.imageAlt} width={640} height={480} />
+                </div>
+                <div className="iso-supply-copy">
+                  <h3>{step.title}</h3>
+                  <p>{step.copy}</p>
+                  <small>{step.meta}</small>
+                </div>
+              </article>
+            ))}
+          </div>
+
+          <WorkingCapitalFlywheel variant="full" />
+
+          <div className="iso-loops-foot">
+            <p className="iso-gasless-note">
+              Dynamic discounting is a coming capability, subject to licensing. Registering interest
+              does not create a financing commitment — it tells us which corridors to build first.
+            </p>
+            <div className="iso-supply-actions">
+              <Link href="/working-capital" className="iso-button iso-button-ghost iso-button-small">
+                The full Supply story
+              </Link>
+              <Link href="/signup?interest=financing" className="iso-button iso-button-small">
+                Register financing interest
+                <ArrowRight aria-hidden="true" />
+              </Link>
+            </div>
           </div>
         </div>
       </section>

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ArrowLeft, ArrowRight, FileCheck2, History, Landmark, ReceiptText, ShieldCheck, Undo2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
 
 import RoadmapChip from '@/components/supply/RoadmapChip';
 import WorkingCapitalFlywheel from '@/components/supply/WorkingCapitalFlywheel';
@@ -21,42 +21,86 @@ export const metadata: Metadata = {
 
 const receivableFacts = [
   {
-    icon: ShieldCheck,
-    title: 'Issued between verified businesses',
+    number: '01',
+    label: 'Verified',
+    title: 'Issued between verified businesses.',
     copy: 'A Receivable would only exist between two KYB-verified counterparties already transacting on Splash — the same verification that gates every payout today.',
+    image: '/isometric/secure.svg',
+    imageAlt: 'Isometric security vault with a verification shield',
+    meta: 'KYB-gated on both sides',
   },
   {
-    icon: History,
-    title: 'Carries its own settlement history',
+    number: '02',
+    label: 'History',
+    title: 'Carries its settlement history.',
     copy: 'Quotes, approvals, receipts, and settlement proof would anchor to the invoice itself — an invoice that shows how reliably it gets paid.',
+    image: '/isometric/op-compliance.svg',
+    imageAlt: 'Isometric compliance ledger with anchored audit records',
+    meta: 'Audit spine attached',
   },
   {
-    icon: FileCheck2,
-    title: 'Safe to pay early',
-    copy: 'A receivable with a clean, verifiable history is the safest thing to fund early. That is the whole idea — no guesswork, no external credit file.',
+    number: '03',
+    label: 'Fundable',
+    title: 'Safe to pay early.',
+    copy: 'A receivable with a clean, verifiable history is the safest thing to fund early. No guesswork, no external credit file — the record is the underwriting.',
+    image: '/isometric/checklist-icon.svg',
+    imageAlt: 'Isometric checklist with completed verification marks',
+    meta: 'History a buyer can read',
   },
 ];
 
 const discountSteps = [
   {
     number: '01',
-    icon: Landmark,
-    title: 'Buyer offers early payment',
+    label: 'Offer',
+    title: 'Buyer offers early payment.',
     copy: 'Your buyer sees an approved 90-day invoice and offers to pay it now — with their own USD already on the settlement rail.',
+    image: '/isometric/op-invoice.svg',
+    imageAlt: 'Isometric invoice ledger with a buyer offer',
+    meta: 'Buyer-initiated',
   },
   {
     number: '02',
-    icon: ReceiptText,
-    title: 'Supplier accepts a discount',
+    label: 'Accept',
+    title: 'Supplier accepts a discount.',
     copy: 'You choose per invoice: the full amount on the due date, or a small discount today. No obligation either way.',
+    image: '/isometric/op-early.svg',
+    imageAlt: 'Isometric early payment releasing coins ahead of schedule',
+    meta: 'Per-invoice choice',
   },
   {
     number: '03',
-    icon: Undo2,
-    title: 'Settlement — no third-party lender',
-    copy: 'The buyer’s own funds would settle the early payment over Splash. No factoring house, no credit line, no lender between you.',
+    label: 'Settle',
+    title: 'Settlement, no lender.',
+    copy: 'The buyer’s own funds would settle the early payment over Splash — no factoring house, no credit line, no lender between you.',
+    image: '/isometric/payment-intent.svg',
+    imageAlt: 'Isometric payment intent flowing through an approval checkpoint',
+    meta: 'No third-party lender',
   },
 ];
+
+function SupplyCards({ items }: { items: typeof receivableFacts }) {
+  return (
+    <div className="iso-supply-grid">
+      {items.map((item, index) => (
+        <article className={`iso-supply-card iso-supply-card-${index + 1}`} key={item.number}>
+          <div className="iso-supply-meta">
+            <span>{item.number}</span>
+            <p>{item.label}</p>
+          </div>
+          <div className="iso-supply-art">
+            <Image src={item.image} alt={item.imageAlt} width={640} height={480} />
+          </div>
+          <div className="iso-supply-copy">
+            <h3>{item.title}</h3>
+            <p>{item.copy}</p>
+            <small>{item.meta}</small>
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+}
 
 export default function WorkingCapitalPage() {
   return (
@@ -106,7 +150,7 @@ export default function WorkingCapitalPage() {
         </div>
       </section>
 
-      <section className="iso-section wc-receivable">
+      <section className="iso-section iso-supply wc-receivable">
         <div className="iso-shell">
           <div className="iso-section-heading iso-heading-split">
             <div>
@@ -122,15 +166,7 @@ export default function WorkingCapitalPage() {
               charge you to underwrite, your buyer can simply read.
             </p>
           </div>
-          <div className="wc-cards">
-            {receivableFacts.map((fact) => (
-              <article className="wc-card" key={fact.title}>
-                <span className="iso-loops-icon"><fact.icon aria-hidden="true" /></span>
-                <h3>{fact.title}</h3>
-                <p>{fact.copy}</p>
-              </article>
-            ))}
-          </div>
+          <SupplyCards items={receivableFacts} />
         </div>
       </section>
 
@@ -150,16 +186,7 @@ export default function WorkingCapitalPage() {
               only referee the exchange.
             </p>
           </div>
-          <ol className="wc-steps">
-            {discountSteps.map((step) => (
-              <li className="wc-step" key={step.number}>
-                <span className="wc-step-number">{step.number}</span>
-                <span className="iso-loops-icon"><step.icon aria-hidden="true" /></span>
-                <h3>{step.title}</h3>
-                <p>{step.copy}</p>
-              </li>
-            ))}
-          </ol>
+          <SupplyCards items={discountSteps} />
         </div>
       </section>
 

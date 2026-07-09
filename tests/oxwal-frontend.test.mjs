@@ -138,7 +138,11 @@ test('landing keeps restored isometric shell with upgraded truth copy', async ()
   assert.match(landing, /SettlementCinematic/);
   assert.match(landing, /Five steps\./);
   assert.match(landing, /Working-capital branch/);
-  assert.match(landing, /Early Pay/);
+  // Early Pay was promoted out of the #operations tool grid into the
+  // dedicated roadmap-labeled #supply section (§4.D).
+  assert.match(landing, /id="supply"/);
+  assert.match(landing, /Your invoices are/);
+  assert.doesNotMatch(landing, /Early Pay/);
   assert.match(landing, /One testnet corridor\. Modeled expansion routes\./);
   assert.match(landing, /claims\.footerLegal\.claim/);
   assert.match(composer, /Ask anything/);
