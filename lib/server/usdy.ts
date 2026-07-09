@@ -27,7 +27,7 @@ export type TreasuryRate = {
   /** True while the time-boxed introductory subsidy is active. */
   introductory: boolean;
   promoUntil: string | null;
-  /** Display string, e.g. "≈3.50% APY · variable". */
+  /** Display string, e.g. "≈{rate}% APY · variable" (always variable, never a fixed figure). */
   label: string;
   asOf: string;
 };

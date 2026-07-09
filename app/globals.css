@@ -51,12 +51,19 @@
 }
 
 :root {
+  /* App-shell canvas — deliberately warmer/deeper than the marketing --bg
+     (#F6F0ED in styles/tokens.css) so product surfaces pop. Single source
+     for the dashboard background; do not reintroduce raw #ece3de inline. */
   --splash-page-bg: #ece3de;
   --splash-page-bg-deep: #e5d8d1;
-  /* Extended accent palette (see tailwind.config.ts → colors.splash) */
-  --splash-gold: #d9a441;
-  --splash-mint: #6fb4a0;
-  --splash-indigo: #2b3a67;
+  /* Named slate/cream aliases consumed by the surface-brightness overrides
+     below. Accent colors come from styles/tokens.css (--teal/--coral/--gold);
+     the old --splash-gold/mint/indigo aliases were dead and removed. */
+  --ink-panel: #264e5b;
+  --ink-panel-deep: #1f4350;
+  --bg-cream-2: #ede8e4;
+  --slate-lift: #387f96;
+  --slate-hover: #2c6c81;
   --background: var(--splash-page-bg);
   --foreground: #326273;
   --card: #fffaf6;
@@ -147,16 +154,16 @@
    Reversible: delete this block.
    ═══════════════════════════════════════════════════════════════════ */
 
-[class~="bg-[#1F4452]"] { background-color: color-mix(in srgb, #1F4452 85%, #ffffff) !important; }
-[class~="bg-[#326273]"] { background-color: #387f96 !important; }
-[class~="bg-[#264e5b]"] { background-color: color-mix(in srgb, #264e5b 85%, #ffffff) !important; }
-[class~="bg-[#1f4350]"] { background-color: color-mix(in srgb, #1f4350 85%, #ffffff) !important; }
-[class~="bg-[#F6F0ED]"] { background-color: color-mix(in srgb, #F6F0ED 85%, #ffffff) !important; }
-[class~="bg-[#EDE8E4]"] { background-color: color-mix(in srgb, #EDE8E4 85%, #ffffff) !important; }
-[class~="bg-[#ECE3DE]"] { background-color: color-mix(in srgb, #ECE3DE 85%, #ffffff) !important; }
+[class~="bg-[#1F4452]"] { background-color: color-mix(in srgb, var(--ink) 85%, #ffffff) !important; }
+[class~="bg-[#326273]"] { background-color: var(--slate-lift) !important; }
+[class~="bg-[#264e5b]"] { background-color: color-mix(in srgb, var(--ink-panel) 85%, #ffffff) !important; }
+[class~="bg-[#1f4350]"] { background-color: color-mix(in srgb, var(--ink-panel-deep) 85%, #ffffff) !important; }
+[class~="bg-[#F6F0ED]"] { background-color: color-mix(in srgb, var(--bg) 85%, #ffffff) !important; }
+[class~="bg-[#EDE8E4]"] { background-color: color-mix(in srgb, var(--bg-cream-2) 85%, #ffffff) !important; }
+[class~="bg-[#ECE3DE]"] { background-color: color-mix(in srgb, var(--splash-page-bg) 85%, #ffffff) !important; }
 
-[class~="hover:bg-[#264e5b]"]:hover { background-color: #2c6c81 !important; }
-[class~="hover:bg-[#326273]"]:hover { background-color: #2c6c81 !important; }
+[class~="hover:bg-[#264e5b]"]:hover { background-color: var(--slate-hover) !important; }
+[class~="hover:bg-[#326273]"]:hover { background-color: var(--slate-hover) !important; }
 
 /* Darker default canvas only. Do not override all cream utility classes,
    because many of those are cards, inputs, badges, and table rows. */

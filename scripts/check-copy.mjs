@@ -19,7 +19,54 @@ const banned = [
   /2:34/i,
   /8 corridors/i,
   /Sui network live/i,
+  // Website-upgrade additions: gasless precision, yield honesty, status honesty.
+  /everything is gasless/i,
+  /\bzero fees\b/i,
+  /same-day/i,
+  /0\.6%/,
+  /save 62%/i,
+  /84,?600/,
+  /mainnet (?:live|now)/i,
 ];
+
+// Fixed-APY guard: any "<number>% APY" must be immediately preceded by
+// "Variable" (e.g. "Variable 4.1% APY") — a bare fixed figure is banned.
+const apyPattern = /\b\d+(\.\d+)?\s*%\s*APY\b/gi;
+function apyViolations(text) {
+  const found = [];
+  for (const match of text.matchAll(apyPattern)) {
+    const before = text.slice(Math.max(0, match.index - 12), match.index);
+    if (!/variable\s*[·—-]?\s*$/i.test(before)) found.push(match[0]);
+  }
+  return found;
+}
+
+// New-arbitrary-hex guard (app|components only): raw hex literals outside
+// this baseline fail CI. Extend deliberately — prefer styles/tokens.css vars.
+const allowedHexes = new Set([
+  // styles/tokens.css values (usable as literals where var() can't reach)
+  '#f6f0ed', '#1f4452', '#326273', '#5c9ead', '#e39774', '#d9a441',
+  '#ffffff', '#fbf7f5', '#e5dcd6', '#c9bdb5', '#2e7d6b', '#e4f1ed',
+  '#b4690e', '#fbefdd', '#b3402f', '#f9e7e3', '#e7eef1', '#6b7c85', '#edeff0',
+  // Baseline snapshot (2026-07-09) of hexes already shipped in app|components
+  '#022b33', '#050505', '#073d49', '#0c3e48', '#0d6370', '#111827', '#145d6a',
+  '#152138', '#1b2b4a', '#1b3a48', '#1f4350', '#234e5e', '#237284', '#254e5c',
+  '#264e5b', '#2b3a67', '#2c5a6b', '#2c5f6f', '#4a8a99', '#4a8b99', '#4a8b9a',
+  '#4f9c88', '#6e7781', '#6fb4a0', '#87919a', '#8b6418', '#8fa6d8', '#8fd7c7',
+  '#9a4a2d', '#9a6f15', '#9b4e32', '#9d5f43', '#9f5839', '#a7d6df', '#b3881f',
+  '#b65f3f', '#bfe6ee', '#c97a56', '#c99a2e', '#cd825f', '#cfe8e0', '#d8fff4',
+  '#d9fff6', '#e0b05a', '#e7eef0', '#eaf6f1', '#eaf7f8', '#ede8e4', '#eef4f5',
+  '#efc46f', '#f4efe4', '#f4f8fa', '#f8fcfd', '#ffd9c9', '#ffe6a4', '#fffaf6',
+  '#fffdf9',
+]);
+const hexPattern = /#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{4}|[0-9a-fA-F]{3})(?![0-9a-fA-F])/g;
+function hexViolations(text) {
+  const found = [];
+  for (const match of text.matchAll(hexPattern)) {
+    if (!allowedHexes.has(match[0].toLowerCase())) found.push(match[0]);
+  }
+  return found;
+}
 
 async function filesUnder(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -41,6 +88,14 @@ for (const root of roots) {
     }
     for (const pattern of banned) {
       if (pattern.test(text)) violations.push(`${relative('.', file)}: ${pattern.source}`);
+    }
+    for (const apy of apyViolations(text)) {
+      violations.push(`${relative('.', file)}: fixed APY figure "${apy}" — yield copy must be prefixed with "Variable"`);
+    }
+    if (root === 'app' || root === 'components') {
+      for (const hex of hexViolations(text)) {
+        violations.push(`${relative('.', file)}: new arbitrary hex ${hex} — use styles/tokens.css variables or extend the baseline deliberately`);
+      }
     }
   }
 }

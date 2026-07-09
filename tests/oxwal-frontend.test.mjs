@@ -121,6 +121,7 @@ test('ActionCard component names release-gate sections and warning accent', asyn
 
 test('landing keeps restored isometric shell with upgraded truth copy', async () => {
   const landing = await readFile(new URL('../components/IsometricLanding.tsx', import.meta.url), 'utf8');
+  const cinematic = await readFile(new URL('../components/landing/SettlementCinematic.tsx', import.meta.url), 'utf8');
   const claims = await readFile(new URL('../content/claims.ts', import.meta.url), 'utf8');
   const copyCheck = await readFile(new URL('../scripts/check-copy.mjs', import.meta.url), 'utf8');
   const ogImage = await readFile(new URL('../app/opengraph-image.tsx', import.meta.url), 'utf8');
@@ -129,8 +130,12 @@ test('landing keeps restored isometric shell with upgraded truth copy', async ()
   const invoiceLoop = await readFile(new URL('../app/dashboard/0xwal/page.tsx', import.meta.url), 'utf8');
 
   assert.match(claims, /headline: 'Collect USD\. Pay Southeast Asia\. Keep cash working\.'/);
-  assert.match(landing, /MOVE MONEY\./);
-  assert.match(landing, /hero-bg\.svg/);
+  // Hero H1 lives in the cinematic hero (visually uppercased by .iso-display).
+  assert.match(cinematic, /Move money\./);
+  assert.match(cinematic, /Settle everything\./);
+  // Hero art is the versioned district raster; bump the version, not the name.
+  assert.match(cinematic, /hero-district-v\d+\.png/);
+  assert.match(landing, /SettlementCinematic/);
   assert.match(landing, /Five steps\./);
   assert.match(landing, /Working-capital branch/);
   assert.match(landing, /Early Pay/);
