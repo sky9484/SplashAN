@@ -20,7 +20,6 @@ import FloatingToken from '@/components/landing/FloatingToken';
 import SettlementCinematic from '@/components/landing/SettlementCinematic';
 import ControlPlaneExplainer from '@/components/oxwal/ControlPlaneExplainer';
 import RoadmapChip from '@/components/supply/RoadmapChip';
-import WorkingCapitalFlywheel from '@/components/supply/WorkingCapitalFlywheel';
 import { claims, lockedCopy } from '@/content/claims';
 
 const operatingLayers = [
@@ -775,20 +774,26 @@ export default function IsometricLanding() {
             ))}
           </div>
 
-          <WorkingCapitalFlywheel variant="full" />
-
-          <div className="iso-loops-foot">
-            <p className="iso-gasless-note">
-              Dynamic discounting is a coming capability, subject to licensing. Registering interest
-              does not create a financing commitment — it tells us which corridors to build first.
-            </p>
-            <div className="iso-supply-actions">
-              <Link href="/working-capital" className="iso-button iso-button-ghost iso-button-small">
-                The full Supply story
-              </Link>
-              <Link href="/signup?interest=financing" className="iso-button iso-button-small">
-                Register financing interest
+          <div className="iso-supply-cta">
+            <div className="iso-supply-cta-copy">
+              <p className="iso-kicker">See the full Supply story</p>
+              <h3>How a Receivable becomes working capital.</h3>
+              <p>
+                The whole loop — verified invoice, buyer-funded early offer, settlement with no
+                third-party lender — laid out end to end.
+              </p>
+              <p className="iso-supply-cta-legal">
+                Dynamic discounting is a coming capability, subject to licensing. Registering interest
+                does not create a financing commitment — it tells us which corridors to build first.
+              </p>
+            </div>
+            <div className="iso-supply-cta-actions">
+              <Link href="/working-capital" className="iso-button">
+                Explore working capital
                 <ArrowRight aria-hidden="true" />
+              </Link>
+              <Link href="/signup?interest=financing" className="iso-button iso-button-ghost iso-button-small">
+                Register financing interest
               </Link>
             </div>
           </div>

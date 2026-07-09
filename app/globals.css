@@ -1663,7 +1663,8 @@ body {
 .iso-ctrl-claim p { max-width: 640px; color: var(--iso-text-secondary); font-size: 14px; line-height: 1.55; }
 .iso-ctrl-claim strong { color: var(--iso-teal-dark); font-weight: 850; }
 
-.iso-ctrl-rail {
+/* Control-plane cards in the §S iso-supply-card grammar (meta / art / copy). */
+.iso-ctrl-grid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 14px;
@@ -1671,52 +1672,119 @@ body {
   padding: 0;
   list-style: none;
 }
-.iso-ctrl-phase {
+.iso-ctrl-card {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  border: 1px solid rgba(12, 62, 72, .2);
+  border: 1px solid color-mix(in srgb, var(--ink) 20%, transparent);
   border-radius: 12px;
   padding: 16px;
-  background: rgba(255, 251, 245, .72);
+  background: color-mix(in srgb, var(--surface) 74%, transparent);
+  box-shadow: 6px 7px 0 color-mix(in srgb, var(--ink) 9%, transparent);
+  transition: transform var(--dur-slow) var(--ease-standard), box-shadow var(--dur-slow) var(--ease-standard);
 }
-.iso-ctrl-phase:nth-child(4) {
-  border-color: rgba(227, 151, 116, .6);
-  background: linear-gradient(155deg, rgba(227, 151, 116, .1), transparent 46%), rgba(255, 251, 245, .9);
+.iso-ctrl-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 8px 10px 0 color-mix(in srgb, var(--ink) 11%, transparent);
 }
-.iso-ctrl-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.iso-ctrl-head code {
-  overflow: hidden;
-  color: var(--iso-text-label);
-  font-size: 9px;
-  letter-spacing: .02em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+/* Step 04 (human approval) is the focal gate — coral, like supply card 3. */
+.iso-ctrl-card:nth-child(4) {
+  border-color: color-mix(in srgb, var(--coral) 55%, transparent);
+  background: linear-gradient(155deg, color-mix(in srgb, var(--coral) 9%, transparent), transparent 46%), color-mix(in srgb, var(--surface) 88%, transparent);
+  box-shadow: 6px 7px 0 color-mix(in srgb, var(--coral) 24%, transparent);
 }
-.iso-ctrl-phase h3 { color: var(--iso-ink); font-size: 15.5px; font-weight: 900; }
-.iso-ctrl-phase h3 em {
-  margin-right: 4px;
-  color: var(--iso-text-label);
+.iso-ctrl-meta {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: color-mix(in srgb, var(--ink) 64%, transparent);
   font-family: var(--font-mono), monospace;
   font-size: 11px;
-  font-style: normal;
   font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
 }
-.iso-ctrl-phase p { color: var(--iso-text-secondary); font-size: 12.5px; line-height: 1.55; }
-.iso-ctrl-states { display: flex; flex-wrap: wrap; gap: 5px; margin-top: auto; }
+.iso-ctrl-meta span {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  color: var(--surface);
+  background: var(--teal);
+  box-shadow: 3px 3px 0 var(--ink);
+}
+.iso-ctrl-card:nth-child(4) .iso-ctrl-meta span {
+  background: var(--coral);
+  box-shadow: 3px 3px 0 color-mix(in srgb, var(--coral) 55%, var(--ink));
+}
+.iso-ctrl-art { position: relative; height: 96px; margin-top: var(--s3); }
+.iso-ctrl-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 12px 10px color-mix(in srgb, var(--ink) 12%, transparent));
+}
+.iso-ctrl-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px solid var(--line);
+  margin-top: var(--s3);
+  padding-top: var(--s3);
+}
+.iso-ctrl-copy p { color: var(--iso-text-secondary); font-size: 12.5px; line-height: 1.55; }
+.iso-ctrl-states { display: flex; flex-wrap: wrap; gap: 5px; }
 .iso-ctrl-states code {
-  border: 1px solid rgba(12, 62, 72, .22);
+  border: 1px solid color-mix(in srgb, var(--ink) 22%, transparent);
   border-radius: 6px;
   padding: 2px 7px;
-  background: rgba(12, 62, 72, .05);
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
   color: var(--iso-teal-dark);
   font-size: 9.5px;
   font-weight: 750;
   letter-spacing: .05em;
 }
+.iso-ctrl-module {
+  color: var(--iso-text-label);
+  font-size: 9px;
+  letter-spacing: .02em;
+  word-break: break-all;
+}
 
-@media (max-width: 1100px) { .iso-ctrl-rail { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 640px) { .iso-ctrl-rail { grid-template-columns: 1fr; } }
+@media (max-width: 1100px) { .iso-ctrl-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 640px) { .iso-ctrl-grid { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { .iso-ctrl-card { transition: none; } }
+
+/* #supply → /working-capital CTA panel (replaces the redundant flywheel). */
+.iso-supply-cta {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  align-items: center;
+  gap: 24px;
+  margin-top: var(--s6);
+  border: 1px solid color-mix(in srgb, var(--coral) 50%, transparent);
+  border-left: 5px solid var(--coral);
+  border-radius: 14px;
+  padding: 26px 28px;
+  background: linear-gradient(150deg, color-mix(in srgb, var(--coral) 12%, transparent), transparent 52%), color-mix(in srgb, var(--surface) 86%, transparent);
+  box-shadow: 8px 9px 0 color-mix(in srgb, var(--coral) 22%, transparent);
+}
+.iso-supply-cta-copy h3 {
+  margin-top: 8px;
+  color: var(--iso-ink);
+  font-size: clamp(20px, 2.2vw, 27px);
+  font-weight: 950;
+  letter-spacing: -.03em;
+}
+.iso-supply-cta-copy > p { margin-top: 10px; color: var(--iso-text-secondary); font-size: 14px; line-height: 1.6; }
+.iso-supply-cta-legal { color: var(--iso-text-muted); font-size: 12px; line-height: 1.55; }
+.iso-supply-cta-actions { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+
+@media (max-width: 820px) {
+  .iso-supply-cta { grid-template-columns: 1fr; }
+  .iso-supply-cta-actions { flex-direction: row; flex-wrap: wrap; }
+}
 
 /* ─── On-chain proof panel (env-gated, landing #how-it-works tail) ───────── */
 .iso-proof-panel {
