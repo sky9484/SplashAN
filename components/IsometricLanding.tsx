@@ -26,6 +26,7 @@ import {
 
 import FloatingToken from '@/components/landing/FloatingToken';
 import SettlementCinematic from '@/components/landing/SettlementCinematic';
+import WorkingCapitalFlywheel from '@/components/supply/WorkingCapitalFlywheel';
 import { claims, lockedCopy } from '@/content/claims';
 
 const operatingLayers = [
@@ -450,12 +451,12 @@ const phaseOneTools = [
 
 /* Ordered to match the page's narrative: how it works → compare → platform → proof → routes → scale. */
 const headerNavItems = [
+  { href: '#working-capital', label: 'Loops', detail: 'Settle · Supply' },
   { href: '#how-it-works', label: 'How it works', detail: '5 steps' },
   { href: '#comparison', label: 'Compare', detail: 'Fees + speed' },
   { href: '#operating-layer', label: 'Platform', detail: 'Pay + treasury' },
   { href: '#walrus', label: 'Proof', detail: 'Walrus + Sui' },
   { href: '#corridors', label: 'Routes', detail: 'MY-PH testnet' },
-  { href: '#readiness', label: 'Scale', detail: 'Controls' },
 ];
 
 export default function IsometricLanding() {
@@ -615,6 +616,38 @@ export default function IsometricLanding() {
         </div>
       </section>
 
+      <section id="working-capital" className="iso-section iso-loops">
+        <div className="iso-shell">
+          <div className="iso-section-heading iso-heading-split">
+            <div>
+              <p className="iso-kicker">The three loops</p>
+              <h2 className="iso-section-title">
+                Working capital,
+                <span>not just transfers.</span>
+              </h2>
+            </div>
+            <p>
+              Idle dollars on Sui already move for free — Splash&apos;s job is what the transfer alone
+              can&apos;t do: verified counterparties, programmable settlement, and invoices that would
+              work as capital.
+            </p>
+          </div>
+
+          <WorkingCapitalFlywheel variant="band" />
+
+          <div className="iso-loops-foot">
+            <p className="iso-gasless-note">
+              <strong>Where the fees live:</strong> simple payouts ride Sui&apos;s zero-fee stablecoin
+              rail; programmable settlement is gas-sponsored. You never hold SUI.
+            </p>
+            <Link href="/working-capital" className="iso-button iso-button-small">
+              Explore the Supply loop
+              <ArrowRight aria-hidden="true" />
+            </Link>
+          </div>
+        </div>
+      </section>
+
       <section id="comparison" className="iso-section iso-comparison">
         <div className="cin-drop" style={{ top: 26, right: '4%' }} aria-hidden="true">
           <FloatingToken src="/cinematic/token-thb.png" alt="Thai baht token" size={104} float="cin-float-slow" />
@@ -657,12 +690,13 @@ export default function IsometricLanding() {
                 ))}
               </tbody>
             </table>
-            <div className="iso-yield-live">
+            <div className="iso-yield-live is-demoted">
               <i aria-hidden="true" />
               <strong>Reference yield benchmark</strong>
               <span>
                 FDIC national savings - IBKR Pro cash - Wise USD Interest - Splash treasury projection
                 {yieldBenchmarks.asOf ? ` - refreshed ${new Date(yieldBenchmarks.asOf).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
+                {' '}· Yield is hygiene, not the headline — the working-capital loop is.
               </span>
             </div>
           </div>
@@ -1193,7 +1227,9 @@ export default function IsometricLanding() {
         <div className="cin-footer-bar">
           <div className="iso-shell cin-footer-bar-inner">
             <span>© 2026 Splash Financial Labuan Ltd.</span>
-            <span className="cin-footer-tick">USD → PHP · {lockedCopy.speed} · {lockedCopy.fee}</span>
+            <span className="cin-footer-tick">
+              USD → PHP · {lockedCopy.speed} · {lockedCopy.fee} · zero-fee stablecoin rail, gas-sponsored settlement — you never hold SUI
+            </span>
           </div>
         </div>
       </footer>
