@@ -4,6 +4,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import {
+  Anchor,
   ArrowDownRight,
   ArrowRight,
   ArrowUp,
@@ -12,8 +13,11 @@ import {
   ChevronRight,
   FileCheck2,
   Gauge,
+  PenLine,
+  ShieldCheck,
   TrendingUp,
   Workflow,
+  Zap,
 } from 'lucide-react';
 
 import FloatingToken from '@/components/landing/FloatingToken';
@@ -279,6 +283,44 @@ const recipientLadder = [
   },
 ];
 
+/* Trust · Four gates — the control sequence every payout passes, in order.
+   Copy stays inside content/claims.ts truth: Sumsub KYB wired, human-final
+   approval, atomic Sui settlement, Seal/Walrus/Sui evidence anchoring. */
+const trustGates = [
+  {
+    number: '01',
+    label: 'Verify',
+    icon: ShieldCheck,
+    title: 'KYB on both sides.',
+    copy: 'A payout only exists between verified businesses. Sumsub gates every counterparty before a quote is even prepared.',
+    meta: 'Sumsub KYB · wired',
+  },
+  {
+    number: '02',
+    label: 'Approve',
+    icon: PenLine,
+    title: 'A person signs. Always.',
+    copy: '0xWal prepares. You approve. No payout, batch, or treasury move executes without a human signature.',
+    meta: 'Maker-checker · human-final',
+  },
+  {
+    number: '03',
+    label: 'Settle',
+    icon: Zap,
+    title: 'Atomic or not at all.',
+    copy: 'The prepared payment completes exactly as approved — or stops safely before funds move. No partial states.',
+    meta: lockedCopy.speed,
+  },
+  {
+    number: '04',
+    label: 'Prove',
+    icon: Anchor,
+    title: 'Evidence outlives the payment.',
+    copy: 'Receipts and Seal-encrypted documents anchor to Walrus and Sui — an audit spine you can hand to an auditor.',
+    meta: 'Seal + Walrus + Sui',
+  },
+];
+
 const headerNavItems = [
   { href: '#how-it-works', label: 'How it works', detail: '5 steps' },
   { href: '#platform', label: 'Platform', detail: 'Pay + treasury' },
@@ -312,7 +354,7 @@ const supplySteps = [
     label: 'Settlement',
     title: 'Same rail, same proof.',
     copy: 'The early payment would settle over Splash like any payout — approval-gated, with Seal-encrypted evidence anchored on Walrus and Sui.',
-    image: '/isometric/supply-settlement.png',
+    image: '/isometric/supply-settlement-v3.png',
     imageAlt: 'Isometric settlement: a payment-intent coin passing an approval gate into a sealed-proof vault anchored on Walrus and Sui',
     meta: 'Approval-gated · audit-anchored',
   },
@@ -324,7 +366,7 @@ const loopCards = [
     label: 'Settle',
     title: 'Move it in minutes.',
     copy: 'Collect USD, pay Southeast Asia. Every approved payout builds verified counterparties and settlement history.',
-    image: '/isometric/loop-settle.png',
+    image: '/isometric/loop-settle-v3.png',
     imageAlt: 'Isometric settlement: a USD coin crossing an approved rail in minutes to arrive as a PHP coin',
     meta: 'USD → PHP · live on testnet',
     roadmap: false,
@@ -334,7 +376,7 @@ const loopCards = [
     label: 'Save',
     title: 'Grow it while it waits.',
     copy: 'Idle USD follows a projected, variable treasury posture. Your business approves every move.',
-    image: '/isometric/loop-save.png',
+    image: '/isometric/loop-save-v3.png',
     imageAlt: 'Isometric treasury tiers of idle USD growing along a yield curve, gated by an approve control',
     meta: 'Projected · variable · human-approved',
     roadmap: false,
@@ -691,6 +733,52 @@ export default function IsometricLanding() {
               </span>
             </div>
           </div>
+        </div>
+      </section>
+
+      <section id="trust" className="iso-section iso-trust">
+        <div className="cin-drop" style={{ top: 30, right: '5%' }} aria-hidden="true">
+          <FloatingToken src="/cinematic/token-sui.png" alt="Sui token" size={104} float="cin-float-slow" />
+        </div>
+        <div className="iso-shell">
+          <div className="iso-section-heading iso-heading-split">
+            <div>
+              <p className="iso-kicker">Trust · Four gates</p>
+              <h2 className="iso-section-title iso-section-title-light">
+                Every payout
+                <span>proves itself.</span>
+              </h2>
+            </div>
+            <p>
+              A payment on Splash cannot skip a checkpoint: verified before it&apos;s quoted,
+              approved before it&apos;s signed, atomic when it settles, anchored after it lands.
+            </p>
+          </div>
+
+          <div className="iso-trust-rail" aria-hidden="true">
+            {trustGates.map((gate) => (
+              <span key={gate.number}><i /></span>
+            ))}
+          </div>
+
+          <ol className="iso-trust-grid">
+            {trustGates.map((gate) => (
+              <li className="iso-trust-card" key={gate.number}>
+                <div className="iso-trust-meta">
+                  <span>{gate.number}</span>
+                  <p>{gate.label}</p>
+                  <gate.icon aria-hidden="true" />
+                </div>
+                <h3>{gate.title}</h3>
+                <p>{gate.copy}</p>
+                <small>{gate.meta}</small>
+              </li>
+            ))}
+          </ol>
+
+          <p className="iso-trust-foot">
+            Sandbox environment · Labuan FSA licence application in progress · No real money moves
+          </p>
         </div>
       </section>
 

@@ -2371,6 +2371,7 @@ body {
 }
 
 .iso-flow .iso-kicker,
+.iso-trust .iso-kicker,
 .iso-final .iso-kicker {
   color: var(--iso-mint);
 }
@@ -6055,11 +6056,178 @@ body {
   flex-direction: column;
 }
 
-/* CANONICAL section order (founder-approved 2026-07-09) — the single source
-   of truth for the landing flex order. The JSX mirrors this sequence for
-   DOM/reading order; .cin-section and .iso-marquee share order 1 in
-   cinematic.css (hero then marquee by DOM order). Do not add a second
-   order map elsewhere. */
+/* ─── #trust — Trust · Four gates (dark control-plane fold) ─────────────
+   Mirrors the #how-it-works dark grammar (ink-teal gradient, mint kicker,
+   gold display span) so the two dark folds read as the same "inside the
+   machine" register. Signature: a gold gate rail threading the four cards. */
+.iso-trust {
+  overflow: hidden;
+  color: #fffaf1;
+  background:
+    radial-gradient(circle at 18% 28%, rgba(159, 207, 199, .18), transparent 26%),
+    radial-gradient(circle at 86% 82%, rgba(239, 196, 111, .09), transparent 30%),
+    linear-gradient(200deg, #0b424c 0%, #062b33 62%, #041f25 100%);
+}
+
+.iso-trust::before {
+  position: absolute;
+  inset: 0;
+  opacity: .12;
+  content: "";
+  background-image:
+    linear-gradient(rgba(255, 250, 241, .34) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 250, 241, .34) 1px, transparent 1px);
+  background-size: 72px 72px;
+  mask-image: linear-gradient(270deg, transparent, #000 55%, transparent);
+  transform: perspective(700px) rotateX(55deg) scale(1.4);
+}
+
+.iso-trust .iso-shell { position: relative; z-index: 2; }
+
+.iso-trust .iso-section-heading > p {
+  color: rgba(255, 250, 241, .74);
+}
+
+/* The gate rail: one gold line, four nodes — the payment's checkpoint path. */
+.iso-trust-rail {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  height: 20px;
+  margin-bottom: 16px;
+}
+
+.iso-trust-rail::before {
+  position: absolute;
+  top: 50%;
+  right: 4%;
+  left: 4%;
+  height: 2px;
+  content: "";
+  transform: translateY(-50%);
+  background: linear-gradient(90deg, transparent, rgba(239, 196, 111, .7) 10%, rgba(239, 196, 111, .7) 90%, transparent);
+}
+
+.iso-trust-rail span { display: grid; place-items: center; }
+
+.iso-trust-rail i {
+  position: relative;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--iso-gold);
+  box-shadow: 0 0 0 5px rgba(239, 196, 111, .16);
+}
+
+.iso-trust-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 18px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.iso-trust-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid rgba(159, 207, 199, .24);
+  border-radius: 12px;
+  padding: 22px 20px 18px;
+  background: linear-gradient(180deg, rgba(255, 250, 241, .06), rgba(255, 250, 241, .02));
+  transition: transform .25s ease, border-color .25s ease, background-color .25s ease;
+}
+
+.iso-trust-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(239, 196, 111, .55);
+}
+
+.iso-trust-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: rgba(255, 250, 241, .72);
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+.iso-trust-meta span {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 6px;
+  color: #083640;
+  background: var(--iso-gold);
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, .35);
+  font-size: 12px;
+}
+
+.iso-trust-meta svg {
+  width: 16px;
+  height: 16px;
+  margin-left: auto;
+  color: var(--iso-mint);
+}
+
+.iso-trust-card h3 {
+  color: #fffaf1;
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: -.02em;
+}
+
+.iso-trust-card > p {
+  color: rgba(255, 250, 241, .72);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.iso-trust-card small {
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px dashed rgba(159, 207, 199, .22);
+  color: rgba(159, 207, 199, .92);
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.iso-trust-foot {
+  margin-top: 28px;
+  color: rgba(255, 250, 241, .5);
+  font-family: var(--font-mono), monospace;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 1100px) {
+  .iso-trust-rail { display: none; }
+  .iso-trust-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 640px) {
+  .iso-trust-grid { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .iso-trust-card { transition: none; }
+}
+
+/* CANONICAL section order (founder-approved 2026-07-09; #trust added
+   2026-07-10) — the single source of truth for the landing flex order. The
+   JSX mirrors this sequence for DOM/reading order; .cin-section and
+   .iso-marquee share order 1 in cinematic.css (hero then marquee by DOM
+   order). Do not add a second order map elsewhere. */
 .iso-header { order: 0; }
 .iso-hero { order: 1; }
 .iso-loops { order: 2; }
@@ -6067,11 +6235,12 @@ body {
 .iso-flow { order: 4; }
 .iso-corridors { order: 5; }
 .iso-comparison { order: 6; }
-.iso-operating { order: 7; } /* #platform (merged operating-layer + operations) */
-.iso-supply { order: 8; }
-.iso-copilot { order: 9; }
-.iso-final { order: 10; }
-.iso-footer { order: 11; }
+.iso-trust { order: 7; } /* #trust — dark control-plane fold after the table's claims */
+.iso-operating { order: 8; } /* #platform (merged operating-layer + operations) */
+.iso-supply { order: 9; }
+.iso-copilot { order: 10; }
+.iso-final { order: 11; }
+.iso-footer { order: 12; }
 .iso-back-to-top { order: 99; }
 /* Removed 2026-07-10 (mainnet-ready pruning): marquee, #walrus, #readiness,
    #operations tool grid + modal, and the fabricated client-proof section. */
