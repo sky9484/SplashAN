@@ -348,30 +348,68 @@
   100% { box-shadow: 0 0 0 0 rgba(242, 185, 75, 0); }
 }
 
-.cin-callout::after {
-  position: absolute;
-  top: 50%;
-  width: 46px;
-  height: 1px;
-  content: "";
-}
-
 .cin-callout-a { top: 19%; left: 9%; }
 .cin-callout-b { top: 23%; right: 7%; }
 .cin-callout-c { bottom: 25%; left: 11%; }
 .cin-callout-d { bottom: 20%; right: 9%; }
 
-.cin-callout-a::after,
-.cin-callout-c::after {
-  right: -46px;
-  background: linear-gradient(90deg, rgba(13, 99, 112, .6), transparent);
+/* Leader wire tying each callout back toward the scan frame — an anchor
+   node on the label, a fading hairline, and a gold node reaching the frame. */
+.cin-callout-wire {
+  position: absolute;
+  top: 50%;
+  height: 2px;
+  width: clamp(60px, 9vw, 150px);
+  pointer-events: none;
+  transform: translateY(-50%);
 }
 
-.cin-callout-b::after,
-.cin-callout-d::after {
-  left: -46px;
-  background: linear-gradient(270deg, rgba(13, 99, 112, .6), transparent);
+.cin-callout-a .cin-callout-wire,
+.cin-callout-c .cin-callout-wire {
+  left: 100%;
+  background: linear-gradient(90deg, var(--cin-teal-dark), rgba(13, 99, 112, 0));
 }
+
+.cin-callout-b .cin-callout-wire,
+.cin-callout-d .cin-callout-wire {
+  right: 100%;
+  background: linear-gradient(270deg, var(--cin-teal-dark), rgba(13, 99, 112, 0));
+}
+
+.cin-callout-wire::before {
+  position: absolute;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  content: "";
+  border-radius: 50%;
+  background: var(--cin-teal-dark);
+  transform: translateY(-50%);
+}
+
+.cin-callout-a .cin-callout-wire::before,
+.cin-callout-c .cin-callout-wire::before { left: -3px; }
+
+.cin-callout-b .cin-callout-wire::before,
+.cin-callout-d .cin-callout-wire::before { right: -3px; }
+
+.cin-callout-wire::after {
+  position: absolute;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  content: "";
+  border-radius: 50%;
+  background: var(--cin-gold);
+  box-shadow: 0 0 0 4px rgba(239, 196, 111, .22);
+  transform: translateY(-50%);
+}
+
+.cin-callout-a .cin-callout-wire::after,
+.cin-callout-c .cin-callout-wire::after { right: 0; }
+
+.cin-callout-b .cin-callout-wire::after,
+.cin-callout-d .cin-callout-wire::after { left: 0; }
 
 .cin-scan {
   position: absolute;
@@ -823,6 +861,10 @@
   content: none;
 }
 
+.cin-callout-static .cin-callout-wire {
+  display: none;
+}
+
 .cin-vision-static {
   position: static;
   display: block;
@@ -922,7 +964,7 @@
 
   .cin-callout strong { font-size: 12.5px; }
   .cin-callout small { font-size: 9.5px; }
-  .cin-callout::after { content: none; }
+  .cin-callout-wire { display: none; }
 
   .cin-callout-a { top: 13%; left: 5%; }
   .cin-callout-b { top: 13%; right: 4%; }

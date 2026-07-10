@@ -117,6 +117,7 @@ function CalloutBody({
         </span>
       ) : null}
       <b aria-hidden="true" /><b aria-hidden="true" /><b aria-hidden="true" /><b aria-hidden="true" />
+      <span className="cin-callout-wire" aria-hidden="true" />
       <i>{tag}</i>
       <strong>{value}</strong>
       <small>{meta}</small>

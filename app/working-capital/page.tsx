@@ -1,9 +1,11 @@
 import type { Metadata } from 'next';
+import type { ReactNode } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 
 import RoadmapChip from '@/components/supply/RoadmapChip';
+import DiscountTermSheet from '@/components/supply/DiscountTermSheet';
 import WorkingCapitalFlywheel from '@/components/supply/WorkingCapitalFlywheel';
 
 export const metadata: Metadata = {
@@ -18,6 +20,12 @@ export const metadata: Metadata = {
     'working capital Southeast Asia',
   ],
 };
+
+const heroProof = [
+  { k: 'Funded by', v: 'The buyer, not a lender' },
+  { k: 'Rail', v: 'Same one payouts use' },
+  { k: 'Control', v: 'Approval-gated, human-final' },
+];
 
 const receivableFacts = [
   {
@@ -79,11 +87,32 @@ const discountSteps = [
   },
 ];
 
-function SupplyCards({ items }: { items: typeof receivableFacts }) {
+type Chapter = {
+  index: string;
+  kicker: string;
+  title: ReactNode;
+  lede: ReactNode;
+};
+
+function ChapterHeading({ index, kicker, title, lede }: Chapter) {
   return (
-    <div className="iso-supply-grid">
+    <div className="wc-chapter">
+      <span className="wc-chapter-index" aria-hidden="true">{index}</span>
+      <div className="wc-chapter-title">
+        <p className="iso-kicker">{kicker}</p>
+        <h2 className="iso-section-title wc-h2">{title}</h2>
+      </div>
+      <p className="wc-chapter-lede">{lede}</p>
+    </div>
+  );
+}
+
+function FlowCards({ items }: { items: typeof receivableFacts }) {
+  return (
+    <ol className="iso-supply-grid wc-flow">
       {items.map((item, index) => (
-        <article className={`iso-supply-card iso-supply-card-${index + 1}`} key={item.number}>
+        <li className={`iso-supply-card wc-flow-card wc-flow-card-${index + 1}`} key={item.number}>
+          <span className="wc-flow-ghost" aria-hidden="true">{item.number}</span>
           <div className="iso-supply-meta">
             <span>{item.number}</span>
             <p>{item.label}</p>
@@ -96,9 +125,9 @@ function SupplyCards({ items }: { items: typeof receivableFacts }) {
             <p>{item.copy}</p>
             <small>{item.meta}</small>
           </div>
-        </article>
+        </li>
       ))}
-    </div>
+    </ol>
   );
 }
 
@@ -124,108 +153,122 @@ export default function WorkingCapitalPage() {
       </header>
 
       <section className="iso-section wc-hero">
-        <div className="iso-shell">
-          <p className="iso-kicker">Supply loop</p>
-          <div className="wc-hero-chiprow">
-            <RoadmapChip detail="coming capability, subject to licensing" />
+        <div className="iso-shell wc-hero-grid">
+          <div className="wc-hero-lead">
+            <p className="iso-kicker">Supply loop · Roadmap</p>
+            <div className="wc-hero-chiprow">
+              <RoadmapChip detail="coming capability, subject to licensing" />
+            </div>
+            <h1 className="iso-section-title wc-hero-title">
+              Your invoices are
+              <span>working capital.</span>
+            </h1>
+            <p className="wc-hero-desc">
+              Splash is building buyer-funded early payment on the same settlement rail that moves your
+              payouts today. No third-party lender — your buyer&apos;s approved USD, released early
+              against an invoice you both already trust.
+            </p>
+            <div className="wc-hero-actions">
+              <Link href="/signup?interest=financing" className="iso-button">
+                Register financing interest
+                <ArrowRight aria-hidden="true" />
+              </Link>
+              <Link href="/" className="iso-button iso-button-ghost">
+                See live settlement first
+              </Link>
+            </div>
+            <dl className="wc-hero-proof">
+              {heroProof.map((item) => (
+                <div key={item.k}>
+                  <dt>{item.k}</dt>
+                  <dd>{item.v}</dd>
+                </div>
+              ))}
+            </dl>
           </div>
-          <h1 className="iso-section-title wc-hero-title">
-            Your invoices are
-            <span>working capital.</span>
-          </h1>
-          <p className="wc-hero-desc">
-            Splash is building buyer-funded early payment on the same settlement rail that moves your
-            payouts today. No third-party lender — your buyer&apos;s approved USD, released early
-            against an invoice you both already trust.
-          </p>
-          <div className="wc-hero-actions">
-            <Link href="/signup?interest=financing" className="iso-button">
-              Register financing interest
-              <ArrowRight aria-hidden="true" />
-            </Link>
-            <Link href="/" className="iso-button iso-button-ghost">
-              See live settlement first
-            </Link>
+
+          <div className="wc-hero-ticket">
+            <DiscountTermSheet />
           </div>
         </div>
       </section>
 
       <section className="iso-section iso-supply wc-receivable">
         <div className="iso-shell">
-          <div className="iso-section-heading iso-heading-split">
-            <div>
-              <p className="iso-kicker">The Receivable</p>
-              <h2 className="iso-section-title">
-                An invoice that carries
-                <span>its own settlement history.</span>
-              </h2>
-            </div>
-            <p>
-              In plain finance terms: a Receivable would be an invoice object that remembers how it
-              gets paid — who approved it, on what rail, with what proof. History a lender would
-              charge you to underwrite, your buyer can simply read.
-            </p>
-          </div>
-          <SupplyCards items={receivableFacts} />
+          <ChapterHeading
+            index="§01"
+            kicker="The Receivable"
+            title={<>An invoice that carries<span>its own settlement history.</span></>}
+            lede={
+              <>
+                In plain finance terms: a Receivable would be an invoice object that remembers how it
+                gets paid — who approved it, on what rail, with what proof. History a lender would
+                charge you to underwrite, your buyer can simply read.
+              </>
+            }
+          />
+          <FlowCards items={receivableFacts} />
         </div>
       </section>
 
       <section className="iso-section wc-mechanics">
         <div className="iso-shell">
-          <div className="iso-section-heading iso-heading-split">
-            <div>
-              <p className="iso-kicker">Buyer-funded discounting</p>
-              <h2 className="iso-section-title">
-                Early payment,
-                <span>without a lender.</span>
-              </h2>
-            </div>
-            <p>
-              Dynamic discounting is a trade between two parties who already trust each other: the
-              buyer puts idle USD to work, the supplier turns a due date into cash flow. Splash would
-              only referee the exchange.
-            </p>
-          </div>
-          <SupplyCards items={discountSteps} />
+          <ChapterHeading
+            index="§02"
+            kicker="Buyer-funded discounting"
+            title={<>Early payment,<span>without a lender.</span></>}
+            lede={
+              <>
+                Dynamic discounting is a trade between two parties who already trust each other: the
+                buyer puts idle USD to work, the supplier turns a due date into cash flow. Splash would
+                only referee the exchange.
+              </>
+            }
+          />
+          <FlowCards items={discountSteps} />
         </div>
       </section>
 
       <section className="iso-section iso-loops wc-flywheel">
         <div className="iso-shell">
-          <div className="iso-section-heading iso-heading-split">
-            <div>
-              <p className="iso-kicker">Where Supply fits</p>
-              <h2 className="iso-section-title">
-                One rail,
-                <span>three loops.</span>
-              </h2>
-            </div>
-            <p>
-              Settle is live and feeds the loop with verified counterparties and settlement history.
-              Supply would compound it into working capital. Save keeps idle balances tidy in between.
-            </p>
-          </div>
+          <ChapterHeading
+            index="§03"
+            kicker="Where Supply fits"
+            title={<>One rail,<span>three loops.</span></>}
+            lede={
+              <>
+                Settle is live and feeds the loop with verified counterparties and settlement history.
+                Supply would compound it into working capital. Save keeps idle balances tidy in between.
+              </>
+            }
+          />
           <WorkingCapitalFlywheel variant="full" />
         </div>
       </section>
 
       <section className="iso-section wc-cta">
-        <div className="iso-shell wc-cta-inner">
-          <div>
-            <h2 className="iso-section-title">
-              Early interest shapes
-              <span>the corridor order.</span>
-            </h2>
-            <p className="wc-legal">
-              Dynamic discounting is a coming capability, subject to licensing. Registering interest
-              does not create a financing commitment — it tells us which corridors to build first.
-            </p>
-          </div>
-          <div className="wc-hero-actions">
-            <Link href="/signup?interest=financing" className="iso-button">
-              Register financing interest
-              <ArrowRight aria-hidden="true" />
-            </Link>
+        <div className="iso-shell">
+          <div className="wc-close">
+            <div className="wc-close-copy">
+              <p className="iso-kicker">Shape the build order</p>
+              <h2 className="iso-section-title wc-h2">
+                Early interest decides
+                <span>which corridor is first.</span>
+              </h2>
+              <p className="wc-legal">
+                Dynamic discounting is a coming capability, subject to licensing. Registering interest
+                does not create a financing commitment — it tells us which corridors to build first.
+              </p>
+            </div>
+            <div className="wc-close-actions">
+              <Link href="/signup?interest=financing" className="iso-button">
+                Register financing interest
+                <ArrowRight aria-hidden="true" />
+              </Link>
+              <Link href="/" className="iso-button iso-button-ghost iso-button-small">
+                See live settlement
+              </Link>
+            </div>
           </div>
         </div>
       </section>
