@@ -1724,9 +1724,13 @@
   height: 100%;
   object-fit: contain;
   filter: drop-shadow(0 18px 16px color-mix(in srgb, var(--ink) 14%, transparent));
-  transition: transform var(--dur-slow) var(--ease-standard);
+  transition: transform var(--dur-slow) var(--ease-standard), filter var(--dur-slow) var(--ease-standard);
 }
-.iso-loops-card:hover .iso-loops-art img { transform: translateY(-6px) scale(1.02); }
+/* Hover the illustration itself → it pops out 1.1x above the card. */
+.iso-loops-art:hover img {
+  transform: translateY(-8px) scale(1.1);
+  filter: drop-shadow(0 28px 24px color-mix(in srgb, var(--ink) 24%, transparent));
+}
 
 .iso-loops-copy {
   position: relative;
@@ -1844,9 +1848,13 @@
   height: 100%;
   object-fit: contain;
   filter: drop-shadow(0 14px 12px color-mix(in srgb, var(--ink) 12%, transparent));
-  transition: transform var(--dur-slow) var(--ease-standard);
+  transition: transform var(--dur-slow) var(--ease-standard), filter var(--dur-slow) var(--ease-standard);
 }
-.iso-supply-card:hover .iso-supply-art img { transform: translateY(-5px) scale(1.02); }
+/* Hover the illustration itself → it pops out 1.1x above the card. */
+.iso-supply-art:hover img {
+  transform: translateY(-8px) scale(1.1);
+  filter: drop-shadow(0 26px 22px color-mix(in srgb, var(--ink) 22%, transparent));
+}
 
 .iso-supply-copy {
   border-top: 1px solid var(--line);
