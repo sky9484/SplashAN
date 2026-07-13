@@ -104,6 +104,16 @@ const flowSteps = [
   },
 ];
 
+/* Metrics ticker: the moving bridge band at the bottom of the hero. */
+const marqueeItems = [
+  ['1 live testnet', 'MY to PH corridor'],
+  ['Modeled routes', 'expand with controls'],
+  ['~400ms', 'Sui settlement finality'],
+  ['From 0.80%', 'starting edge fee'],
+  ['Human approved', 'AI recommendations'],
+  ['Stored proof', 'Walrus + Sui audit'],
+];
+
 const partnerRail: Array<{ src: string; name: string; role: string; logoClass?: string }> = [
   { src: '/stripe-logo.svg', name: 'Stripe', role: 'USD collection' },
   { src: '/partners/airwallex.png', name: 'Airwallex', role: 'bank rails', logoClass: 'iso-airwallex-logo' },
@@ -393,7 +403,7 @@ const loopCards = [
   },
 ];
 
-export default function IsometricLanding() {
+export default function IsometricLanding({ isPhone = false }: { isPhone?: boolean }) {
   const [activeFlow, setActiveFlow] = useState(flowSteps[0]);
   const [yieldBenchmarks, setYieldBenchmarks] = useState(fallbackYieldBenchmarks);
   const [showBackToTop, setShowBackToTop] = useState(false);
@@ -470,7 +480,7 @@ export default function IsometricLanding() {
   ];
 
   return (
-    <main className="iso-landing">
+    <main className={`iso-landing${isPhone ? ' is-phone' : ''}`}>
       <header className={`iso-header ${showBackToTop ? 'is-scrolled' : ''}`}>
         <div className="iso-shell iso-header-inner">
           <Link href="/" className="iso-brand" aria-label="Splash Finance home">
@@ -502,7 +512,19 @@ export default function IsometricLanding() {
         </div>
       </header>
 
-      <SettlementCinematic />
+      <SettlementCinematic isPhone={isPhone} />
+
+      <div className="iso-marquee is-static" aria-label="Platform metrics">
+        <div className="iso-marquee-track">
+          {[...marqueeItems, ...marqueeItems].map(([value, label], index) => (
+            <div className="iso-marquee-item" key={`${value}-${index}`}>
+              <strong>{value}</strong>
+              <span>{label}</span>
+              <i aria-hidden="true">◆</i>
+            </div>
+          ))}
+        </div>
+      </div>
 
       <section id="loops" className="iso-section iso-loops">
         <div className="cin-drop" style={{ top: 28, right: '4%' }} aria-hidden="true">

@@ -149,7 +149,7 @@ export default function DashboardSettingsPage() {
         <div className="flex items-center gap-3">
           <ShieldCheck className="text-[#5C9EAD]" />
           <div>
-            <h2 className="text-xl font-black text-[#326273]">Business module v7.1</h2>
+            <h2 className="text-xl font-black text-[#326273]">How Splash operates</h2>
             <p className="text-xs text-[#326273]/55">Plain-language operating position, without over-claiming.</p>
           </div>
         </div>

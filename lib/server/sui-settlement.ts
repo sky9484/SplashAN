@@ -206,6 +206,7 @@ const ABORT_CODES: Record<number, string> = {
   103: 'E_FEE_EXCEEDED — fee_bps passed to settle_payment/settle_batch is above MAX_FEE_BPS (200). Check the corridor fee in lib/fx/corridors.ts.',
   104: 'E_INVALID_RECIPIENT — settlement recipient is the zero address.',
   105: 'E_INVALID_AMOUNT — settlement amount or deposit coin value is zero.',
+  106: 'E_NOT_ACCOUNT_OWNER — BusinessAccount object was transferred away from its recorded owner; verified status is not transferable (audit S-01).',
 
   // ── peg_monitor ──────────────────────────────────────────────────────────
   300: 'E_PEG_BROKEN_USDC — USDC deviation > 30 bps. Update peg with valid data.',
@@ -232,6 +233,7 @@ const ABORT_CODES: Record<number, string> = {
   409: 'E_EMPTY_BENEFICIARY_REF — payment_intent::create called without a verified counterparty reference hash.',
   410: 'E_EMPTY_CURRENCY — payment_intent::create called without a currency tag.',
   411: 'E_EMPTY_CORRIDOR — payment_intent::create called without a corridor tag.',
+  412: 'E_STILL_PENDING — payment_intent::delete_finalized called on a pending intent; confirm or cancel it first.',
 
   // ── audit_anchor ─────────────────────────────────────────────────────────
   500: 'E_EMPTY_HASH — audit_anchor::anchor_audit_hash called with an empty audit_hash string.',

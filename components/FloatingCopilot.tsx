@@ -1,12 +1,18 @@
 'use client';
 
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { ChevronDown, Sparkles, X } from 'lucide-react';
+import { BellRing, ChevronDown, Sparkles, X } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { streamCopilot } from '../lib/copilot-client';
 import { stashBatchDraft, type ParsedBatch } from '../lib/batch-parse';
+import {
+  readPendingProposals,
+  subscribePendingProposals,
+  type OxwalPendingSnapshot,
+} from '../lib/oxwal-notify';
 import OxWalComposer, { type OxWalComposerChip } from './oxwal/OxWalComposer';
 
 // ─── Compact AI responses ─────────────────────────────────────────────────────
@@ -130,6 +136,7 @@ function formatChatTime(date: Date = new Date()): string {
 
 export default function FloatingCopilot() {
   const router = useRouter();
+  const pathname = usePathname();
   const [open,      setOpen]      = useState(false);
   const [input,     setInput]     = useState('');
   const [thinking,  setThinking]  = useState(false);
@@ -137,6 +144,22 @@ export default function FloatingCopilot() {
   const [messages,  setMessages]  = useState<Message[]>([]);
   const [nudge, setNudge] = useState<string | null>(null);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [pending, setPending] = useState<OxwalPendingSnapshot>({ count: 0, label: null, updatedAt: 0 });
+
+  // The 0xWal desk records unsigned proposals; remind the operator about them
+  // whenever they are anywhere else in the app.
+  const awayFromDesk = pathname !== '/dashboard' && pathname !== '/queue';
+  const hasReminder = pending.count > 0 && awayFromDesk;
+
+  useEffect(() => {
+    // Hydration-safe initial read, then live subscription.
+    const timeout = setTimeout(() => setPending(readPendingProposals()), 0);
+    const unsubscribe = subscribePendingProposals(setPending);
+    return () => {
+      clearTimeout(timeout);
+      unsubscribe();
+    };
+  }, []);
 
   const msgIdRef          = useRef(1);
   const fallbackRef       = useRef(0);
@@ -168,23 +191,30 @@ export default function FloatingCopilot() {
     return () => window.clearTimeout(timer);
   }, []);
 
-  // A brief, low-pressure prompt appears every 45 seconds while the chat is closed.
+  // A brief, low-pressure prompt appears every 45 seconds while the chat is
+  // closed. When unsigned proposals are waiting and the operator is away from
+  // the desk, the reminder takes priority over small talk.
   useEffect(() => {
     const showNudge = () => {
       if (open) return;
       setNudge((current) => {
+        if (hasReminder) {
+          return pending.count === 1
+            ? '1 approval waiting for you'
+            : `${pending.count} approvals waiting for you`;
+        }
         const choices = NUDGES.filter((item) => item !== current);
         return choices[Math.floor(Math.random() * choices.length)] ?? NUDGES[0];
       });
       if (nudgeTimeoutRef.current) window.clearTimeout(nudgeTimeoutRef.current);
-      nudgeTimeoutRef.current = window.setTimeout(() => setNudge(null), 3000);
+      nudgeTimeoutRef.current = window.setTimeout(() => setNudge(null), hasReminder ? 6000 : 3000);
     };
-    const interval = window.setInterval(showNudge, 45_000);
+    const interval = window.setInterval(showNudge, hasReminder ? 20_000 : 45_000);
     return () => {
       window.clearInterval(interval);
       if (nudgeTimeoutRef.current) window.clearTimeout(nudgeTimeoutRef.current);
     };
-  }, [open]);
+  }, [open, hasReminder, pending.count]);
 
   // Auto-scroll on new messages
   useEffect(() => {
@@ -349,6 +379,24 @@ export default function FloatingCopilot() {
           </div>
         </div>
 
+        {/* Pending-approval reminder — 0xWal prepared work that needs a human */}
+        {pending.count > 0 && (
+          <Link
+            href="/queue"
+            onClick={() => setOpen(false)}
+            className="flex shrink-0 items-center gap-2.5 border-b border-[#efc46f]/50 bg-[#efc46f]/15 px-4 py-2.5 transition-colors hover:bg-[#efc46f]/25"
+          >
+            <BellRing size={14} className="shrink-0 text-[#9A4A2D]" />
+            <span className="min-w-0 flex-1 text-[11px] font-bold leading-4 text-[#0c3e48]">
+              {pending.count === 1 ? '1 unsigned proposal waits' : `${pending.count} unsigned proposals wait`} for your approval
+              {pending.label ? ` — ${pending.label}` : ''}
+            </span>
+            <span className="shrink-0 rounded-md bg-[#0c3e48] px-2 py-1 text-[10px] font-black uppercase tracking-[0.1em] text-white">
+              Queue
+            </span>
+          </Link>
+        )}
+
         {/* Live desk ticker — signals a fintech terminal, not a generic chat */}
         <div className="grid shrink-0 grid-cols-3 divide-x divide-[#0c3e48]/10 border-b border-[#0c3e48]/10 bg-[#f4efe4]">
           {[
@@ -489,8 +537,14 @@ export default function FloatingCopilot() {
             </span>
           )}
 
-          {/* Live pulse dot (closed only) */}
-          {!open && (
+          {/* Closed-state indicator: approval count when work is waiting,
+              otherwise the ambient pulse dot */}
+          {!open && hasReminder && (
+            <span className="absolute -right-0.5 -top-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-[#E39774] px-1 font-mono text-[10px] font-black text-white ring-2 ring-white/80">
+              {pending.count > 9 ? '9+' : pending.count}
+            </span>
+          )}
+          {!open && !hasReminder && (
             <span className="absolute right-1 top-1">
               <span className="relative flex h-3 w-3">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#efc46f] opacity-60" />

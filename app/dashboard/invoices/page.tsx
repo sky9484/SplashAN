@@ -1,13 +1,16 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Archive, CheckCircle2, Copy, Database, FilePlus2, FileText, Lock, Search, Send, ShieldCheck, X } from 'lucide-react';
+import { Archive, CheckCircle2, Copy, Database, FilePlus2, FileText, Lock, Search, Send, ShieldCheck, Sparkles, X } from 'lucide-react';
 import { toast } from 'sonner';
 
+import InvoiceLoop from '@/components/invoices/InvoiceLoop';
 import StatusBadge from '@/components/StatusBadge';
 import { ACTIVE_USD_CORRIDORS } from '@/lib/fx/corridors';
 import type { InvoiceRecord, InvoiceStatusV2 } from '@/lib/server/operations';
+
+type InvoiceView = 'vault' | 'loop';
 
 const statusStyle: Record<InvoiceStatusV2, string> = {
   draft: 'bg-foreground/10 text-foreground/60',
@@ -26,11 +29,20 @@ async function fetchInvoices() {
 
 export default function InvoicesPage() {
   const queryClient = useQueryClient();
+  const [view, setView] = useState<InvoiceView>('vault');
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'all' | InvoiceStatusV2>('all');
   const [createOpen, setCreateOpen] = useState(false);
   const { data, isLoading } = useQuery({ queryKey: ['invoices'], queryFn: fetchInvoices });
   const invoices = useMemo(() => data?.invoices ?? [], [data?.invoices]);
+
+  // Deep links from the old /dashboard/0xwal route land on the loop tab.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('view') !== 'loop') return;
+    const timeout = setTimeout(() => setView('loop'), 0);
+    return () => clearTimeout(timeout);
+  }, []);
 
   const filtered = useMemo(() => invoices.filter((invoice) => {
     const q = search.trim().toLowerCase();
@@ -65,18 +77,48 @@ export default function InvoicesPage() {
   };
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <span className="dash-kicker">Get paid</span>
-          <h1 className="dash-title mt-2">Invoice Vault</h1>
-          <p className="mt-1 text-sm text-foreground/55">Create a pay link, protect the document with Seal, and preserve its proof on Walrus.</p>
+          <h1 className="dash-title mt-2">Invoices</h1>
+          <p className="mt-1 text-sm text-foreground/55">
+            {view === 'vault'
+              ? 'Create a pay link, protect the document with Seal, and preserve its proof on Walrus.'
+              : 'Ask 0xWal to inspect an invoice: encrypted intake, Walrus proof, Seal access, and a route recommendation.'}
+          </p>
         </div>
-        <button onClick={() => setCreateOpen(true)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-accent px-5 py-3 text-sm font-black text-card shadow-lg shadow-accent/20">
-          <FilePlus2 className="h-4 w-4" /> Create invoice
-        </button>
+        {view === 'vault' && (
+          <button onClick={() => setCreateOpen(true)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-accent px-5 py-3 text-sm font-black text-card shadow-lg shadow-accent/20">
+            <FilePlus2 className="h-4 w-4" /> Create invoice
+          </button>
+        )}
       </header>
 
+      {/* The old standalone "Invoice loop" page now lives here as a tab. */}
+      <div className="flex w-fit gap-1 rounded-xl border border-foreground/10 bg-card p-1">
+        {([
+          { key: 'vault', label: 'Invoice vault', icon: FileText },
+          { key: 'loop', label: 'Inspection loop', icon: Sparkles },
+        ] as const).map(({ key, label, icon: Icon }) => (
+          <button
+            key={key}
+            type="button"
+            aria-pressed={view === key}
+            onClick={() => setView(key)}
+            className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-black transition ${
+              view === key ? 'bg-foreground text-card shadow-sm' : 'text-foreground/55 hover:text-foreground'
+            }`}
+          >
+            <Icon className="h-4 w-4" />
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {view === 'loop' && <InvoiceLoop />}
+
+      {view === 'vault' && (<>
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[
           { label: 'Invoices', value: invoices.length, icon: FileText },
@@ -134,6 +176,7 @@ export default function InvoicesPage() {
           </table>
         </div>
       </section>
+      </>)}
 
       {createOpen && <CreateInvoiceModal close={() => setCreateOpen(false)} onCreated={() => { setCreateOpen(false); void queryClient.invalidateQueries({ queryKey: ['invoices'] }); }} />}
     </div>

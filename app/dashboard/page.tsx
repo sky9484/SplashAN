@@ -1,17 +1,15 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   AlertTriangle,
-  Bot,
-  BrainCircuit,
   CheckCircle2,
   Clock3,
-  MessageSquareText,
+  RotateCcw,
   ShieldCheck,
-  Sparkles,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -19,19 +17,29 @@ import ActionCard from '@/components/oxwal/ActionCard';
 import OxWalComposer, { type OxWalComposerChip } from '@/components/oxwal/OxWalComposer';
 import MemWalBehaviorCard from '@/components/MemWalBehaviorCard';
 import { stashBatchDraft } from '@/lib/batch-parse';
+import { recordPendingProposals } from '@/lib/oxwal-notify';
 import type { ActionCardProposal } from '@/lib/agent/action-card';
 
-type ChatTurn = {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-};
+/**
+ * 0xWal desk — a Claude-style expanding chat.
+ *
+ * Fresh desk: a centered composer ("What's on the agenda today?").
+ * First message: the surface becomes a conversation — the thread grows
+ * downward and the composer docks at the bottom, exactly like starting a chat.
+ *
+ * Everything the agent does surfaces INSIDE the thread, in operator language:
+ * reads become quiet activity lines, warnings become amber notes, and every
+ * prepared proposal appears as an unsigned action card the operator can read
+ * but not act on here — approval always happens in the queue.
+ */
 
-type DeskEvent = {
-  id: string;
-  label: string;
-  tone: 'read' | 'propose' | 'warning' | 'meta';
-};
+type ThreadItem =
+  | { kind: 'user'; id: string; text: string }
+  | { kind: 'assistant'; id: string; text: string }
+  | { kind: 'activity'; id: string; label: string; tone: 'read' | 'propose' }
+  | { kind: 'notice'; id: string; text: string; retryPrompt?: string }
+  | { kind: 'session-expired'; id: string }
+  | { kind: 'proposal'; id: string; proposal: ActionCardProposal };
 
 type OxwalStreamEvent =
   | { type: 'meta'; source: 'claude' | 'local'; readTools: string[]; proposeTools: string[] }
@@ -47,48 +55,87 @@ const quickPrompts: OxWalComposerChip[] = [
   { label: 'Look up tools', prompt: 'What can you read and prepare?', icon: 'search' },
 ];
 
+/** The operator sees what 0xWal is doing, never which backend does it. */
+const activityLabels: Record<string, string> = {
+  getBalances: 'Reading balances',
+  getTreasuryState: 'Reading treasury state',
+  getCorridorLiquidity: 'Checking corridor liquidity',
+  getRate: 'Fetching FX rate',
+  getCounterparty: 'Verifying counterparty',
+  getInvoice: 'Reading invoice',
+  getNettingOpportunities: 'Scanning netting opportunities',
+  getComplianceStatus: 'Checking compliance',
+  proposePayment: 'Preparing payment proposal',
+  proposeInternalTransfer: 'Preparing internal transfer',
+  proposeFxConvert: 'Preparing FX conversion',
+  proposeTreasuryAllocation: 'Preparing treasury allocation',
+  proposeTreasuryRedeem: 'Preparing treasury redemption',
+  proposeNettingSettlement: 'Preparing netting settlement',
+  proposeBatchPayout: 'Preparing batch payout',
+};
+
+const WELCOME =
+  '0xWal is standing by. Every money movement becomes an unsigned proposal for human approval.';
+
 function newId(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
-}
-
-function eventToneClass(tone: DeskEvent['tone']) {
-  if (tone === 'warning') return 'border-[#E39774]/55 bg-[#E39774]/15 text-[#9A4A2D]';
-  if (tone === 'propose') return 'border-[#5C9EAD]/35 bg-[#5C9EAD]/10 text-[#326273]';
-  if (tone === 'read') return 'border-[#326273]/18 bg-white text-[#326273]';
-  return 'border-[#326273]/14 bg-[#F6F0ED] text-[#326273]/70';
 }
 
 export default function OxwalDeskPage() {
   const router = useRouter();
   const [input, setInput] = useState('');
-  const [messages, setMessages] = useState<ChatTurn[]>([
-    {
-      id: 'assistant_welcome',
-      role: 'assistant',
-      content: '0xWal is standing by. Every money movement becomes an unsigned proposal for human approval.',
-    },
+  const [thread, setThread] = useState<ThreadItem[]>([
+    { kind: 'assistant', id: 'assistant_welcome', text: WELCOME },
   ]);
   const [streamingText, setStreamingText] = useState('');
-  const [proposals, setProposals] = useState<ActionCardProposal[]>([]);
-  const [events, setEvents] = useState<DeskEvent[]>([]);
-  const [source, setSource] = useState<'claude' | 'local' | null>(null);
   const [isSending, setIsSending] = useState(false);
+  const threadRef = useRef<HTMLDivElement>(null);
 
-  const proposalStats = useMemo(() => {
-    const needsApproval = proposals.filter((proposal) => proposal.explain.requiredApprovers > proposal.approvals.length).length;
-    const warnings = events.filter((event) => event.tone === 'warning').length;
+  const hasStarted = thread.some((item) => item.kind === 'user');
+
+  const proposals = useMemo(
+    () => thread.flatMap((item) => (item.kind === 'proposal' ? [item.proposal] : [])),
+    [thread],
+  );
+
+  const deskStats = useMemo(() => {
+    const needsApproval = proposals.filter(
+      (proposal) => proposal.explain.requiredApprovers > proposal.approvals.length,
+    ).length;
+    const warnings = thread.filter((item) => item.kind === 'notice').length;
     return { total: proposals.length, needsApproval, warnings };
-  }, [events, proposals]);
+  }, [proposals, thread]);
+
+  // Let the floating 0xWal remind the operator elsewhere in the app. Every
+  // streamed proposal is unsigned work until a human settles it in the queue.
+  useEffect(() => {
+    if (proposals.length > 0) {
+      recordPendingProposals({ count: proposals.length, label: proposals[proposals.length - 1].explain.recommendation });
+    }
+  }, [proposals]);
+
+  // Keep the newest turn in view while the conversation grows or streams.
+  useEffect(() => {
+    const el = threadRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+  }, [thread, streamingText]);
 
   async function submitPrompt(rawPrompt: string) {
     const prompt = rawPrompt.trim();
     if (!prompt || isSending) return;
 
-    const history = messages.slice(-8).map(({ role, content }) => ({ role, content }));
+    const history = thread
+      .flatMap((item) =>
+        item.kind === 'user' || item.kind === 'assistant'
+          ? [{ role: item.kind, content: item.text }]
+          : [],
+      )
+      .slice(-8);
+
     setInput('');
     setStreamingText('');
     setIsSending(true);
-    setMessages((current) => [...current, { id: newId('user'), role: 'user', content: prompt }]);
+    setThread((current) => [...current, { kind: 'user', id: newId('user'), text: prompt }]);
 
     let assistantText = '';
     try {
@@ -102,13 +149,36 @@ export default function OxwalDeskPage() {
           history,
         }),
       });
+
+      if (response.status === 401) {
+        setThread((current) => [...current, { kind: 'session-expired', id: newId('expired') }]);
+        return;
+      }
       if (!response.ok || !response.body) {
-        throw new Error('0xWal stream failed to open');
+        setThread((current) => [
+          ...current,
+          {
+            kind: 'notice',
+            id: newId('notice'),
+            text: '0xWal could not open a secure line just now. Nothing was prepared — try again.',
+            retryPrompt: prompt,
+          },
+        ]);
+        return;
       }
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
+
+      const flushAssistant = () => {
+        const text = assistantText.trim();
+        if (text) {
+          setThread((current) => [...current, { kind: 'assistant', id: newId('assistant'), text }]);
+        }
+        assistantText = '';
+        setStreamingText('');
+      };
 
       for (;;) {
         const { done, value } = await reader.read();
@@ -122,30 +192,35 @@ export default function OxwalDeskPage() {
           if (!line) continue;
           const event = JSON.parse(line.slice(6)) as OxwalStreamEvent;
 
-          if (event.type === 'meta') {
-            setSource(event.source);
-            setEvents((current) => [
-              { id: newId('meta'), label: `${event.source} - ${event.readTools.length} read tools - ${event.proposeTools.length} propose tools`, tone: 'meta' as const },
-              ...current,
-            ].slice(0, 10));
-          }
-
           if (event.type === 'tool') {
-            setEvents((current) => [
-              { id: newId('tool'), label: `${event.category}: ${event.name}`, tone: (event.category === 'PROPOSE' ? 'propose' : 'read') as DeskEvent['tone'] },
+            // A tool call means the current text turn ended — commit it so the
+            // activity line lands between turns, in order.
+            flushAssistant();
+            setThread((current) => [
               ...current,
-            ].slice(0, 10));
+              {
+                kind: 'activity',
+                id: newId('tool'),
+                label: activityLabels[event.name] ?? 'Working',
+                tone: event.category === 'PROPOSE' ? 'propose' : 'read',
+              },
+            ]);
           }
 
           if (event.type === 'warning') {
-            setEvents((current) => [
-              { id: newId('warning'), label: `${event.warning.code}: ${event.warning.message}`, tone: 'warning' as const },
+            flushAssistant();
+            setThread((current) => [
               ...current,
-            ].slice(0, 10));
+              { kind: 'notice', id: newId('notice'), text: event.warning.message },
+            ]);
           }
 
           if (event.type === 'proposal') {
-            setProposals((current) => [event.proposal, ...current]);
+            flushAssistant();
+            setThread((current) => [
+              ...current,
+              { kind: 'proposal', id: newId('proposal'), proposal: event.proposal },
+            ]);
           }
 
           if (event.type === 'delta') {
@@ -155,12 +230,17 @@ export default function OxwalDeskPage() {
         }
       }
 
-      if (assistantText.trim()) {
-        setMessages((current) => [...current, { id: newId('assistant'), role: 'assistant', content: assistantText.trim() }]);
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : '0xWal request failed';
-      setEvents((current) => [{ id: newId('warning'), label: message, tone: 'warning' as const }, ...current].slice(0, 10));
+      flushAssistant();
+    } catch {
+      setThread((current) => [
+        ...current,
+        {
+          kind: 'notice',
+          id: newId('notice'),
+          text: 'The connection dropped mid-answer. Nothing was prepared without you — try again.',
+          retryPrompt: prompt,
+        },
+      ]);
     } finally {
       setStreamingText('');
       setIsSending(false);
@@ -171,6 +251,24 @@ export default function OxwalDeskPage() {
     void submitPrompt(input);
   }
 
+  const composer = (
+    <OxWalComposer
+      compact={hasStarted}
+      title={hasStarted ? undefined : "What's on the agenda today?"}
+      value={input}
+      onChange={setInput}
+      onSubmit={handleSubmit}
+      onChipSubmit={(prompt) => void submitPrompt(prompt)}
+      onFilePrepared={(batch) => {
+        stashBatchDraft(batch);
+        router.push('/dashboard/batch?draft=1');
+      }}
+      chips={hasStarted ? [] : quickPrompts}
+      disabled={isSending}
+      placeholder="Ask 0xWal to read, prepare, or explain — or attach a payout sheet"
+    />
+  );
+
   return (
     <div className="mx-auto grid w-full max-w-7xl gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
       <main className="min-w-0 space-y-4">
@@ -180,113 +278,78 @@ export default function OxwalDeskPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <span className="dash-kicker">Operating desk · AI</span>
                 <span className="inline-flex items-center gap-2 rounded-md bg-[#0c3e48] px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-white">
-                  <Bot className="h-3.5 w-3.5 text-[#efc46f]" />
-                  0xWal
-                </span>
-                <span className="rounded-md border border-[#5C9EAD]/35 bg-[#5C9EAD]/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-[#326273]">
-                  {source ?? 'local'} mode
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden="true" />
+                  0xWal online
                 </span>
               </div>
-              <h1 className="dash-title mt-3 text-3xl md:text-4xl">
-                Finance command desk
-              </h1>
+              <h1 className="dash-title mt-3 text-3xl md:text-4xl">Finance command desk</h1>
               <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-[#326273]/62">
                 Read financial state, prepare unsigned proposals, and route approvals from one operating surface.
               </p>
             </div>
             <div className="grid w-full grid-cols-3 overflow-hidden rounded-lg border border-[#326273]/14 bg-white text-center md:w-auto md:min-w-[300px]">
-              <DeskStat label="Proposals" value={proposalStats.total} />
-              <DeskStat label="Approval" value={proposalStats.needsApproval} caution={proposalStats.needsApproval > 0} />
-              <DeskStat label="Warnings" value={proposalStats.warnings} caution={proposalStats.warnings > 0} />
+              <DeskStat label="Proposals" value={deskStats.total} />
+              <DeskStat label="Approval" value={deskStats.needsApproval} caution={deskStats.needsApproval > 0} />
+              <DeskStat label="Notices" value={deskStats.warnings} caution={deskStats.warnings > 0} />
             </div>
           </div>
         </header>
 
-        <section className="dash-surface dash-reveal px-4 py-8 md:px-8 md:py-10">
-          <OxWalComposer
-            title="What's on the agenda today?"
-            value={input}
-            onChange={setInput}
-            onSubmit={handleSubmit}
-            onChipSubmit={(prompt) => void submitPrompt(prompt)}
-            onFilePrepared={(batch) => { stashBatchDraft(batch); router.push('/dashboard/batch?draft=1'); }}
-            chips={quickPrompts}
-            disabled={isSending}
-            placeholder="Ask 0xWal to read, prepare, or explain — or attach a payout sheet"
-          />
-        </section>
-
-        <section className="grid gap-4 dash-reveal-stagger lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-          <div className="dash-surface overflow-hidden">
-            <div className="flex items-center gap-2 border-b border-[#326273]/10 px-4 py-3">
-              <MessageSquareText className="h-4 w-4 text-[#5C9EAD]" />
-              <h2 className="text-sm font-black text-[#1F4452]">Conversation</h2>
-            </div>
-            <div className="max-h-[520px] min-h-[360px] space-y-3 overflow-y-auto p-4">
-              {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={message.role === 'user'
-                    ? 'ml-auto max-w-[86%] rounded-lg bg-[#1F4452] px-3 py-2 text-sm font-semibold leading-6 text-white'
-                    : 'max-w-[92%] rounded-lg border border-[#326273]/12 bg-[#F6F0ED] px-3 py-2 text-sm font-semibold leading-6 text-[#326273]'}
-                >
-                  {message.content}
-                </div>
-              ))}
-              {streamingText && (
-                <div className="max-w-[92%] rounded-lg border border-[#5C9EAD]/30 bg-[#5C9EAD]/10 px-3 py-2 text-sm font-semibold leading-6 text-[#326273]">
-                  {streamingText}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="dash-surface overflow-hidden">
+        {/* The chat surface. Starts as a centered composer; the first message
+            expands it into a full conversation with the composer docked below. */}
+        {!hasStarted ? (
+          <section className="dash-surface dash-reveal px-4 py-10 md:px-8 md:py-14">
+            {composer}
+          </section>
+        ) : (
+          <section className="dash-surface dash-reveal flex flex-col overflow-hidden">
             <div className="flex items-center justify-between gap-3 border-b border-[#326273]/10 px-4 py-3">
               <div className="flex items-center gap-2">
-                <BrainCircuit className="h-4 w-4 text-[#5C9EAD]" />
-                <h2 className="text-sm font-black text-[#1F4452]">Agent events</h2>
+                <BotAvatar size={24} />
+                <h2 className="text-sm font-black text-[#1F4452]">0xWal</h2>
+                <span className="font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-[#326273]/45">
+                  prepares · you approve
+                </span>
               </div>
-              <Link href="/queue" className="text-xs font-black text-[#326273]">Queue</Link>
+              <Link href="/queue" className="text-xs font-black text-[#326273] underline-offset-4 hover:underline">
+                Approval queue
+              </Link>
             </div>
-            <div className="grid max-h-[520px] min-h-[360px] content-start gap-2 overflow-y-auto p-4">
-              {events.length === 0 && (
-                <div className="rounded-lg border border-dashed border-[#326273]/18 p-6 text-center text-sm font-semibold text-[#326273]/55">
-                  No events yet
+
+            <div
+              ref={threadRef}
+              className="max-h-[62vh] min-h-[380px] space-y-3 overflow-y-auto p-4"
+              aria-live="polite"
+            >
+              {thread.map((item) => (
+                <ThreadRow key={item.id} item={item} onRetry={(prompt) => void submitPrompt(prompt)} />
+              ))}
+
+              {streamingText && (
+                <div className="flex gap-2">
+                  <BotAvatar />
+                  <div className="max-w-[88%] rounded-lg rounded-tl-sm border border-[#5C9EAD]/30 bg-[#5C9EAD]/10 px-3 py-2 text-sm font-semibold leading-6 text-[#326273]">
+                    <span className="whitespace-pre-wrap">{streamingText}</span>
+                    <span className="ml-0.5 inline-block h-3 w-0.5 animate-pulse bg-[#0d6370]/60" aria-hidden="true" />
+                  </div>
                 </div>
               )}
-              {events.map((event) => (
-                <div key={event.id} className={`rounded-md border px-3 py-2 text-xs font-black leading-5 ${eventToneClass(event.tone)}`}>
-                  {event.label}
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
 
-        <section className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <span className="dash-kicker">Unsigned proposals</span>
-              <h2 className="mt-1 text-2xl font-black tracking-tight text-[#0c3e48]">Action cards</h2>
+              {isSending && !streamingText && (
+                <div className="flex gap-2">
+                  <BotAvatar />
+                  <div className="flex items-center gap-1.5 rounded-lg rounded-tl-sm border border-[#326273]/10 bg-[#F6F0ED] px-3 py-2.5">
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#0d6370]/50 [animation-delay:0ms]" />
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#0d6370]/50 [animation-delay:150ms]" />
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#0d6370]/50 [animation-delay:300ms]" />
+                  </div>
+                </div>
+              )}
             </div>
-            <Link href="/dashboard/overview" className="dash-btn-ghost dash-btn">
-              Overview
-            </Link>
-          </div>
-          {proposals.length === 0 ? (
-            <div className="dash-surface p-8 text-center">
-              <Sparkles className="mx-auto h-8 w-8 text-[#5C9EAD]" />
-              <p className="mt-3 text-sm font-black text-[#1F4452]">No active proposals</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {proposals.map((proposal) => (
-                <ActionCard key={proposal.id} proposal={proposal} />
-              ))}
-            </div>
-          )}
-        </section>
+
+            <div className="border-t border-[#326273]/10 bg-white/60 p-3">{composer}</div>
+          </section>
+        )}
       </main>
 
       <aside className="space-y-4 dash-reveal-stagger">
@@ -299,20 +362,127 @@ export default function OxwalDeskPage() {
           <div className="mt-3 divide-y divide-[#326273]/10 text-sm">
             <ControlRow icon={CheckCircle2} label="Tool boundary" value="Read + propose" />
             <ControlRow icon={Clock3} label="Submit guard" value="Policy re-check" />
-            <ControlRow icon={AlertTriangle} label="Circuit breaker" value="Armed" caution={false} />
+            <ControlRow icon={AlertTriangle} label="Circuit breaker" value="Armed" />
           </div>
         </div>
         <div className="rounded-2xl border border-[#0c3e48] bg-[#0c3e48] p-4 text-white shadow-[6px_7px_0_rgba(12,62,72,0.18)]">
           <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#efc46f]/80">Approval surface</p>
           <div className="mt-2 text-2xl font-black">Maker-checker</div>
-          <p className="mt-2 text-xs font-semibold leading-5 text-white/62">
-            Pending proposals, compliance holds, expiring quotes, failed settlements, and anomaly halts live in the queue.
-          </p>
+          {deskStats.needsApproval > 0 ? (
+            <p className="mt-2 text-xs font-semibold leading-5 text-white/78">
+              {deskStats.needsApproval} unsigned {deskStats.needsApproval === 1 ? 'proposal is' : 'proposals are'} waiting
+              for your approval.
+            </p>
+          ) : (
+            <p className="mt-2 text-xs font-semibold leading-5 text-white/62">
+              Pending proposals, compliance holds, expiring quotes, failed settlements, and anomaly halts live in the queue.
+            </p>
+          )}
           <Link href="/queue" className="dash-btn dash-btn-gold mt-4">
             Open queue
           </Link>
         </div>
       </aside>
+    </div>
+  );
+}
+
+function ThreadRow({ item, onRetry }: { item: ThreadItem; onRetry: (prompt: string) => void }) {
+  if (item.kind === 'user') {
+    return (
+      <div className="ml-auto max-w-[86%] rounded-lg rounded-tr-sm bg-[#1F4452] px-3 py-2 text-sm font-semibold leading-6 text-white">
+        {item.text}
+      </div>
+    );
+  }
+
+  if (item.kind === 'assistant') {
+    return (
+      <div className="flex gap-2">
+        <BotAvatar />
+        <div className="max-w-[88%] whitespace-pre-wrap rounded-lg rounded-tl-sm border border-[#326273]/12 bg-[#F6F0ED] px-3 py-2 text-sm font-semibold leading-6 text-[#326273]">
+          {item.text}
+        </div>
+      </div>
+    );
+  }
+
+  if (item.kind === 'activity') {
+    return (
+      <div className="flex items-center gap-2 pl-8">
+        <span
+          className={
+            item.tone === 'propose'
+              ? 'inline-flex items-center gap-1.5 rounded-md border border-[#5C9EAD]/35 bg-[#5C9EAD]/10 px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-[#326273]'
+              : 'inline-flex items-center gap-1.5 rounded-md border border-[#326273]/14 bg-white px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-[#326273]/70'
+          }
+        >
+          <span className="h-1 w-1 rounded-full bg-current" aria-hidden="true" />
+          {item.label}
+        </span>
+      </div>
+    );
+  }
+
+  if (item.kind === 'notice') {
+    return (
+      <div className="flex flex-wrap items-center gap-2 pl-8">
+        <span className="inline-flex items-center gap-1.5 rounded-md border border-[#E39774]/55 bg-[#E39774]/15 px-2.5 py-1.5 text-xs font-bold leading-5 text-[#9A4A2D]">
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+          {item.text}
+        </span>
+        {item.retryPrompt && (
+          <button
+            type="button"
+            onClick={() => onRetry(item.retryPrompt!)}
+            className="inline-flex items-center gap-1.5 rounded-md border border-[#326273]/20 bg-white px-2.5 py-1.5 text-xs font-black text-[#326273] transition hover:border-[#5C9EAD]"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            Try again
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  if (item.kind === 'session-expired') {
+    return (
+      <div className="flex flex-wrap items-center gap-2 pl-8">
+        <span className="inline-flex items-center gap-1.5 rounded-md border border-[#E39774]/55 bg-[#E39774]/15 px-2.5 py-1.5 text-xs font-bold leading-5 text-[#9A4A2D]">
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+          Your session ended, so 0xWal paused. Sign in again to pick up where you left off.
+        </span>
+        <Link
+          href="/login"
+          className="rounded-md bg-[#1F4452] px-2.5 py-1.5 text-xs font-black text-white transition hover:bg-[#326273]"
+        >
+          Sign in again
+        </Link>
+      </div>
+    );
+  }
+
+  // Unsigned proposal — readable in the thread, actionable only in the queue.
+  const proposal = item.proposal;
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-2 pl-8">
+        <span className="inline-flex items-center gap-1.5 rounded-md border border-[#efc46f]/60 bg-[#efc46f]/15 px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-[#9A4A2D]">
+          Unsigned · sent to approval queue
+        </span>
+      </div>
+      <ActionCard key={proposal.id} proposal={proposal} readOnly />
+    </div>
+  );
+}
+
+function BotAvatar({ size = 24 }: { size?: number }) {
+  return (
+    <div
+      className="mt-0.5 grid shrink-0 place-items-center overflow-hidden rounded-full bg-[radial-gradient(circle_at_50%_35%,#eaf6f1,#cfe8e0)] ring-1 ring-[#0d6370]/25"
+      style={{ height: size, width: size }}
+    >
+      <Image src="/cinematic/agent-bot-cut.png" alt="" width={512} height={512} style={{ height: size * 0.66, width: 'auto' }} />
     </div>
   );
 }
@@ -328,11 +498,11 @@ function DeskStat({ label, value, caution = false }: { label: string; value: num
   );
 }
 
-function ControlRow({ icon: Icon, label, value, caution = false }: { icon: LucideIcon; label: string; value: string; caution?: boolean }) {
+function ControlRow({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
       <div className="flex items-center gap-2">
-        <Icon className={caution ? 'h-4 w-4 text-[#E39774]' : 'h-4 w-4 text-[#5C9EAD]'} />
+        <Icon className="h-4 w-4 text-[#5C9EAD]" />
         <span className="font-black text-[#326273]">{label}</span>
       </div>
       <span className="font-mono text-xs font-black text-[#1F4452]">{value}</span>

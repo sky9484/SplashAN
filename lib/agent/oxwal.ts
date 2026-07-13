@@ -1125,13 +1125,10 @@ export async function* runOxwalAgent(request: OxwalAgentRequest): AsyncGenerator
       yield* runClaudeToolLoop(request);
     }
   } catch (error) {
-    yield {
-      type: 'warning',
-      warning: {
-        code: 'TOOL_ERROR',
-        message: error instanceof Error ? error.message : '0xWal generation failed',
-      },
-    };
+    // Backend trouble (API unreachable, model error) is an operator no-op:
+    // the local planner answers instead. Log it server-side only — the
+    // operator never needs to see which engine produced the reply.
+    console.error('[oxwal] generation fell back to local planner:', error instanceof Error ? error.message : error);
     yield* runLocalPlanner({ ...request, forceLocal: true });
   }
 

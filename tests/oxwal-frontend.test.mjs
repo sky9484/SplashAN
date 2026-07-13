@@ -127,7 +127,8 @@ test('landing keeps restored isometric shell with upgraded truth copy', async ()
   const ogImage = await readFile(new URL('../app/opengraph-image.tsx', import.meta.url), 'utf8');
   const composer = await readFile(new URL('../components/oxwal/OxWalComposer.tsx', import.meta.url), 'utf8');
   const floating = await readFile(new URL('../components/FloatingCopilot.tsx', import.meta.url), 'utf8');
-  const invoiceLoop = await readFile(new URL('../app/dashboard/0xwal/page.tsx', import.meta.url), 'utf8');
+  // The invoice loop lives inside the Invoices page now (Inspection loop tab).
+  const invoiceLoop = await readFile(new URL('../components/invoices/InvoiceLoop.tsx', import.meta.url), 'utf8');
 
   assert.match(claims, /headline: 'Collect USD\. Pay Southeast Asia\. Keep cash working\.'/);
   // Hero H1 lives in the cinematic hero (visually uppercased by .iso-display).

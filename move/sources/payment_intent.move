@@ -34,6 +34,7 @@ const E_INVALID_FX_RATE:       u64 = 408;
 const E_EMPTY_BENEFICIARY_REF: u64 = 409;
 const E_EMPTY_CURRENCY:        u64 = 410;
 const E_EMPTY_CORRIDOR:        u64 = 411;
+const E_STILL_PENDING:         u64 = 412;
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 /// 5-minute expiration window.
@@ -352,6 +353,31 @@ public fun cancel_by_sender(
         canceled_at: clock::timestamp_ms(clock),
         reason: STATUS_CANCELED,
     });
+}
+
+/// Delete a finalized (confirmed, expired, or canceled) intent to reclaim
+/// storage — shared intents otherwise live forever (audit fix S-04). Pending
+/// intents must be resolved through confirm/cancel first so their terminal
+/// state is evented before the object disappears.
+public fun delete_finalized(intent: PaymentIntent) {
+    assert!(intent.status != STATUS_PENDING, E_STILL_PENDING);
+
+    let PaymentIntent {
+        id,
+        sender: _,
+        recipient: _,
+        beneficiary_ref: _,
+        amount_usd: _,
+        currency: _,
+        corridor: _,
+        target_currency: _,
+        fx_rate_usd_local: _,
+        created_at: _,
+        created_epoch: _,
+        expires_at: _,
+        status: _,
+    } = intent;
+    id.delete();
 }
 
 // ─── Views ─────────────────────────────────────────────────────────────────

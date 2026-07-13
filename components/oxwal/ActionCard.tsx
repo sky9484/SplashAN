@@ -20,7 +20,14 @@ function confidenceColor(tone: ReturnType<typeof buildActionCardModel>['riskTone
   return tone === 'high' || hasUntrustedEvidence ? 'bg-[#E39774]' : 'bg-[#5C9EAD]';
 }
 
-export default function ActionCard({ proposal }: { proposal: ActionCardProposal }) {
+type ActionCardProps = {
+  proposal: ActionCardProposal;
+  /** View-only rendering for the chat thread: approval actions live in the
+   *  queue, so the buttons are replaced by a status note. */
+  readOnly?: boolean;
+};
+
+export default function ActionCard({ proposal, readOnly = false }: ActionCardProps) {
   const model = buildActionCardModel(proposal);
   const confidenceTone = confidenceColor(model.riskTone, model.hasUntrustedEvidence);
 
@@ -133,29 +140,36 @@ export default function ActionCard({ proposal }: { proposal: ActionCardProposal 
           </a>
         </details>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            className="inline-flex items-center gap-2 rounded-md bg-[#1F4452] px-3 py-2 text-sm font-black text-white"
-          >
-            <PenLine className="h-4 w-4" />
-            {model.primaryActionLabel}
-          </button>
-          <button
-            type="button"
-            className="inline-flex items-center gap-2 rounded-md border border-[#326273]/20 bg-white px-3 py-2 text-sm font-black text-[#326273]"
-          >
-            <Send className="h-4 w-4" />
-            {actionLabels.send}
-          </button>
-          <button
-            type="button"
-            className="inline-flex items-center gap-2 rounded-md border border-[#E39774]/55 bg-[#E39774]/10 px-3 py-2 text-sm font-black text-[#9A4A2D]"
-          >
-            <XCircle className="h-4 w-4" />
-            {actionLabels.reject}
-          </button>
-        </div>
+        {readOnly ? (
+          <span className="inline-flex items-center gap-2 rounded-md border border-[#326273]/16 bg-white px-3 py-2 font-mono text-xs font-bold uppercase tracking-[0.1em] text-[#326273]/70">
+            <ShieldCheck className="h-4 w-4 text-[#5C9EAD]" />
+            Approve or reject in the queue
+          </span>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className="inline-flex items-center gap-2 rounded-md bg-[#1F4452] px-3 py-2 text-sm font-black text-white"
+            >
+              <PenLine className="h-4 w-4" />
+              {model.primaryActionLabel}
+            </button>
+            <button
+              type="button"
+              className="inline-flex items-center gap-2 rounded-md border border-[#326273]/20 bg-white px-3 py-2 text-sm font-black text-[#326273]"
+            >
+              <Send className="h-4 w-4" />
+              {actionLabels.send}
+            </button>
+            <button
+              type="button"
+              className="inline-flex items-center gap-2 rounded-md border border-[#E39774]/55 bg-[#E39774]/10 px-3 py-2 text-sm font-black text-[#9A4A2D]"
+            >
+              <XCircle className="h-4 w-4" />
+              {actionLabels.reject}
+            </button>
+          </div>
+        )}
       </div>
     </article>
   );

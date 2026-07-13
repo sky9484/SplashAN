@@ -30,6 +30,42 @@ The remaining four modules (`smart_treasury`, `payment_intent`, `audit_anchor`, 
 
 ---
 
+## Re-audit pass — 2026-07-13
+
+**Scope**: all 9 modules under `move/sources/` at HEAD. Methodology: OtterSec
+checklist (capabilities, authority, asset flow, replay, events, upgrade
+posture) + OpenZeppelin math standards. `sui move build` passes (CLI 1.59.1).
+`sui move test` is blocked by a pre-existing incompatibility between the
+pinned deepbook rev's own test files and the CLI stdlib — unrelated to
+`splash_protocol` sources; tracked as a toolchain item.
+
+**Verification of prior findings.** The scaffold rewrites HAVE landed in this
+tree: C-01/C-02 (smart_treasury holds a real `Balance<T>`), C-03 + H-01/02/03
+(payment_intent binds sender via `tx_context`, uses `&Clock`, refunds
+overpay), H-05 (peg state initializes broken-until-first-update), M-01/M-02
+(audit_anchor AdminCap-gated, real verification), M-03/L-05 (receipt_v2
+immutable + gated). The "Open" statuses in the 2026-05-29 table below are
+retained as history; module doc-comments name the finding IDs they fix.
+
+**New findings (this pass):**
+
+| ID | Sev | Finding | Status |
+|----|-----|---------|--------|
+| S-01 | Medium | `BusinessAccount` has `store`, so a KYB-verified account object can be transferred/sold; `settle_payment` accepted any holder. **Fixed**: `settle_payment` now asserts `owner == tx_context::sender` (abort 106 `E_NOT_ACCOUNT_OWNER`). Ability itself cannot change in an upgrade — flag for next package version. | Fixed (mitigation) |
+| S-02 | Medium | `SettlementPool.protocol_fees` had no extraction path — protocol revenue permanently locked in the shared object. **Fixed**: AdminCap-gated `withdraw_fees` + `FeesWithdrawn` event. | Fixed |
+| S-03 | Low | `ComplianceCap` (`key`-only) could never be rotated to a new custodian. **Fixed**: `transfer_cap`. | Fixed |
+| S-04 | Low | Shared `PaymentIntent` objects lived forever after finalization (storage growth). **Fixed**: `delete_finalized` (abort 412 `E_STILL_PENDING`). | Fixed |
+| S-05 | Low | Raw u128 fee math in `settlement` replaced with OpenZeppelin `u64::mul_div(..., rounding::down())` — checked overflow, rounding documented as payer-favoring. | Fixed |
+| S-06 | Info | `AdminCap` has `key, store` — publicly transferable/wrappable. Custody policy must treat it as a bearer asset; ability change requires a new package (upgrade rules forbid ability edits). | Advisory |
+| S-07 | Info | `settle_batch` attributes `PaymentExecuted` events to whichever `BusinessAccount` the operator passes; attribution is operator-trusted, not chain-enforced. | Advisory |
+| S-08 | Info | `payment_intent::create` mints its `SettleReceipt` at creation time, so `SettlementAnchored` can fire for intents that never confirm. Off-chain indexers must join on `IntentConfirmed` before treating an anchor as a settlement. | Advisory |
+| S-09 | Info | `assert_deepbook_liquidity` in the caller-facing `settle_payment` path reads a caller-chosen `Pool<T, QuoteAsset>`; a permissionlessly-created pool with self-provided liquidity satisfies the guard. Acceptable today because the guard only gates the caller's own funds, but do not repurpose it to protect pooled funds. | Advisory |
+
+New abort codes to mirror in `lib/server/sui-settlement.ts::ABORT_CODES`:
+`106 E_NOT_ACCOUNT_OWNER`, `412 E_STILL_PENDING`.
+
+---
+
 ## Findings
 
 ### C-01 · `smart_treasury::add_usdc` always aborts on non-zero coins

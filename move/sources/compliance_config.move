@@ -80,6 +80,13 @@ public fun update(
     emit_update(config);
 }
 
+/// Rotate the operator capability to a new custodian. `ComplianceCap` has no
+/// `store` ability, so without this function the cap could never leave the
+/// address that created the config (audit fix S-03: key rotation).
+public fun transfer_cap(cap: ComplianceCap, recipient: address) {
+    transfer::transfer(cap, recipient);
+}
+
 public fun set_paused(config: &mut ComplianceConfig, cap: &ComplianceCap, paused: bool) {
     assert!(cap.config_id == object::id(config), E_INVALID_CAP);
     config.paused = paused;

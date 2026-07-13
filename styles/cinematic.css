@@ -1140,7 +1140,7 @@
       native 1200x896 ratio (object-fit cover on a matching box → it only
       ever downscales, so no blow-up / quality loss), the stat floats on
       it, and the caption is the card's joined footer. Card cream is
-      sampled from the art's own backdrop (#fcefdd) so it reads seamless
+      sampled from the art's own backdrop (#f4e7d5) so it reads seamless
       on every screen size. ─────────────────────────────────────────── */
 
 .iso-flow .iso-flow-visual {
@@ -1152,7 +1152,7 @@
   border: 1px solid rgba(8, 54, 64, .22);
   border-radius: 20px;
   padding: 0;
-  background: #fcefdd;
+  background: #f4e7d5;
   box-shadow:
     0 30px 60px rgba(0, 0, 0, .34),
     0 6px 0 rgba(0, 0, 0, .14);
@@ -1171,7 +1171,7 @@
   min-height: 0;
   padding: 0;
   border-radius: 0;
-  background: #fcefdd;
+  background: #f4e7d5;
 }
 
 .iso-flow .iso-flow-image img {
@@ -1181,7 +1181,9 @@
   max-height: none;
   object-fit: cover;
   object-position: center;
-  filter: none;
+  /* Tame the baked-in sunlight/bloom in the artwork so structure edges
+     stay readable: pull highlights down, restore edge contrast. */
+  filter: brightness(.93) contrast(1.09) saturate(1.04);
   animation: iso-reveal .35s ease both;
 }
 
@@ -1218,7 +1220,7 @@
   border-top: 1px dashed rgba(8, 54, 64, .28);
   border-radius: 0;
   padding: 18px 20px 20px;
-  background: #fcefdd;
+  background: #f4e7d5;
   box-shadow: none;
 }
 

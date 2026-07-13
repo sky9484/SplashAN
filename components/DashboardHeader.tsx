@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import {
   Camera,
@@ -8,6 +9,7 @@ import {
   LogOut,
   Search,
   Settings,
+  UserRound,
 } from 'lucide-react';
 
 import type { CustomerSession } from '@/lib/auth/customer-session';
@@ -129,6 +131,15 @@ export default function DashboardHeader({ collapsed, session, onLogout }: Dashbo
 
               {/* Actions */}
               <div className="space-y-0.5 p-1.5">
+                <Link
+                  href="/dashboard/profile"
+                  onClick={() => setProfileOpen(false)}
+                  className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-xs text-[#326273]/65 transition-colors hover:bg-[#F6F0ED] hover:text-[#326273]"
+                  role="menuitem"
+                >
+                  <UserRound size={13} />
+                  My profile
+                </Link>
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
@@ -138,14 +149,15 @@ export default function DashboardHeader({ collapsed, session, onLogout }: Dashbo
                   <Camera size={13} />
                   Change profile photo
                 </button>
-                <button
-                  type="button"
+                <Link
+                  href="/dashboard/settings"
+                  onClick={() => setProfileOpen(false)}
                   className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-xs text-[#326273]/65 transition-colors hover:bg-[#F6F0ED] hover:text-[#326273]"
                   role="menuitem"
                 >
                   <Settings size={13} />
                   Account settings
-                </button>
+                </Link>
               </div>
 
               <div className="border-t border-[#326273]/8 p-1.5">

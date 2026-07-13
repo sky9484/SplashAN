@@ -3,6 +3,7 @@
 @import "shadcn/tailwind.css";
 @import "../styles/tokens.css";
 @import "../styles/cinematic.css";
+@import "../styles/mobile-landing.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -4114,17 +4115,20 @@ body {
     gap: 8px;
   }
 
-  .iso-button-small {
-    width: 36px;
-    min-width: 36px;
-    min-height: 34px;
+  /* Icon-only collapse is a HEADER affordance only — the wordmark + CTA must
+     share a 66px bar. In-content .iso-button-small CTAs keep their labels
+     (see the phone readability layer at the end of this file). */
+  .iso-header .iso-button-small {
+    width: 40px;
+    min-width: 40px;
+    min-height: 40px;
     padding: 0;
     font-size: 0;
   }
 
-  .iso-button-small svg {
-    width: 14px;
-    height: 14px;
+  .iso-header .iso-button-small svg {
+    width: 15px;
+    height: 15px;
   }
 
   .iso-hero-layout {
@@ -7834,5 +7838,68 @@ button.iso-product-row {
   .iso-floating-note-c {
     --note-scale: .36;
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Phone readability layer — "the desktop look, made to fit"
+   Phones render the full isometric landing (with the non-pinned static
+   hero). The reflow to a single column is already handled by the
+   breakpoints above; this layer only guarantees legibility on a thumb:
+   in-content CTAs keep their labels, and the micro-labels the desktop
+   sets at 9–10px are lifted to an ~11px floor. Everything is scoped
+   under .iso-landing so it wins over the base rules in cinematic.css
+   regardless of stylesheet order. Nothing here changes the desktop.
+   (Floors align with the brand rule: no text below ~10px, body ≥ 13px.)
+   ═══════════════════════════════════════════════════════════════════ */
+@media (max-width: 700px) {
+  /* In-content small CTAs are full-width bars, not header icons — keep the
+     label and a comfortable 46px tap target. */
+  .iso-landing .iso-button-small {
+    min-height: 46px;
+    padding-inline: 20px;
+    font-size: 14px;
+  }
+
+  /* ...but the header CTA must stay an icon (its bar is only 66px). This
+     re-asserts the collapse at higher specificity so the rule above can't
+     un-hide the label and overflow the header. */
+  .iso-landing .iso-header .iso-button-small {
+    width: 40px;
+    min-width: 40px;
+    min-height: 40px;
+    padding: 0;
+    font-size: 0;
+  }
+
+  /* Static-hero telemetry meta is real explanatory copy — lift it off the
+     9.5px compact floor so it reads on a phone. */
+  .iso-landing .cin-callout small {
+    font-size: 11.5px;
+    line-height: 1.5;
+  }
+
+  /* Roadmap pills, evidence code paths and inline module names. */
+  .iso-landing .iso-roadmap-chip strong { font-size: 11px; }
+  .iso-landing .iso-roadmap-chip small { font-size: 10.5px; }
+  .iso-landing .iso-ctrl-module { font-size: 11px; }
+  .iso-landing .iso-ctrl-states code { font-size: 11px; }
+
+  /* Card sub-labels across the loops, supply, trust and copilot sections. */
+  .iso-landing .iso-loops-card small,
+  .iso-landing .iso-loops-live,
+  .iso-landing .iso-loops-copy small,
+  .iso-landing .iso-loops-meta small,
+  .iso-landing .iso-supply-copy small,
+  .iso-landing .iso-trust-card small,
+  .iso-landing .iso-trust-foot,
+  .iso-landing .iso-copilot-memory small,
+  .iso-landing .iso-recipient-ladder small,
+  .iso-landing .cin-partner-reveal small { font-size: 11px; }
+
+  /* Footer: status line, legal, ticker and copyright. */
+  .iso-landing .cin-footer-status span,
+  .iso-landing .cin-footer-col small,
+  .iso-landing .cin-footer-tick,
+  .iso-landing .cin-footer-bar span { font-size: 11px; }
 }
 

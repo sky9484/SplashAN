@@ -4,6 +4,8 @@ use splash_protocol::business_account::{Self, BusinessAccount, AdminCap};
 use splash_protocol::compliance_config::ComplianceConfig;
 use splash_protocol::peg_monitor::{Self, PegState};
 use deepbook::pool::Pool;
+use openzeppelin_math::rounding;
+use openzeppelin_math::u64 as oz_u64;
 use sui::clock::Clock;
 use sui::balance::{Self, Balance};
 use sui::coin::{Self, Coin};
@@ -18,6 +20,9 @@ const E_EMPTY_BATCH: u64 = 102;
 const E_FEE_EXCEEDED: u64 = 103;
 const E_INVALID_RECIPIENT: u64 = 104;
 const E_INVALID_AMOUNT: u64 = 105;
+/// The BusinessAccount object was transferred away from the address recorded
+/// as its owner. Verified status is not transferable (audit fix S-01).
+const E_NOT_ACCOUNT_OWNER: u64 = 106;
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 const BPS_DENOMINATOR: u64 = 10_000;
@@ -93,6 +98,11 @@ public fun settle_payment<T, QuoteAsset>(
     ctx: &mut TxContext,
 ) {
     assert!(business_account::is_verified(business_account), E_NOT_VERIFIED);
+    // Bind verified status to the address that passed KYB. The owned-object
+    // rule already forces the tx sender to hold the account object; this
+    // assert additionally rejects accounts whose object was transferred or
+    // sold after verification (S-01: verified status is not transferable).
+    assert!(business_account::owner(business_account) == tx_context::sender(ctx), E_NOT_ACCOUNT_OWNER);
     assert!(fee_bps <= MAX_FEE_BPS, E_FEE_EXCEEDED);
     assert!(recipient != @0x0, E_INVALID_RECIPIENT);
     peg_monitor::assert_pegged(peg_state, compliance_config, clock);
@@ -100,9 +110,10 @@ public fun settle_payment<T, QuoteAsset>(
     let gross = coin::value(&payment);
     assert!(gross > 0, E_INVALID_AMOUNT);
     peg_monitor::assert_deepbook_liquidity(compliance_config, deepbook_pool, gross, clock);
-    // u128 intermediate: gross * fee_bps can exceed u64::MAX for large amounts
-    // (Move aborts on overflow), which would DoS legitimate large settlements.
-    let fee = (((gross as u128) * (fee_bps as u128)) / (BPS_DENOMINATOR as u128)) as u64;
+    // OpenZeppelin checked mul_div (u128 intermediate, rounds down): fee
+    // rounding always favors the payer, and overflow aborts instead of
+    // wrapping.
+    let fee = fee_of(gross, fee_bps);
     let net = gross - fee;
 
     assert!(net > 0, E_INSUFFICIENT_FUNDS);
@@ -167,7 +178,7 @@ public fun settle_batch<T, QuoteAsset>(
         assert!(payment.recipient != @0x0, E_INVALID_RECIPIENT);
         assert!(payment.amount > 0, E_INVALID_AMOUNT);
 
-        let fee = (((payment.amount as u128) * (fee_bps as u128)) / (BPS_DENOMINATOR as u128)) as u64;
+        let fee = fee_of(payment.amount, fee_bps);
         let net = payment.amount - fee;
 
         // Same invariant as single settle — net must be positive after fee.
@@ -214,6 +225,37 @@ public fun settle_sui_batch<QuoteAsset>(
         clock,
         ctx,
     );
+}
+
+/// Withdraw accumulated protocol fees to `recipient`. AdminCap-gated.
+///
+/// Audit fix S-02: fees previously accumulated in `pool.protocol_fees` with
+/// no extraction path, permanently locking revenue in the shared object.
+public fun withdraw_fees<T>(
+    _admin: &AdminCap,
+    pool: &mut SettlementPool<T>,
+    recipient: address,
+    amount: u64,
+    ctx: &mut TxContext,
+) {
+    assert!(recipient != @0x0, E_INVALID_RECIPIENT);
+    assert!(amount > 0, E_INVALID_AMOUNT);
+    assert!(balance::value(&pool.protocol_fees) >= amount, E_INSUFFICIENT_FUNDS);
+
+    let fees = balance::split(&mut pool.protocol_fees, amount);
+    transfer::public_transfer(coin::from_balance(fees, ctx), recipient);
+
+    event::emit(FeesWithdrawn { recipient, amount });
+}
+
+public struct FeesWithdrawn has copy, drop {
+    recipient: address,
+    amount: u64,
+}
+
+/// Checked fee math shared by single and batch settlement.
+fun fee_of(gross: u64, fee_bps: u64): u64 {
+    oz_u64::mul_div(gross, fee_bps, BPS_DENOMINATOR, rounding::down()).destroy_some()
 }
 
 public fun pool_balance<T>(pool: &SettlementPool<T>): u64 {

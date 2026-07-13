@@ -46,7 +46,6 @@ const navGroups: NavGroup[] = [
       { label: 'Overview', href: '/dashboard/overview', icon: LayoutDashboard },
       { label: 'Treasury', href: '/dashboard/treasury', icon: TrendingUp },
       { label: 'Invoices', href: '/dashboard/invoices', icon: FileText },
-      { label: 'Invoice loop', href: '/dashboard/0xwal', icon: FileText },
     ],
   },
   {
