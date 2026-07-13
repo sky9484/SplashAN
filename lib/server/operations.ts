@@ -90,6 +90,7 @@ export type BatchRecord = {
   digest: string | null;
   packageId: string | null;
   explorer: { suiVisionTxUrl: string | null; suiScanTxUrl: string | null };
+  demo?: boolean;
   createdAt: string;
 };
 

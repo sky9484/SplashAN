@@ -94,7 +94,7 @@ export default function StepStatus({ state, set, next }: { state: TransferState;
     {
       label: state.funding.selection.type === 'held' ? 'Balance debited' : state.funding.selection.type === 'fiat' ? 'Provider funds received' : 'Coin source cleared',
       detail: state.funding.selection.type === 'held'
-        ? `Splash balance debited $${state.amount.value || '0.00'} in native USDC`
+        ? `Splash balance debited $${state.amount.value || '0.00'}`
         : state.funding.selection.type === 'fiat'
           ? `${state.funding.selection.provider} deposit confirmed $${state.amount.value || '0.00'}`
           : `${state.funding.selection.asset} passed KYT and normalized to native USDC`,
@@ -102,12 +102,12 @@ export default function StepStatus({ state, set, next }: { state: TransferState;
     },
     {
       label: 'Sui settlement',
-      detail: 'Routing native USDC settlement through Sui finality',
+      detail: 'Routing USD settlement through Sui finality',
       icon: Network,
     },
     {
       label: state.deliveryTier === 'SWEEP_ACCOUNT' ? 'Auto-sweeping to bank' : state.deliveryTier === 'STORED_BALANCE' ? 'Crediting Splash balance' : `Connecting to ${state.recipient.country}`,
-      detail: state.deliveryTier === 'SWEEP_ACCOUNT' ? `PDAX converts and pays ${state.amount.targetCurrency}` : state.deliveryTier === 'STORED_BALANCE' ? 'Crediting reusable USDC balance' : `Preparing ${state.amount.targetCurrency} payout on the local partner rail`,
+      detail: state.deliveryTier === 'SWEEP_ACCOUNT' ? `PDAX converts and pays ${state.amount.targetCurrency}` : state.deliveryTier === 'STORED_BALANCE' ? 'Crediting reusable Splash balance' : `Preparing ${state.amount.targetCurrency} payout on the local partner rail`,
       icon: Globe2,
     },
     {

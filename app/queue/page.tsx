@@ -30,7 +30,7 @@ const baseExplain: ProposalExplain = {
   recommendation: 'Release verified supplier payout',
   financialImpact: {
     amountOut: BigInt(420000),
-    currencyOut: 'USDC',
+    currencyOut: 'USD',
     feeBps: 18,
   },
   evidence: [
@@ -46,8 +46,8 @@ const baseExplain: ProposalExplain = {
 const baseSimulation: SimulationResult = {
   ok: true,
   balanceChanges: [
-    { owner: 'org_treasury', coinType: 'USDC', amount: '-420000' },
-    { owner: 'cp_acme_ph', coinType: 'USDC', amount: '420000' },
+    { owner: 'org_treasury', coinType: 'USD', amount: '-420000' },
+    { owner: 'cp_acme_ph', coinType: 'USD', amount: '420000' },
   ],
   gasSponsored: true,
   simulatedAt: generatedAt.toISOString(),
@@ -83,7 +83,7 @@ const demoProposals: UnsignedProposal[] = [
   proposal('prop_dual_threshold', {
     explain: {
       recommendation: 'Approve dual-control supplier payout',
-      financialImpact: { amountOut: BigInt(1250000), currencyOut: 'USDC', feeBps: 14 },
+      financialImpact: { amountOut: BigInt(1250000), currencyOut: 'USD', feeBps: 14 },
       requiredApprovers: 2,
       risk: 'MEDIUM',
       confidence: 0.86,
@@ -95,7 +95,7 @@ const demoProposals: UnsignedProposal[] = [
     expiresAt: minutesFromNow(11),
     explain: {
       recommendation: 'Convert corridor float before quote expiry',
-      financialImpact: { amountIn: BigInt(300000), amountOut: BigInt(299240), currencyIn: 'USDC', currencyOut: 'USDC', feeBps: 9 },
+      financialImpact: { amountIn: BigInt(300000), amountOut: BigInt(299240), currencyIn: 'USD', currencyOut: 'USD', feeBps: 9 },
       requiredApprovers: 1,
       risk: 'LOW',
     },

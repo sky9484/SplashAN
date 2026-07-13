@@ -4,6 +4,7 @@ import { promisify } from 'node:util';
 
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { Secp256k1Keypair } from '@mysten/sui/keypairs/secp256k1';
 import { Transaction } from '@mysten/sui/transactions';
 
 import {
@@ -23,7 +24,7 @@ const execFileAsync = promisify(execFile);
 type SettlementExecution = 'sdk' | 'cli' | 'simulate';
 type CliReadiness = { ready: true; address: string } | { ready: false; reason: string };
 
-let cachedOperatorKeypair: Ed25519Keypair | null | undefined;
+let cachedOperatorKeypair: Ed25519Keypair | Secp256k1Keypair | null | undefined;
 let cachedCliReadiness: CliReadiness | null = null;
 
 function settlementMode(): 'auto' | 'live' | 'simulate' {
@@ -32,11 +33,22 @@ function settlementMode(): 'auto' | 'live' | 'simulate' {
   throw new Error(`Invalid SUI_SETTLEMENT_MODE "${mode}". Use auto, live, or simulate.`);
 }
 
+// Batch-only settlement override. `settle_batch` requires live DeepBook order-book
+// depth (peg_monitor::assert_deepbook_liquidity), which testnet pools rarely have,
+// so a real batch can abort mid-demo. Setting SUI_BATCH_SETTLEMENT_MODE=simulate
+// keeps batch on a labelled SIM_ receipt while single transfers, treasury, and the
+// composed proof flow still settle for real. Returns null → fall through to the
+// global mode.
+function batchExecutionOverride(): SettlementExecution | null {
+  const mode = (process.env.SUI_BATCH_SETTLEMENT_MODE ?? '').trim().toLowerCase();
+  return mode === 'simulate' ? 'simulate' : null;
+}
+
 function configuredOperatorAddress(): string {
   return (getContractConfig().operatorAddress ?? '').trim();
 }
 
-export function getOperatorKeypair(): Ed25519Keypair | null {
+export function getOperatorKeypair(): Ed25519Keypair | Secp256k1Keypair | null {
   if (cachedOperatorKeypair !== undefined) return cachedOperatorKeypair;
 
   const encoded = (
@@ -52,11 +64,15 @@ export function getOperatorKeypair(): Ed25519Keypair | null {
 
   try {
     const parsed = decodeSuiPrivateKey(encoded);
-    if (parsed.scheme !== 'ED25519') {
-      throw new Error(`unsupported key scheme ${parsed.scheme}; Splash currently requires ED25519`);
+    let keypair: Ed25519Keypair | Secp256k1Keypair;
+    if (parsed.scheme === 'ED25519') {
+      keypair = Ed25519Keypair.fromSecretKey(parsed.secretKey);
+    } else if (parsed.scheme === 'Secp256k1') {
+      keypair = Secp256k1Keypair.fromSecretKey(parsed.secretKey);
+    } else {
+      throw new Error(`unsupported key scheme ${parsed.scheme}; Splash supports ED25519 and Secp256k1`);
     }
 
-    const keypair = Ed25519Keypair.fromSecretKey(parsed.secretKey);
     const signerAddress = keypair.toSuiAddress();
     const expectedAddress = configuredOperatorAddress();
     if (expectedAddress && signerAddress.toLowerCase() !== expectedAddress.toLowerCase()) {
@@ -948,11 +964,11 @@ export async function recordBatchSettlementOnSui(input: {
   /** Override the corridor fee. Bounded to CONTRACT_MAX_FEE_BPS. */
   feeBps?: number;
 }) {
-  const execution = await resolveSettlementExecution();
+  const execution = batchExecutionOverride() ?? await resolveSettlementExecution();
   if (execution === 'simulate') {
     const sim = simulatedSettlement(input.batchId);
-    console.warn(`[Sui Batch Settlement] sui CLI unavailable or simulate mode — recording SIMULATED settlement. batch=${input.batchId} rows=${input.rows.length} digest=${sim.digest}`);
-    return sim;
+    console.warn(`[Sui Batch Settlement] simulate mode (or CLI unavailable) — recording SIMULATED settlement. batch=${input.batchId} rows=${input.rows.length} digest=${sim.digest}`);
+    return { ...sim, simulated: true as const };
   }
   const cfg = getContractConfig();
   const SPLASH_PACKAGE_ID = configIdOrThrow('packageId', 'SPLASH_PACKAGE_ID');

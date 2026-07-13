@@ -329,9 +329,9 @@ export default function StepQuote({
         <div className="flex gap-3">
           <ShieldCheck />
           <span>{selection.type === 'held'
-            ? 'Splash balance is already native USDC, so no additional funding sub-flow is required.'
+            ? 'Splash balance is ready to settle, so no additional funding sub-flow is required.'
             : selection.type === 'fiat'
-              ? 'USD bank funding uses Stripe or Airwallex. Cards remain disabled, and funding normalizes to USDC.'
+              ? 'USD bank funding uses Stripe or Airwallex. Cards remain disabled, and funds settle on the Splash network.'
               : 'USDC deposits use a deposit address and QR. KYT clears before credit, and only native Sui USDC reaches settlement.'}</span>
         </div>
       </div>

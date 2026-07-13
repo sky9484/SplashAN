@@ -6,6 +6,7 @@ import Papa from "papaparse";
 import { toast } from "sonner";
 
 import HoverPopup from "@/components/HoverPopup";
+import StatusBadge from "@/components/StatusBadge";
 import DashPageHeader from "@/components/dashboard/DashPageHeader";
 import DashStat from "@/components/dashboard/DashStat";
 import ExplorerLinks from "@/components/dashboard/ExplorerLinks";
@@ -38,6 +39,7 @@ type BatchStatus = {
   totalAmount: string;
   digest: string | null;
   explorer: { suiVisionTxUrl: string | null; suiScanTxUrl: string | null };
+  demo?: boolean;
 };
 
 type CsvRow = {
@@ -562,14 +564,24 @@ function BatchStatusPanel({ status }: { status: BatchStatus }) {
 
       <div className="font-mono text-[11px] text-[#326273]/50 break-all">ID: {status.id}</div>
 
-      {status.digest && (
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="min-w-0 flex-1 break-all rounded-lg bg-white px-3 py-1.5 font-mono text-[11px] text-[#326273]/60">
-            {status.digest}
+      {status.digest && (() => {
+        const isSimulated = status.demo === true || status.digest.startsWith("SIM_");
+        return (
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="min-w-0 flex-1 break-all rounded-lg bg-white px-3 py-1.5 font-mono text-[11px] text-[#326273]/60">
+              {status.digest}
+            </div>
+            {isSimulated ? (
+              <span className="inline-flex items-center gap-2">
+                <StatusBadge status="demo" />
+                <span className="text-[11px] font-semibold text-[#9a6f15]">Simulated batch — no on-chain transaction</span>
+              </span>
+            ) : (
+              <ExplorerLinks digest={status.digest} />
+            )}
           </div>
-          <ExplorerLinks digest={status.digest} />
-        </div>
-      )}
+        );
+      })()}
 
       <div className="flex items-center gap-3 text-[11px] text-[#326273]/50">
         <Clock size={11} />

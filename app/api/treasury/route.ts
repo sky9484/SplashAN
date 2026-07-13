@@ -15,9 +15,12 @@ import { NextResponse } from 'next/server';
 import { requireCustomerRequest } from '@/lib/server/customer-auth';
 import { readJsonBody } from '@/lib/server/http';
 import {
+  cancelTreasuryWithdrawal,
   getLedger,
   listNotices,
   moveToTreasury,
+  noticeWindowDays,
+  noticeWindowLabel,
   requestTreasuryWithdrawal,
 } from '@/lib/server/treasury';
 import { getTreasuryRate } from '@/lib/server/usdy';
@@ -36,12 +39,16 @@ function snapshot() {
     treasuryYield: toUsd(ledger.treasuryYieldMicro),
     executionEnabled: process.env.TREASURY_EXECUTION_ENABLED === 'true',
     rate: { apy: rate.netApyPct, label: rate.label, introductory: rate.introductory },
-    notices: listNotices(ledger.userId).map((n) => ({
-      id: n.id,
-      amount: toUsd(n.amountMicro),
-      availableAt: n.availableAt,
-      state: n.state,
-    })),
+    withdrawalWindowDays: noticeWindowDays(),
+    withdrawalWindowLabel: noticeWindowLabel(),
+    notices: listNotices(ledger.userId)
+      .filter((n) => n.state === 'PENDING')
+      .map((n) => ({
+        id: n.id,
+        amount: toUsd(n.amountMicro),
+        availableAt: n.availableAt,
+        state: n.state,
+      })),
   };
 }
 
@@ -63,13 +70,25 @@ export async function POST(request: Request) {
     );
   }
   const body = await readJsonBody(request);
+  const ledger = getLedger();
+
+  // Cancel a still-pending withdrawal — returns reserved funds to Treasury.
+  if (body.action === 'cancel') {
+    const noticeId = typeof body.noticeId === 'string' ? body.noticeId : '';
+    if (!noticeId) return NextResponse.json({ error: 'noticeId is required to cancel a withdrawal' }, { status: 400 });
+    try {
+      cancelTreasuryWithdrawal(noticeId);
+    } catch (error) {
+      return NextResponse.json({ error: (error as Error).message }, { status: 400 });
+    }
+    return NextResponse.json(snapshot());
+  }
 
   const amountUsd = Number(body.amountUsd);
   if (!Number.isFinite(amountUsd) || amountUsd <= 0) {
     return NextResponse.json({ error: 'amountUsd must be a positive number' }, { status: 400 });
   }
   const amountMicro = Math.round(amountUsd * 1_000_000);
-  const ledger = getLedger();
 
   try {
     if (body.action === 'move') {
@@ -77,7 +96,7 @@ export async function POST(request: Request) {
     } else if (body.action === 'withdraw') {
       requestTreasuryWithdrawal(ledger.userId, amountMicro);
     } else {
-      return NextResponse.json({ error: "action must be 'move' or 'withdraw'" }, { status: 400 });
+      return NextResponse.json({ error: "action must be 'move', 'withdraw', or 'cancel'" }, { status: 400 });
     }
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 400 });

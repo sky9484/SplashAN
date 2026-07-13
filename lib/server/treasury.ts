@@ -77,9 +77,21 @@ export function listLedgers(): UserTreasuryLedger[] {
   return [...ledgers.values()];
 }
 
-function clampNoticeDays(): number {
+// Notice window in business days. USDY is short-dated-T-bill backed, so this is
+// a fast, liquid window by design (working capital, not a lock-up). Bounded to
+// [1, 10] business days: 1–2 is the realistic headline, up to 5 (one business
+// week) is a defensible liquidity-management buffer; longer is discouraged.
+const NOTICE_DAYS_MAX = 10;
+
+export function noticeWindowDays(): number {
   const n = Number(process.env.USDY_WITHDRAWAL_DAYS ?? 2);
-  return Math.min(3, Math.max(1, Number.isFinite(n) ? Math.round(n) : 2));
+  return Math.min(NOTICE_DAYS_MAX, Math.max(1, Number.isFinite(n) ? Math.round(n) : 2));
+}
+
+/** Single source of truth for withdrawal-window copy — UI never hardcodes it. */
+export function noticeWindowLabel(): string {
+  const n = noticeWindowDays();
+  return n === 1 ? 'next business day' : `1–${n} business days`;
 }
 
 /** Add N business days (skip Sat/Sun) — the T+1–T+3 settlement window. */
@@ -123,7 +135,7 @@ export function requestTreasuryWithdrawal(userId: string, amountMicro: number): 
     userId,
     amountMicro,
     requestedAt: now.toISOString(),
-    availableAt: addBusinessDays(now, clampNoticeDays()).toISOString(),
+    availableAt: addBusinessDays(now, noticeWindowDays()).toISOString(),
     state: 'PENDING',
   };
   // Reserve against principal first, then accrued yield.
@@ -140,12 +152,44 @@ export async function settleWithdrawal(noticeId: string) {
   const notice = notices.find((n) => n.id === noticeId);
   if (!notice) throw new Error('notice not found');
   if (notice.state === 'SETTLED') return notice;
+  if (notice.state === 'CANCELLED') throw new Error('withdrawal was cancelled');
   notice.state = 'SWAPPING';
   await quoteSwap('usdy->usdc', BigInt(notice.amountMicro));
   const ledger = getLedger(notice.userId);
   ledger.availableMicro += notice.amountMicro;
   ledger.updatedAt = new Date().toISOString();
   notice.state = 'SETTLED';
+  return notice;
+}
+
+/**
+ * Settle every PENDING notice whose window has elapsed (availableAt ≤ now). This
+ * is what actually credits Available on schedule — call it from the
+ * settle-withdrawals cron. `force` settles all PENDING regardless of date and is
+ * demo-only (used to fast-forward the T+N window without waiting real days).
+ */
+export async function settleDueWithdrawals(opts: { force?: boolean } = {}): Promise<WithdrawalNotice[]> {
+  const now = Date.now();
+  const due = notices.filter(
+    (n) => n.state === 'PENDING' && (opts.force === true || new Date(n.availableAt).getTime() <= now),
+  );
+  const settled: WithdrawalNotice[] = [];
+  for (const n of due) settled.push(await settleWithdrawal(n.id));
+  return settled;
+}
+
+/**
+ * Cancel a still-pending withdrawal and return the reserved funds to Treasury.
+ * Completes the notice state machine (PENDING → CANCELLED).
+ */
+export function cancelTreasuryWithdrawal(noticeId: string): WithdrawalNotice {
+  const notice = notices.find((n) => n.id === noticeId);
+  if (!notice) throw new Error('notice not found');
+  if (notice.state !== 'PENDING') throw new Error(`cannot cancel a ${notice.state} withdrawal`);
+  const ledger = getLedger(notice.userId);
+  ledger.treasuryPrincipalMicro += notice.amountMicro; // un-reserve
+  ledger.updatedAt = new Date().toISOString();
+  notice.state = 'CANCELLED';
   return notice;
 }
 

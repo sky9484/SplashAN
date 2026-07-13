@@ -46,14 +46,20 @@ export async function POST(request: Request) {
         // Per-corridor fee — contract enforces fee_bps ≤ MAX_FEE_BPS (200).
         targetCurrency,
       });
+      // Batch may run in labelled-simulate mode (SUI_BATCH_SETTLEMENT_MODE=simulate):
+      // its SIM_ digest has no on-chain tx, so don't emit explorer links that 404.
+      const simulated = (result as { simulated?: boolean }).simulated === true;
       updateBatch(batch.id, {
         state: 'SETTLED',
         digest: result.digest,
         packageId: result.packageId,
-        explorer: {
-          suiVisionTxUrl: `https://testnet.suivision.xyz/txblock/${result.digest}`,
-          suiScanTxUrl: `https://suiscan.xyz/testnet/tx/${result.digest}`,
-        },
+        demo: simulated,
+        explorer: simulated
+          ? { suiVisionTxUrl: null, suiScanTxUrl: null }
+          : {
+              suiVisionTxUrl: `https://testnet.suivision.xyz/txblock/${result.digest}`,
+              suiScanTxUrl: `https://suiscan.xyz/testnet/tx/${result.digest}`,
+            },
       });
     } catch (error) {
       updateBatch(batch.id, {

@@ -47,7 +47,7 @@ const SettlementReceipt = forwardRef<HTMLDivElement, ReceiptProps>(function Sett
         <ReceiptRow label="Recipient" value={props.recipient} />
         <ReceiptRow label="Amount" value={`${props.amount} ${props.currency}`} />
         <ReceiptRow label={`Fee (${props.feeTier ?? 'STANDARD'})`} value={`${props.fee} ${props.currency}`} />
-        <ReceiptRow label="Payment source" value={props.fundingSource ?? 'Bank USD to native USDC'} />
+        <ReceiptRow label="Payment source" value={props.fundingSource ?? 'Bank USD'} />
         <ReceiptRow label="On-chain digest" value={props.txDigest} mono />
         {props.explorerUrl && (
           <ReceiptRow label="Sui Explorer" value={props.explorerUrl} mono />

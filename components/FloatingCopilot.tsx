@@ -36,7 +36,7 @@ const COMPACT_RESPONSES: { keywords: string[]; reply: string }[] = [
   {
     keywords: ['treasury', 'yield', 'apy', 'earn', 'deposit', 'compound'],
     reply:
-      'Smart Treasury earns a variable Ondo USDY (T-bill) yield.\n\nYour Available balance (USDC) stays 0% but instant. Withdrawals from Smart Treasury take 1–3 business days. Want me to prepare a projection?',
+      'Smart Treasury earns a variable Ondo USDY (T-bill) yield.\n\nYour Available balance (USD) stays 0% but instant. Withdrawals from Smart Treasury take 1–3 business days. Want me to prepare a projection?',
   },
   {
     keywords: ['cheapest', 'corridor', 'rate', 'compare', 'best'],

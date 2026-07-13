@@ -40,7 +40,7 @@ const DEFAULT_SOURCES: Record<Variant, FlowNode[]> = {
     { label: 'Airwallex', sublabel: 'Bank rails', src: '/airwallex-logo.png' },
   ],
   treasury: [
-    { label: 'Idle USDC', sublabel: 'Available balance' },
+    { label: 'Idle USD', sublabel: 'Available balance' },
   ],
   batch: [
     { label: 'CSV upload', sublabel: 'Recipients' },
