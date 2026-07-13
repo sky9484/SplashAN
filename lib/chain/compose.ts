@@ -134,20 +134,30 @@ function mockSponsoredBytes(txKind: string, sender: string): SponsoredTransactio
 }
 
 function mockSimulationForProposal(proposal: UnsignedProposal): SuiDryRunResult {
-  const amount = positiveImpactAmount(proposal).toString();
-  const currency = proposal.explain.financialImpact.currencyOut
-    ?? proposal.explain.financialImpact.currencyIn
-    ?? 'USDC';
-  return {
-    effects: { status: { status: 'success' } },
-    balanceChanges: [
-      {
-        owner: { AddressOwner: proposal.orgId },
-        coinType: currency,
-        amount: `-${amount}`,
-      },
-    ],
-  };
+  const impact = proposal.explain.financialImpact;
+  const primary = positiveImpactAmount(proposal).toString();
+  const currency = impact.currencyOut ?? impact.currencyIn ?? 'USDC';
+  const balanceChanges: SuiDryRunResult['balanceChanges'] = [
+    {
+      owner: { AddressOwner: proposal.orgId },
+      coinType: currency,
+      amount: `-${primary}`,
+    },
+  ];
+
+  // Cross-currency proposals (e.g. USD funded → PHP delivered) carry a distinct
+  // input leg. Reflect it so the policy simulation-match check sees both the
+  // funding and the delivery amounts, not just one.
+  const amountIn = impact.amountIn;
+  if (typeof amountIn === 'bigint' && amountIn > BigInt(0) && amountIn.toString() !== primary) {
+    balanceChanges.push({
+      owner: { AddressOwner: `${proposal.orgId}:funding` },
+      coinType: impact.currencyIn ?? 'USD',
+      amount: `-${amountIn.toString()}`,
+    });
+  }
+
+  return { effects: { status: { status: 'success' } }, balanceChanges };
 }
 
 function normalizeDryRun(result: SuiDryRunResult): SimulationResult {

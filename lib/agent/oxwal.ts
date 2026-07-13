@@ -1,6 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
 
 import { composeAndSimulateProposal } from '../chain/compose.ts';
+import { estimateNettingSavedUsd, getCorridorFeeBps, getUsdCorridorByCurrency } from '../fx/corridors.ts';
+import { getUsdyNetApyPct } from '../server/usdy.ts';
 import { InMemoryProposalStore } from '../queue/proposal-state.ts';
 import type {
   ComplianceResult,
@@ -534,6 +536,36 @@ function usdMicro(amountUsd: number): bigint {
   return BigInt(Math.round(amountUsd * 1_000_000));
 }
 
+/** Micro units for any currency amount (same 1e6 scaling as usdMicro). */
+function toMicro(amount: number): bigint {
+  return BigInt(Math.round(amount * 1_000_000));
+}
+
+/**
+ * Real FX for a USD→currency corridor. The reference rate comes from the
+ * corridor table (source of truth for all 8 live currencies) and the Pyth
+ * price id + timestamp from getRate — so the FX row is a genuine quote, not a
+ * placeholder. Returns `null` for an unknown/unsupported currency.
+ */
+function resolveCorridorFx(currency: string) {
+  const corridor = getUsdCorridorByCurrency(currency);
+  if (!corridor) return null;
+  const quote = getRate({ pair: `USD/${currency}` });
+  return {
+    rate: corridor.rate,
+    fxRate: {
+      value: corridor.rate.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 }),
+      pythPriceId: quote.pythPriceId,
+      observedAt: quote.observedAt,
+    },
+  };
+}
+
+/** Net Smart Treasury yield (floating Ondo USDY), in bps — one source of truth. */
+function treasuryYieldBps(): number {
+  return Math.round(getUsdyNetApyPct() * 100);
+}
+
 function assertNoRawDestination(input: Record<string, unknown>) {
   const forbidden = ['destination', 'address', 'wallet', 'account', 'accountNumber', 'bankAccount', 'beneficiaryAddress'];
   const present = forbidden.filter((key) => input[key] !== undefined);
@@ -566,6 +598,7 @@ async function createDraftProposal(input: {
   currencyIn?: string;
   currencyOut?: string;
   feeBps?: number;
+  fxRate?: { value: string; pythPriceId: string; observedAt: string };
   yieldDeltaBps?: number;
   nettingSaved?: bigint;
   evidence: EvidenceItem[];
@@ -593,6 +626,7 @@ async function createDraftProposal(input: {
         currencyIn: input.currencyIn,
         currencyOut: input.currencyOut,
         feeBps: input.feeBps,
+        fxRate: input.fxRate,
         yieldDeltaBps: input.yieldDeltaBps,
         nettingSaved: input.nettingSaved,
       },
@@ -757,17 +791,28 @@ export async function proposePayment(input: unknown): Promise<UnsignedProposal> 
   const invoice = invoiceId ? getInvoice({ id: invoiceId }) : undefined;
   const corridor = optionalString(object, 'corridor') ?? `USD_${currency}`;
 
+  // Real economics: USD in, target currency out at the live corridor rate,
+  // the treasury float yield, and the netting saving for this notional.
+  const fx = resolveCorridorFx(currency);
+  const targetAmount = fx ? amountUsd * fx.rate : amountUsd;
+
   return createDraftProposal({
     keyParts: ['PAYMENT', orgId, counterpartyId, amountUsd, currency, invoiceId ?? null],
     kind: 'PAYMENT',
     orgId,
     corridor,
     recommendation: `Prepare a ${currency} payment for verified counterparty ${counterparty.id}. Human signature is required before any execution.`,
-    amountOut: usdMicro(amountUsd),
+    amountIn: usdMicro(amountUsd),
+    currencyIn: 'USD',
+    amountOut: toMicro(targetAmount),
     currencyOut: currency,
-    feeBps: currency === 'PHP' ? 80 : 85,
+    feeBps: getCorridorFeeBps(currency),
+    fxRate: fx?.fxRate,
+    yieldDeltaBps: treasuryYieldBps(),
+    nettingSaved: usdMicro(estimateNettingSavedUsd(amountUsd)),
     evidence: [
       evidence('COUNTERPARTY', counterparty.id, true),
+      ...(fx ? [evidence('PYTH_RATE', `USD/${currency}`, true)] : []),
       ...(invoice ? [evidence('INVOICE', invoice.id, false)] : []),
       evidence('COMPLIANCE', counterparty.id, true),
     ],
@@ -801,6 +846,8 @@ export async function proposeFxConvert(input: unknown): Promise<UnsignedProposal
   const amountUsd = requireAmount(object, 'amountUsd');
   const currencyOut = requireString(object, 'currencyOut').toUpperCase();
   if (currencyOut === 'USD') throw new Error('MYR to USD and non-USD to USD conversion are out of scope for v1');
+  const fx = resolveCorridorFx(currencyOut);
+  const targetAmount = fx ? amountUsd * fx.rate : amountUsd;
   return createDraftProposal({
     keyParts: ['FX_CONVERT', orgId, amountUsd, currencyOut],
     kind: 'FX_CONVERT',
@@ -808,9 +855,12 @@ export async function proposeFxConvert(input: unknown): Promise<UnsignedProposal
     corridor: `USD_${currencyOut}`,
     recommendation: `Prepare a USD-first FX conversion into ${currencyOut}.`,
     amountIn: usdMicro(amountUsd),
-    amountOut: usdMicro(amountUsd),
+    amountOut: toMicro(targetAmount),
     currencyIn: 'USD',
     currencyOut,
+    feeBps: getCorridorFeeBps(currencyOut),
+    fxRate: fx?.fxRate,
+    nettingSaved: usdMicro(estimateNettingSavedUsd(amountUsd)),
     evidence: [evidence('PYTH_RATE', `USD/${currencyOut}`, true)],
     risk: 'MEDIUM',
     confidence: 0.68,
@@ -831,7 +881,7 @@ export async function proposeTreasuryAllocation(input: unknown): Promise<Unsigne
     recommendation: `Prepare a reversible treasury allocation while preserving the ${corridor} operating floor.`,
     amountIn: usdMicro(amountUsd),
     currencyIn: 'USDC',
-    yieldDeltaBps: 520,
+    yieldDeltaBps: treasuryYieldBps(),
     evidence: [evidence('TREASURY', orgId, true), evidence('CORRIDOR_LIQUIDITY', corridor, true)],
     risk: 'LOW',
     confidence: 0.76,

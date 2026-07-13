@@ -40,6 +40,19 @@ export const ACTIVE_USD_CORRIDORS = USD_CORRIDORS.filter((c) => c.status === 'ac
 /** Hard ceiling — must stay ≤ MAX_FEE_BPS in settlement.move. */
 export const CONTRACT_MAX_FEE_BPS = 200;
 
+/**
+ * FX spread saved by sourcing the target currency from netted treasury
+ * inventory instead of a fresh market conversion. This is the per-transfer
+ * form of the documented "15–30 bps cheaper FX" batch benefit; 25 bps is the
+ * mid-corridor figure used to estimate savings on a single proposal.
+ */
+export const NETTING_SPREAD_BPS = 25;
+
+/** Estimated netting saving in USD for a given USD notional. */
+export function estimateNettingSavedUsd(amountUsd: number): number {
+  return Math.max(0, amountUsd) * (NETTING_SPREAD_BPS / 10_000);
+}
+
 /** Fallback used when an unknown currency is quoted. Matches USD→PHP (lowest). */
 export const FALLBACK_FEE_BPS = 80;
 

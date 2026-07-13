@@ -25,10 +25,20 @@ const OUTBOUND_KINDS = new Set<ProposalKind>(['PAYMENT', 'BATCH_PAYOUT', 'NETTIN
 const APPROVAL_ROLES = new Set<UserRole>(['OWNER', 'FINANCE_ADMIN', 'APPROVER']);
 const AUTO_INTERNAL_ROLES = new Set<UserRole>(['OWNER', 'FINANCE_ADMIN', 'APPROVER', 'MAKER']);
 
+const USD_LEG_CURRENCIES = new Set(['USD', 'USDC', 'USDT']);
+
 function amountUsdMicro(proposal: UnsignedProposal): bigint {
-  return proposal.explain.financialImpact.amountOut
-    ?? proposal.explain.financialImpact.amountIn
-    ?? BigInt(0);
+  const impact = proposal.explain.financialImpact;
+  // USD thresholds must compare against the USD-denominated leg. Cross-currency
+  // proposals (payment/FX) carry the USD notional as amountIn and the target
+  // currency as amountOut — using amountOut here would compare pesos to dollars.
+  if (USD_LEG_CURRENCIES.has(impact.currencyIn ?? '') && typeof impact.amountIn === 'bigint') {
+    return impact.amountIn;
+  }
+  if (USD_LEG_CURRENCIES.has(impact.currencyOut ?? '') && typeof impact.amountOut === 'bigint') {
+    return impact.amountOut;
+  }
+  return impact.amountOut ?? impact.amountIn ?? BigInt(0);
 }
 
 function absBigInt(value: bigint) {
