@@ -41,6 +41,17 @@ type ThreadItem =
   | { kind: 'session-expired'; id: string }
   | { kind: 'proposal'; id: string; proposal: ActionCardProposal };
 
+/** In-chat approval window per proposal. `waiting` counts down from 2 minutes;
+ *  an unapproved proposal then falls back to the maker-checker queue (it
+ *  already lives there server-side — the chat window is a convenience). */
+type ChatApproval = {
+  state: 'waiting' | 'approving' | 'approved' | 'expired' | 'blocked';
+  expiresAt: number;
+  note?: string;
+};
+
+const CHAT_APPROVAL_WINDOW_MS = 120_000;
+
 type OxwalStreamEvent =
   | { type: 'meta'; source: 'claude' | 'local'; readTools: string[]; proposeTools: string[] }
   | { type: 'delta'; text: string }
@@ -89,6 +100,8 @@ export default function OxwalDeskPage() {
   ]);
   const [streamingText, setStreamingText] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [chatApprovals, setChatApprovals] = useState<Record<string, ChatApproval>>({});
+  const [clockMs, setClockMs] = useState(() => Date.now());
   const threadRef = useRef<HTMLDivElement>(null);
 
   const hasStarted = thread.some((item) => item.kind === 'user');
@@ -98,6 +111,70 @@ export default function OxwalDeskPage() {
     [thread],
   );
 
+  // Tick once a second while any in-chat approval window is open, and expire
+  // windows that ran out — expired proposals wait in the maker-checker queue.
+  const hasOpenWindow = Object.values(chatApprovals).some((entry) => entry.state === 'waiting');
+  useEffect(() => {
+    if (!hasOpenWindow) return;
+    const interval = window.setInterval(() => {
+      const now = Date.now();
+      setClockMs(now);
+      setChatApprovals((current) => {
+        let changed = false;
+        const next: Record<string, ChatApproval> = {};
+        for (const [id, entry] of Object.entries(current)) {
+          if (entry.state === 'waiting' && now >= entry.expiresAt) {
+            next[id] = { ...entry, state: 'expired' };
+            changed = true;
+          } else {
+            next[id] = entry;
+          }
+        }
+        return changed ? next : current;
+      });
+    }, 1000);
+    return () => window.clearInterval(interval);
+  }, [hasOpenWindow]);
+
+  async function approveInChat(proposal: ActionCardProposal) {
+    setChatApprovals((current) => ({
+      ...current,
+      [proposal.id]: { ...current[proposal.id], state: 'approving', expiresAt: current[proposal.id]?.expiresAt ?? 0 },
+    }));
+    try {
+      const response = await fetch(`/api/proposals/${encodeURIComponent(proposal.id)}/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          signatureRef: `sig_chat_${proposal.id}`,
+          signedBy: 'operator-1',
+          actorRole: 'APPROVER',
+        }),
+      });
+      if (response.ok) {
+        setChatApprovals((current) => ({
+          ...current,
+          [proposal.id]: { state: 'approved', expiresAt: 0 },
+        }));
+        return;
+      }
+      const body = (await response.json().catch(() => null)) as { error?: string } | null;
+      setChatApprovals((current) => ({
+        ...current,
+        [proposal.id]: {
+          state: 'blocked',
+          expiresAt: 0,
+          note: body?.error ?? 'Policy requires this one to go through the approval queue.',
+        },
+      }));
+    } catch {
+      setChatApprovals((current) => ({
+        ...current,
+        [proposal.id]: { state: 'blocked', expiresAt: 0, note: 'Connection dropped — approve it from the queue instead.' },
+      }));
+    }
+  }
+
   const deskStats = useMemo(() => {
     const needsApproval = proposals.filter(
       (proposal) => proposal.explain.requiredApprovers > proposal.approvals.length,
@@ -106,13 +183,17 @@ export default function OxwalDeskPage() {
     return { total: proposals.length, needsApproval, warnings };
   }, [proposals, thread]);
 
-  // Let the floating 0xWal remind the operator elsewhere in the app. Every
-  // streamed proposal is unsigned work until a human settles it in the queue.
+  // Let the floating 0xWal remind the operator elsewhere in the app. A
+  // proposal stays "pending" until it is approved (in chat or in the queue).
   useEffect(() => {
+    const unresolved = proposals.filter((proposal) => chatApprovals[proposal.id]?.state !== 'approved');
     if (proposals.length > 0) {
-      recordPendingProposals({ count: proposals.length, label: proposals[proposals.length - 1].explain.recommendation });
+      recordPendingProposals({
+        count: unresolved.length,
+        label: unresolved[unresolved.length - 1]?.explain.recommendation ?? null,
+      });
     }
-  }, [proposals]);
+  }, [proposals, chatApprovals]);
 
   // Keep the newest turn in view while the conversation grows or streams.
   useEffect(() => {
@@ -217,6 +298,11 @@ export default function OxwalDeskPage() {
 
           if (event.type === 'proposal') {
             flushAssistant();
+            const proposalId = event.proposal.id;
+            setChatApprovals((current) => ({
+              ...current,
+              [proposalId]: { state: 'waiting', expiresAt: Date.now() + CHAT_APPROVAL_WINDOW_MS },
+            }));
             setThread((current) => [
               ...current,
               { kind: 'proposal', id: newId('proposal'), proposal: event.proposal },
@@ -322,7 +408,14 @@ export default function OxwalDeskPage() {
               aria-live="polite"
             >
               {thread.map((item) => (
-                <ThreadRow key={item.id} item={item} onRetry={(prompt) => void submitPrompt(prompt)} />
+                <ThreadRow
+                  key={item.id}
+                  item={item}
+                  onRetry={(prompt) => void submitPrompt(prompt)}
+                  chatApprovals={chatApprovals}
+                  clockMs={clockMs}
+                  onApprove={(proposal) => void approveInChat(proposal)}
+                />
               ))}
 
               {streamingText && (
@@ -387,7 +480,26 @@ export default function OxwalDeskPage() {
   );
 }
 
-function ThreadRow({ item, onRetry }: { item: ThreadItem; onRetry: (prompt: string) => void }) {
+function formatCountdown(ms: number) {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
+function ThreadRow({
+  item,
+  onRetry,
+  chatApprovals,
+  clockMs,
+  onApprove,
+}: {
+  item: ThreadItem;
+  onRetry: (prompt: string) => void;
+  chatApprovals: Record<string, ChatApproval>;
+  clockMs: number;
+  onApprove: (proposal: ActionCardProposal) => void;
+}) {
   if (item.kind === 'user') {
     return (
       <div className="ml-auto max-w-[86%] rounded-lg rounded-tr-sm bg-[#1F4452] px-3 py-2 text-sm font-semibold leading-6 text-white">
@@ -462,16 +574,81 @@ function ThreadRow({ item, onRetry }: { item: ThreadItem; onRetry: (prompt: stri
     );
   }
 
-  // Unsigned proposal — readable in the thread, actionable only in the queue.
+  // Unsigned proposal — approvable in the thread for 2 minutes, then it
+  // waits in the maker-checker queue like any other proposal.
   const proposal = item.proposal;
+  const approval = chatApprovals[proposal.id];
+  const remainingMs = approval ? approval.expiresAt - clockMs : 0;
+
   return (
     <div className="space-y-1.5">
       <div className="flex items-center gap-2 pl-8">
         <span className="inline-flex items-center gap-1.5 rounded-md border border-[#efc46f]/60 bg-[#efc46f]/15 px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-[#9A4A2D]">
-          Unsigned · sent to approval queue
+          {approval?.state === 'approved' ? 'Signed · queued for settlement' : 'Unsigned proposal'}
         </span>
       </div>
       <ActionCard key={proposal.id} proposal={proposal} readOnly />
+
+      {(!approval || approval.state === 'waiting') && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-[#326273]/14 bg-white px-3 py-2.5">
+          <Clock3 className="h-4 w-4 shrink-0 text-[#5C9EAD]" />
+          <span className="text-xs font-bold leading-5 text-[#326273]">
+            Approve here for the next{' '}
+            <span className="font-mono font-black tabular-nums text-[#1F4452]">{formatCountdown(remainingMs)}</span>
+            {' '}— after that it waits in the approval queue.
+          </span>
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => onApprove(proposal)}
+              className="inline-flex h-9 items-center gap-1.5 rounded-md bg-[#1F4452] px-3.5 text-xs font-black text-white transition hover:bg-[#326273] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#5C9EAD]/30"
+            >
+              <CheckCircle2 className="h-4 w-4" />
+              Approve now
+            </button>
+            <Link
+              href="/queue"
+              className="rounded-md border border-[#326273]/20 px-3 py-2 text-xs font-black text-[#326273] transition hover:border-[#5C9EAD]"
+            >
+              Review in queue
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {approval?.state === 'approving' && (
+        <div className="flex items-center gap-2 rounded-lg border border-[#326273]/14 bg-white px-3 py-2.5 text-xs font-bold text-[#326273]">
+          <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#5C9EAD] border-t-transparent" aria-hidden="true" />
+          Recording your signature…
+        </div>
+      )}
+
+      {approval?.state === 'approved' && (
+        <div className="flex items-center gap-2 rounded-lg border border-[#5C9EAD]/40 bg-[#5C9EAD]/10 px-3 py-2.5 text-xs font-black text-[#326273]">
+          <CheckCircle2 className="h-4 w-4 shrink-0 text-[#5C9EAD]" />
+          Approved — signed and submitted for settlement. The receipt lands in History.
+        </div>
+      )}
+
+      {approval?.state === 'expired' && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-[#326273]/14 bg-[#F6F0ED] px-3 py-2.5 text-xs font-bold text-[#326273]">
+          <Clock3 className="h-4 w-4 shrink-0 text-[#326273]/50" />
+          The in-chat window passed — this proposal now waits in the maker-checker queue.
+          <Link href="/queue" className="ml-auto rounded-md bg-[#1F4452] px-3 py-1.5 text-xs font-black text-white">
+            Open queue
+          </Link>
+        </div>
+      )}
+
+      {approval?.state === 'blocked' && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-[#E39774]/55 bg-[#E39774]/12 px-3 py-2.5 text-xs font-bold text-[#9A4A2D]">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          {approval.note ?? 'Policy requires this one to go through the approval queue.'}
+          <Link href="/queue" className="ml-auto rounded-md bg-[#1F4452] px-3 py-1.5 text-xs font-black text-white">
+            Open queue
+          </Link>
+        </div>
+      )}
     </div>
   );
 }

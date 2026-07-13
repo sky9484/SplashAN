@@ -608,7 +608,22 @@ async function createDraftProposal(input: {
     approvals: [],
   };
   const stored = proposalStore().create(proposal);
-  return composeAndSimulateProposal(stored);
+  const composed = await composeAndSimulateProposal(stored);
+  // Persist the simulation outcome so the approval surfaces (in-chat approve,
+  // control-room queue) act on the same state the operator saw in the chat —
+  // without this the store copy stays DRAFTED and submission 409s.
+  if (composed.simulation) {
+    try {
+      proposalStore().transition(stored.id, {
+        type: 'SIMULATION_COMPLETED',
+        simulation: composed.simulation,
+      });
+    } catch {
+      // Replayed idempotency keys return an already-transitioned proposal;
+      // the chat rendering below is unaffected.
+    }
+  }
+  return composed;
 }
 
 export function getBalances(input: unknown) {
@@ -1109,20 +1124,149 @@ function isInvoiceForAgent(value: unknown): value is InvoiceForAgent {
 }
 
 /**
- * Deterministic replies for a few high-intent demo phrases. Runs before the
- * model so the answer is instant, identical every time, and never depends on
- * the API being reachable — a deterministic fallback for a critical path.
- * Returns null for anything it doesn't own, which then flows to the model.
+ * Deterministic Splash desk knowledge. Runs BEFORE the model so answers are
+ * instant, identical every run, and independent of API availability — the
+ * deterministic fallback for a critical path.
  *
- * Guardrail: skip when the message names a specific invoice (inv…) or
- * counterparty (cp…) so the real "pay invoice X to cp_Y" proposal path is
- * never swallowed.
+ * Routing contract:
+ *   1. Anything that should produce a PROPOSAL is never answered here —
+ *      messages naming inv_/cp_ ids, or treasury/payment ACTION verbs, fall
+ *      through (return null) to the tool loop / local planner.
+ *   2. Off-topic requests get the business-focus line.
+ *   3. Splash questions referencing data we do not hold get the upload line.
+ *   4. Known Splash topics get concrete desk answers.
+ *   5. Everything else returns null and flows to the model.
  */
+const OFF_TOPIC_REPLY = 'Sorry, we need to focus on business! I can help with transfers, batch payouts, invoices, treasury, compliance, rates, and settlement proof.';
+const MISSING_DATA_REPLY = 'You need to provide me the data or upload a file. Attach a payout CSV or an invoice document in the composer, or point me at a record that exists on the desk (for example inv_demo_acme_5000 or cp_acme_ph).';
+
+const SPLASH_ANSWERS: Array<{ test: RegExp; reply: string; skipIf?: RegExp }> = [
+  {
+    // Fees / pricing / cost
+    test: /\b(fee|fees|pricing|price|cost|charge|commission|how much (do|does|will) (it|you|this) cost)\b/,
+    reply: 'Corridor fees start at 0.80% on the live USD to PHP testnet path (MYR, SGD, IDR, VND, THB, EUR and GBP stay modeled until partner rails activate). Batch runs quote one blended rate, typically 15-30 bps tighter. A hard on-chain ceiling caps any settlement fee at 2.00% — the contract aborts above it.',
+  },
+  {
+    // Corridors / countries / currencies
+    test: /\b(corridor|countries|country|currenc|where can (i|we) (send|pay)|which markets|support(ed)?\s+(countries|currencies|markets))\b/,
+    reply: 'Live today: USD to PHP on the Sui testnet corridor. Modeled expansion routes: MYR, SGD, IDR, VND, THB, EUR and GBP — I can prepare route reviews for those, but execution stays blocked until partner and regulatory controls are active.',
+  },
+  {
+    // FX rate
+    test: /\b(rate|fx|exchange|peso|php price|convert)\b/,
+    skipIf: /\b(hold|lock)\b/, // rate-hold questions get the hold answer below
+    reply: 'The desk models 1 USD ~ 56.42 PHP right now. A quote locks for 30 seconds at review, and you can hold a rate for 48 hours from the Rate holds page. On-chain, settlement aborts if the stablecoin peg deviates beyond the configured threshold, so a broken peg can never settle.',
+  },
+  {
+    // Rate holds
+    test: /\b(rate hold|hold (a|the|this) rate|lock (a|the|this) rate|48h|hold for)\b/,
+    reply: 'Rate holds pin a quote for 48 hours. Open Payments > Rate holds to create or review one, or ask me during a transfer review — the hold is recorded with its evidence so approvers can see exactly what was promised.',
+  },
+  {
+    // Treasury / yield — QUESTIONS only; allocate/sweep actions flow to the planner
+    test: /\b(treasury|yield|apy|earn|interest|idle cash|usdy|t-?bill)\b/,
+    skipIf: /\b(allocate|sweep|deploy|move|put|redeem|withdraw)\b/,
+    reply: 'Smart Treasury earns a variable Ondo USDY (T-bill backed) yield; your Available balance stays instant at 0%. Withdrawals from Smart Treasury take 1-3 business days and every movement is approval-gated. Ask me to "allocate idle treasury" and I will draft an unsigned proposal for you to sign.',
+  },
+  {
+    // Balances
+    test: /\b(balance|balances|how much (do|have) (i|we)|available funds|float)\b/,
+    reply: 'Your Available (instant) and Smart Treasury balances live on the Overview and Treasury pages. From here I can read balances into a proposal — say "allocate idle treasury" or start a transfer and I will pull the numbers with evidence attached.',
+  },
+  {
+    // Compliance / KYB / AML / limits
+    test: /\b(compliance|kyb|kyc|aml|kyt|sanction|limit|screening|watchlist)\b/,
+    reply: 'Compliance posture: KYB Tier 1 approved, AML clear, no sanctions flags. Every batch row is screened for AML lists, KYT amount rules (single transfers above 5,000 USD route to manual review), structuring patterns, corridor allowlist and purpose codes — before any value moves. The audit trail is retained on Walrus.',
+  },
+  {
+    // Settlement speed
+    test: /\b(how (fast|long|quick)|speed|settle time|settlement time|finality|instant)\b/,
+    reply: 'Sui finality anchors the settlement record in about 400ms. Delivery depends on the payout rail: bank payout lands in roughly 3-20 minutes on the PHP testnet path, a Splash receive account credits in seconds, and keeping funds as a Splash balance is immediate.',
+  },
+  {
+    // Proof / audit / receipts / walrus / seal
+    test: /\b(walrus|seal|proof|receipt|audit|evidence|trail|blob)\b/,
+    reply: 'Every settlement produces an on-chain receipt, and documents are Seal-encrypted before their proof is stored on Walrus with 7-year retention. Access is identity-gated: allowed identities decrypt, unknown parties fail closed. You can verify any record from the History page or the invoice Inspection loop.',
+  },
+  {
+    // Security / custody / safety
+    test: /\b(secure|security|safe|hack|custody|trust|risk of loss)\b/,
+    reply: 'Controls are layered: I can only read state and draft unsigned proposals — there is no execution tool on my side. A human signs every money movement (maker-checker), the policy engine re-checks at submit time, an on-chain peg monitor halts settlement on a broken peg, and a circuit breaker can pause each corridor.',
+  },
+  {
+    // Approvals / maker-checker / queue
+    test: /\b(approve|approval|maker|checker|sign|who signs|queue|control room)\b/,
+    reply: 'Splash runs maker-checker: I prepare an unsigned proposal with its impact, simulation and evidence, then a human approves. Small items can be approved right here in the chat within the 2-minute window; after that they wait in the approval queue (Open queue on the right). Dual-control amounts always need two distinct approvers.',
+  },
+  {
+    // Invoices — questions/how-to; actions with ids fall through
+    test: /\b(invoice|invoices|bill|get paid|receivable)\b/,
+    reply: 'Invoices live under Finance > Invoices. The vault creates Seal-protected pay links; the Inspection loop takes an uploaded invoice through encrypted intake, Walrus proof, Seal access checks and a route recommendation before any payment intent opens. Upload a document there, or tell me an invoice id (like inv_demo_acme_5000) and I will read it.',
+  },
+  {
+    // Recipients
+    test: /\b(recipient|beneficiar|payee|contact|supplier list|vendor list)\b/,
+    reply: 'Saved recipients are under Contacts > Recipients. I can only draft payments to a verified Counterparty id — never to a pasted account number, wallet address or memo text. If your payee is not on file yet, add them there first and I will use the verified record.',
+  },
+  {
+    // History / transactions
+    test: /\b(history|transactions|past payments|last (payment|transfer|batch)|statement)\b/,
+    reply: 'The full ledger is under Contacts > History — every transfer, batch and settlement with its receipt and proof links. Tell me what you are looking for and I can point you at the record.',
+  },
+  {
+    // Netting
+    test: /\b(netting|net settle|offset)\b/,
+    reply: 'Netting offsets opposing flows in a corridor so only the difference settles — fewer transfers, less spread. I can scan for netting opportunities and draft an unsigned netting settlement for approval; nothing nets without a human signature.',
+  },
+  {
+    // Onboarding / getting started
+    test: /\b(how (do|to) (i|we) (start|begin|use)|get started|onboard|new here|tutorial|guide)\b/,
+    reply: 'Quick tour: Transfer sends one payout (beneficiary > delivery > locked quote > receipt). Batch Payout screens a CSV payroll and settles it under one authorization. Invoices collects money with Seal-protected pay links. Treasury puts idle USD to work. I sit on top — ask me to read state or prepare any of it, and you approve.',
+  },
+  {
+    // Capabilities
+    test: /\b(what can you (do|read|prepare)|help|capabilities|tools|commands)\b/,
+    reply: 'I can read balances, treasury state, corridor liquidity, rates, counterparties, invoices, netting opportunities, and compliance status. I can also draft unsigned proposals — payments, transfers, FX conversions, treasury moves, netting, batch payouts — but I cannot sign or submit transactions. That authority stays with you.',
+  },
+  {
+    // Greetings
+    test: /^(hi|hey|hello|good (morning|afternoon|evening)|yo|sup)\b/,
+    reply: 'Hey! Ready when you are — I can check a rate, draft a transfer or batch, inspect an invoice, or look at treasury. What is on the agenda?',
+  },
+  {
+    // Thanks
+    test: /\b(thanks|thank you|thx|appreciate)\b/,
+    reply: 'Anytime! Anything else on the desk I can prepare for you?',
+  },
+];
+
+const OFF_TOPIC_PATTERNS = [
+  /\b(weather|raining|sunny|forecast)\b/,
+  /\b(joke|funny|make me laugh|meme)\b/,
+  /\b(poem|story|song|essay|lyrics|novel)\b/,
+  /\b(movie|film|netflix|series|anime|music|playlist)\b/,
+  /\b(football|soccer|basketball|nba|premier league|world cup|score)\b/,
+  /\b(news|headline|election|president|politics|celebrity)\b/,
+  /\b(bitcoin|btc|ethereum|crypto price|stock price|shares|nasdaq)\b/,
+  /\b(recipe|cook|dinner|restaurant|food)\b/,
+  /\b(game|gaming|play|fortnite|minecraft)\b/,
+  /\b(travel|holiday|vacation|flight|hotel)\b/,
+  /\b(homework|translate|write (me|a|an) (email|letter|post|tweet|blog))\b/,
+  /\b(girlfriend|boyfriend|dating|relationship advice)\b/,
+];
+
 function matchDemoScript(message: string): string | null {
   const q = message.toLowerCase();
-  const namesTarget = /\binv[\w-]/i.test(message) || /\bcp[\w-]/i.test(message);
+
+  // 1. Proposal paths are sacred — record IDs (inv_…, cp_…) go to the tools.
+  //    Note the underscore: plain words like "invoice" must NOT match.
+  const namesTarget = /\binv[_-][\w-]+/i.test(message) || /\bcp[_-][\w-]+/i.test(message);
   if (namesTarget) return null;
 
+  // 2. Off-topic → business focus.
+  if (OFF_TOPIC_PATTERNS.some((pattern) => pattern.test(q))) return OFF_TOPIC_REPLY;
+
+  // 3. Batch intent → offer to create one (no batch data lives on the desk).
   const batchIntent = /\b(batch|bulk|payroll|mass\s*payout|pay (everyone|all|the team|suppliers))\b/.test(q);
   const actionVerb = /\b(do|run|start|make|create|prepare|new|another|a)\b/.test(q) || /\?$/.test(q);
   if (batchIntent && actionVerb) {
@@ -1133,6 +1277,19 @@ function matchDemoScript(message: string): string | null {
       '',
       'You can also open the Batch desk to start from a template. Nothing settles until you sign the authorization.',
     ].join('\n');
+  }
+
+  // 4. References to records we do not hold → ask for the data.
+  //    e.g. "show the invoice from Tesla", "pay the Vertex invoice",
+  //    "open my batch for October" — Splash-shaped but nothing on file.
+  const referencesRecord = /\b(invoice|batch|payout|recipient|counterparty|payment)\b/.test(q);
+  const looksUpSpecific = /\b(from|for|by|of)\s+[a-z0-9]/.test(q) && /\b(show|open|find|look ?up|pull|where is|check|read|pay)\b/.test(q);
+  if (referencesRecord && looksUpSpecific) return MISSING_DATA_REPLY;
+
+  // 5. Known Splash topics.
+  for (const entry of SPLASH_ANSWERS) {
+    if (entry.skipIf?.test(q)) continue;
+    if (entry.test.test(q)) return entry.reply;
   }
 
   return null;

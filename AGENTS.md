@@ -17,6 +17,8 @@ so explicitly rather than silently proceeding without it.
 - `isometric-typography-designer` — the Splash isometric visual language (hero
   art, diagrams, depth/lighting, display type). Keep the brand look consistent.
 - `frontend-design` — distinctive, non-templated visual direction.
+- `design-taste-frontend` (taste-skill) — anti-slop guardrails so nothing ships
+  looking generic/templated. Installed in `.agents/skills/` and user-level.
 
 **For Sui Move / smart-contract work:**
 - `sui-move` and `sui-move-project` — official Mysten guidance (abilities,

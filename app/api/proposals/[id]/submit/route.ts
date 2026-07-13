@@ -100,14 +100,46 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       signatureRef: parsed.data.signatureRef,
       signedBy: parsed.data.signedBy,
     });
-    const signed = proposal.status === 'SIGNED'
-      ? proposal
+
+    // Walk the maker-checker chain from wherever the proposal currently sits.
+    // The policy engine (not the caller) decides how many approvers are needed.
+    const signedAt = new Date().toISOString();
+    let current = proposal;
+
+    if (current.status === 'SIMULATED') {
+      const approvers = policyDecision.outcome === 'REQUIRE_APPROVAL' ? policyDecision.approvers : 0;
+      current = store.transition(id, { type: 'POLICY_EVALUATED', requiredApprovers: approvers });
+      if (approvers === 0) {
+        current = store.transition(id, { type: 'MARK_APPROVED' });
+      } else {
+        current = store.transition(id, { type: 'QUEUE_FOR_APPROVAL' });
+      }
+    }
+
+    if (current.status === 'PENDING_APPROVAL') {
+      current = store.transition(id, {
+        type: 'APPROVE',
+        approval: { userId: parsed.data.signedBy, role: parsed.data.actorRole, signedAt },
+      });
+      if (current.status === 'PENDING_APPROVAL') {
+        // Dual-control: this signature is recorded; a distinct co-approver
+        // must sign from the queue before submission.
+        return json({
+          proposal: current,
+          policyDecision,
+          error: 'Your approval is recorded — a second approver must sign from the queue before this settles.',
+        }, 409);
+      }
+    }
+
+    const signed = current.status === 'SIGNED'
+      ? current
       : store.transition(id, {
           type: 'SIGN',
           signatureRef: parsed.data.signatureRef,
           signedBy: parsed.data.signedBy,
           policyAuthorized: true,
-          signedAt: new Date().toISOString(),
+          signedAt,
         });
     const submitted = store.transition(signed.id, { type: 'SUBMIT' });
     return json({ proposal: submitted, policyDecision });

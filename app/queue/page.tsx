@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import type { ProposalExplain, SimulationResult, UnsignedProposal } from '@/lib/agent/types';
+import { getOxwalProposalStore } from '@/lib/agent/oxwal';
 import { buildApprovalQueue, queueLanes, type QueueLane } from '@/lib/queue/approval-queue';
 import { getCustomerSession } from '@/lib/server/customer-auth';
 import ApprovalQueueBoard, { type QueueItem, type QueueLaneData } from '@/components/queue/ApprovalQueueBoard';
@@ -152,19 +153,40 @@ export default async function QueuePage() {
     redirect('/login');
   }
 
+  // Live proposals 0xWal drafted this session (in-memory store). Anything the
+  // operator did not approve inside the 2-minute chat window — or walked away
+  // from — surfaces here as real maker-checker work.
+  const liveProposals: QueueItem[] = getOxwalProposalStore()
+    .list()
+    .filter((item) => item.status === 'SIMULATED' || item.status === 'POLICY_EVALUATED' || item.status === 'PENDING_APPROVAL')
+    .map((item) => ({
+      id: item.id,
+      recommendation: item.explain.recommendation,
+      kind: item.kind,
+      maker: item.createdBy,
+      amountLabel: formatAmount(item),
+      approvalsCollected: new Set(item.approvals.map((approval) => approval.userId)).size,
+      requiredApprovers: item.explain.requiredApprovers,
+      risk: item.explain.risk,
+      expiryLabel: 'From 0xWal chat',
+    }));
+
   // Serialize the queue for the interactive client board (no bigint/Date over
   // the boundary). Approve/Reject state lives client-side for the demo.
-  const pending: QueueItem[] = queueView.lanes.PENDING_APPROVALS.map((item) => ({
-    id: item.proposal.id,
-    recommendation: item.proposal.explain.recommendation,
-    kind: item.proposal.kind,
-    maker: item.proposal.createdBy,
-    amountLabel: formatAmount(item.proposal),
-    approvalsCollected: item.approvalsCollected,
-    requiredApprovers: item.requiredApprovers,
-    risk: item.proposal.explain.risk,
-    expiryLabel: formatExpiry(item.expiresInMs),
-  }));
+  const pending: QueueItem[] = [
+    ...liveProposals,
+    ...queueView.lanes.PENDING_APPROVALS.map((item) => ({
+      id: item.proposal.id,
+      recommendation: item.proposal.explain.recommendation,
+      kind: item.proposal.kind,
+      maker: item.proposal.createdBy,
+      amountLabel: formatAmount(item.proposal),
+      approvalsCollected: item.approvalsCollected,
+      requiredApprovers: item.requiredApprovers,
+      risk: item.proposal.explain.risk,
+      expiryLabel: formatExpiry(item.expiresInMs),
+    })),
+  ];
 
   const otherLanes: QueueLaneData[] = queueLanes
     .filter((lane) => lane !== 'PENDING_APPROVALS')
