@@ -1108,6 +1108,36 @@ function isInvoiceForAgent(value: unknown): value is InvoiceForAgent {
   return Boolean(value && typeof value === 'object' && Array.isArray((value as { warnings?: unknown }).warnings));
 }
 
+/**
+ * Deterministic replies for a few high-intent demo phrases. Runs before the
+ * model so the answer is instant, identical every time, and never depends on
+ * the API being reachable — a deterministic fallback for a critical path.
+ * Returns null for anything it doesn't own, which then flows to the model.
+ *
+ * Guardrail: skip when the message names a specific invoice (inv…) or
+ * counterparty (cp…) so the real "pay invoice X to cp_Y" proposal path is
+ * never swallowed.
+ */
+function matchDemoScript(message: string): string | null {
+  const q = message.toLowerCase();
+  const namesTarget = /\binv[\w-]/i.test(message) || /\bcp[\w-]/i.test(message);
+  if (namesTarget) return null;
+
+  const batchIntent = /\b(batch|bulk|payroll|mass\s*payout|pay (everyone|all|the team|suppliers))\b/.test(q);
+  const actionVerb = /\b(do|run|start|make|create|prepare|new|another|a)\b/.test(q) || /\?$/.test(q);
+  if (batchIntent && actionVerb) {
+    return [
+      "I don't see a batch drafted yet — want to create one now?",
+      '',
+      'Drop a CSV of recipients into the composer (columns: name, address, country, purpose, amount) and I will screen every row for AML, KYT, structuring, and corridor rules, then hand you a batch to authorize.',
+      '',
+      'You can also open the Batch desk to start from a template. Nothing settles until you sign the authorization.',
+    ].join('\n');
+  }
+
+  return null;
+}
+
 export async function* runOxwalAgent(request: OxwalAgentRequest): AsyncGenerator<OxwalAgentEvent> {
   assertNoExecutionTools();
   const useLocal = request.forceLocal || process.env.OXWAL_FORCE_LOCAL === 'true' || !process.env.ANTHROPIC_API_KEY;
@@ -1117,6 +1147,14 @@ export async function* runOxwalAgent(request: OxwalAgentRequest): AsyncGenerator
     readTools: [...READ_TOOL_NAMES],
     proposeTools: [...PROPOSE_TOOL_NAMES],
   };
+
+  // Deterministic demo intents answer instantly, before the model.
+  const scripted = matchDemoScript(request.message.trim());
+  if (scripted) {
+    for (const token of tokens(scripted)) yield { type: 'delta', text: token };
+    yield { type: 'done' };
+    return;
+  }
 
   try {
     if (useLocal) {

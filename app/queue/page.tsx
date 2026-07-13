@@ -1,20 +1,11 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import {
-  AlertTriangle,
-  CheckCircle2,
-  Clock3,
-  FileWarning,
-  ShieldAlert,
-  ShieldCheck,
-  XCircle,
-  type LucideIcon,
-} from 'lucide-react';
 
 import type { ProposalExplain, SimulationResult, UnsignedProposal } from '@/lib/agent/types';
 import { buildApprovalQueue, queueLanes, type QueueLane } from '@/lib/queue/approval-queue';
 import { getCustomerSession } from '@/lib/server/customer-auth';
+import ApprovalQueueBoard, { type QueueItem, type QueueLaneData } from '@/components/queue/ApprovalQueueBoard';
 
 export const dynamic = 'force-dynamic';
 
@@ -133,14 +124,6 @@ const demoProposals: UnsignedProposal[] = [
 
 const queueView = buildApprovalQueue(demoProposals, { now: generatedAt, expiringWithinMs: 20 * 60 * 1000 });
 
-const laneMeta: Record<QueueLane, { label: string; icon: LucideIcon; tone: string }> = {
-  PENDING_APPROVALS: { label: 'Pending approvals', icon: ShieldCheck, tone: 'text-[#326273]' },
-  COMPLIANCE_HOLDS: { label: 'Compliance holds', icon: ShieldAlert, tone: 'text-[#E39774]' },
-  EXPIRING_QUOTES: { label: 'Expiring quotes', icon: Clock3, tone: 'text-[#E39774]' },
-  FAILED_SETTLEMENTS: { label: 'Failed settlements', icon: XCircle, tone: 'text-[#326273]' },
-  ANOMALY_HALTS: { label: 'Anomaly halts', icon: AlertTriangle, tone: 'text-[#E39774]' },
-};
-
 function formatAmount(proposal: UnsignedProposal) {
   const amount = proposal.explain.financialImpact.amountOut ?? proposal.explain.financialImpact.amountIn ?? BigInt(0);
   const currency = proposal.explain.financialImpact.currencyOut ?? proposal.explain.financialImpact.currencyIn ?? 'USD';
@@ -154,11 +137,13 @@ function formatExpiry(expiresInMs: number | null) {
   return `${minutes}m`;
 }
 
-function riskClass(risk: UnsignedProposal['explain']['risk']) {
-  if (risk === 'HIGH') return 'border-[#E39774]/50 bg-[#E39774]/15 text-[#9A4A2D]';
-  if (risk === 'MEDIUM') return 'border-[#326273]/20 bg-white/70 text-[#326273]';
-  return 'border-[#5C9EAD]/30 bg-[#5C9EAD]/12 text-[#326273]';
-}
+const laneLabels: Record<QueueLane, string> = {
+  PENDING_APPROVALS: 'Pending approvals',
+  COMPLIANCE_HOLDS: 'Compliance holds',
+  EXPIRING_QUOTES: 'Expiring quotes',
+  FAILED_SETTLEMENTS: 'Failed settlements',
+  ANOMALY_HALTS: 'Anomaly halts',
+};
 
 export default async function QueuePage() {
   const session = await getCustomerSession();
@@ -166,6 +151,39 @@ export default async function QueuePage() {
   if (!session) {
     redirect('/login');
   }
+
+  // Serialize the queue for the interactive client board (no bigint/Date over
+  // the boundary). Approve/Reject state lives client-side for the demo.
+  const pending: QueueItem[] = queueView.lanes.PENDING_APPROVALS.map((item) => ({
+    id: item.proposal.id,
+    recommendation: item.proposal.explain.recommendation,
+    kind: item.proposal.kind,
+    maker: item.proposal.createdBy,
+    amountLabel: formatAmount(item.proposal),
+    approvalsCollected: item.approvalsCollected,
+    requiredApprovers: item.requiredApprovers,
+    risk: item.proposal.explain.risk,
+    expiryLabel: formatExpiry(item.expiresInMs),
+  }));
+
+  const otherLanes: QueueLaneData[] = queueLanes
+    .filter((lane) => lane !== 'PENDING_APPROVALS')
+    .map((lane) => ({
+      key: lane,
+      label: laneLabels[lane],
+      items: queueView.lanes[lane].map((item) => ({
+        id: item.proposal.id,
+        recommendation: item.proposal.explain.recommendation,
+        kind: item.proposal.kind,
+        maker: item.proposal.createdBy,
+        amountLabel: formatAmount(item.proposal),
+        approvalsCollected: item.approvalsCollected,
+        requiredApprovers: item.requiredApprovers,
+        risk: item.proposal.explain.risk,
+        expiryLabel: formatExpiry(item.expiresInMs),
+        reason: item.reasons[0],
+      })),
+    }));
 
   return (
     <main className="min-h-screen bg-[#F6F0ED] px-4 py-6 text-[#326273] md:px-8">
@@ -184,93 +202,7 @@ export default async function QueuePage() {
           </nav>
         </header>
 
-        <section className="grid gap-3 md:grid-cols-5">
-          {queueLanes.map((lane) => {
-            const meta = laneMeta[lane];
-            const Icon = meta.icon;
-            return (
-              <div key={lane} className="rounded-lg border border-[#326273]/14 bg-white/75 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <Icon className={`h-5 w-5 ${meta.tone}`} />
-                  <span className="text-2xl font-black text-[#1F4452]">{queueView.totals[lane]}</span>
-                </div>
-                <p className="mt-3 text-sm font-black text-[#326273]">{meta.label}</p>
-              </div>
-            );
-          })}
-        </section>
-
-        <section className="overflow-hidden rounded-lg border border-[#326273]/16 bg-white/80">
-          <div className="grid grid-cols-[1.3fr_0.9fr_0.7fr_0.7fr_0.8fr_0.8fr] gap-0 border-b border-[#326273]/12 bg-[#1F4452] px-4 py-3 text-xs font-black uppercase tracking-[0.12em] text-white/75">
-            <span>Proposal</span>
-            <span>Kind</span>
-            <span>Impact</span>
-            <span>Approvers</span>
-            <span>Risk</span>
-            <span>Actions</span>
-          </div>
-          <div className="divide-y divide-[#326273]/10">
-            {queueView.lanes.PENDING_APPROVALS.map((item) => (
-              <div key={item.proposal.id} className="grid grid-cols-1 gap-3 px-4 py-4 md:grid-cols-[1.3fr_0.9fr_0.7fr_0.7fr_0.8fr_0.8fr] md:items-center">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <FileWarning className="h-4 w-4 text-[#E39774]" />
-                    <strong className="truncate text-sm text-[#1F4452]">{item.proposal.explain.recommendation}</strong>
-                  </div>
-                  <p className="mt-1 truncate text-xs font-semibold text-[#326273]/65">{item.proposal.id} · maker {item.proposal.createdBy}</p>
-                </div>
-                <span className="text-sm font-bold text-[#326273]">{item.proposal.kind}</span>
-                <span className="text-sm font-black text-[#1F4452]">{formatAmount(item.proposal)}</span>
-                <span className="text-sm font-bold text-[#326273]">{item.approvalsCollected}/{item.requiredApprovers}</span>
-                <span className={`w-fit rounded-md border px-2 py-1 text-xs font-black ${riskClass(item.proposal.explain.risk)}`}>{item.proposal.explain.risk}</span>
-                <div className="flex items-center gap-2">
-                  <button type="button" title="Approve" className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-[#1F4452] text-white">
-                    <CheckCircle2 className="h-4 w-4" />
-                  </button>
-                  <button type="button" title="Reject" className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[#E39774]/50 text-[#9A4A2D]">
-                    <XCircle className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="grid gap-4 lg:grid-cols-2">
-          {queueLanes.filter((lane) => lane !== 'PENDING_APPROVALS').map((lane) => {
-            const meta = laneMeta[lane];
-            const Icon = meta.icon;
-            return (
-              <div key={lane} className="rounded-lg border border-[#326273]/14 bg-white/72">
-                <div className="flex items-center justify-between border-b border-[#326273]/10 px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <Icon className={`h-4 w-4 ${meta.tone}`} />
-                    <h2 className="text-sm font-black text-[#1F4452]">{meta.label}</h2>
-                  </div>
-                  <span className="text-sm font-black text-[#326273]">{queueView.totals[lane]}</span>
-                </div>
-                <div className="divide-y divide-[#326273]/10">
-                  {queueView.lanes[lane].map((item) => (
-                    <div key={`${lane}-${item.proposal.id}`} className="grid gap-2 px-4 py-3 text-sm">
-                      <div className="flex items-center justify-between gap-3">
-                        <strong className="min-w-0 truncate text-[#1F4452]">{item.proposal.explain.recommendation}</strong>
-                        <span className="shrink-0 text-xs font-black text-[#326273]/60">{formatExpiry(item.expiresInMs)}</span>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-[#326273]/65">
-                        <span>{item.proposal.kind}</span>
-                        <span>{formatAmount(item.proposal)}</span>
-                        <span>{item.reasons[0]}</span>
-                      </div>
-                    </div>
-                  ))}
-                  {queueView.lanes[lane].length === 0 && (
-                    <div className="px-4 py-5 text-sm font-semibold text-[#326273]/55">Clear</div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </section>
+        <ApprovalQueueBoard pending={pending} otherLanes={otherLanes} />
       </div>
     </main>
   );

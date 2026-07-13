@@ -759,7 +759,7 @@ export default function TreasuryPage() {
                               type="button"
                               disabled={busy}
                               onClick={() => cancelWithdrawal(n.id)}
-                              className="rounded-md bg-[#C97A56] px-2 py-1 text-[10px] font-bold text-white transition-colors hover:bg-[#b5673f] disabled:opacity-50"
+                              className="rounded-md bg-[#C97A56] px-2 py-1 text-[10px] font-bold text-white transition-colors hover:bg-[#b65f3f] disabled:opacity-50"
                             >
                               {busy ? 'Cancelling…' : 'Yes, cancel'}
                             </button>
