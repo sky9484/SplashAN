@@ -62,3 +62,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Machine-local skill symlinks (npx skills creates them per-machine)
+/.claude/skills/
