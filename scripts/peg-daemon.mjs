@@ -14,7 +14,7 @@
  * settle_batch aborts with E_PEG_STALE.
  */
 
-import { SuiJsonRpcClient, getJsonRpcFullnodeUrl } from '@mysten/sui/jsonRpc'
+import { SuiGrpcClient } from '@mysten/sui/grpc'
 import { Transaction } from '@mysten/sui/transactions'
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519'
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography'
@@ -23,7 +23,7 @@ const PACKAGE_ID    = process.env.SPLASH_PACKAGE_ID
 const PEG_STATE_ID  = process.env.SPLASH_PEG_STATE_ID
 const ADMIN_CAP_ID  = process.env.SPLASH_ADMIN_CAP_ID
 const PRIVATE_KEY   = process.env.SUI_SPONSOR_PRIVATE_KEY
-const RPC_URL       = process.env.SUI_RPC_URL || getJsonRpcFullnodeUrl('testnet')
+const RPC_URL       = process.env.SUI_RPC_URL || 'https://fullnode.testnet.sui.io:443'
 const PEG_API_URL   = process.env.PEG_API_URL || 'http://127.0.0.1:3004/api/quotes/peg-status'
 const INTERVAL_MS   = Number(process.env.PEG_INTERVAL_MS ?? 30_000)
 
@@ -34,7 +34,7 @@ for (const [k, v] of Object.entries({ PACKAGE_ID, PEG_STATE_ID, ADMIN_CAP_ID, PR
   }
 }
 
-const client = new SuiJsonRpcClient({ network: process.env.SUI_NETWORK === 'mainnet' ? 'mainnet' : 'testnet', url: RPC_URL })
+const client = new SuiGrpcClient({ network: process.env.SUI_NETWORK === 'mainnet' ? 'mainnet' : 'testnet', baseUrl: RPC_URL })
 const { secretKey } = decodeSuiPrivateKey(PRIVATE_KEY)
 const keypair = Ed25519Keypair.fromSecretKey(secretKey)
 const ADDR = keypair.getPublicKey().toSuiAddress()
@@ -79,17 +79,18 @@ async function tick() {
     const result = await client.signAndExecuteTransaction({
       signer: keypair,
       transaction: tx,
-      options: { showEffects: true },
+      include: { effects: true },
     })
 
-    if (result.effects?.status?.status !== 'success') {
-      throw new Error(`tx failed: ${JSON.stringify(result.effects?.status)}`)
+    const executed = result.Transaction ?? result.FailedTransaction
+    if (result.$kind !== 'Transaction' || !executed.status.success) {
+      throw new Error(`tx failed: ${JSON.stringify(executed.status.error)}`)
     }
 
     consecutiveFailures = 0
     console.log(
       `[peg-daemon] ok  src=${source}  usdc=${usdcPrice.toFixed(6)} (${usdcDevPpm}ppm)  ` +
-      `usdt=${usdtPrice.toFixed(6)} (${usdtDevPpm}ppm)  digest=${result.digest}`,
+      `usdt=${usdtPrice.toFixed(6)} (${usdtDevPpm}ppm)  digest=${executed.digest}`,
     )
   } catch (e) {
     consecutiveFailures++

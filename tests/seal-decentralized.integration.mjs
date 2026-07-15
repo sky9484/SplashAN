@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 
 import { SealClient, SessionKey } from '@mysten/seal';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
-import { SuiJsonRpcClient, getJsonRpcFullnodeUrl } from '@mysten/sui/jsonRpc';
+import { SuiGrpcClient } from '@mysten/sui/grpc';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Transaction } from '@mysten/sui/transactions';
 import { fromHex, toHex } from '@mysten/sui/utils';
@@ -20,9 +20,9 @@ const decoded = decodeSuiPrivateKey(privateKey);
 assert.equal(decoded.scheme, 'ED25519', 'The integration test requires an ED25519 operator key.');
 const signer = Ed25519Keypair.fromSecretKey(decoded.secretKey);
 const network = process.env.SUI_NETWORK === 'mainnet' ? 'mainnet' : 'testnet';
-const suiClient = new SuiJsonRpcClient({
+const suiClient = new SuiGrpcClient({
   network,
-  url: process.env.SUI_RPC_URL || getJsonRpcFullnodeUrl(network),
+  baseUrl: process.env.SUI_RPC_URL || `https://fullnode.${network}.sui.io:443`,
 });
 
 const client = new SealClient({

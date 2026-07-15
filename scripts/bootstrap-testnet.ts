@@ -1,6 +1,6 @@
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { SuiJsonRpcClient } from '@mysten/sui/jsonRpc';
+import { SuiGrpcClient } from '@mysten/sui/grpc';
 import { Transaction } from '@mysten/sui/transactions';
 
 function required(name: string) {
@@ -30,7 +30,7 @@ if (signer.toSuiAddress().toLowerCase() !== operatorAddress.toLowerCase()) {
   throw new Error('OPERATOR_SUI_PRIVATE_KEY does not match OPERATOR_SUI_ADDRESS.');
 }
 
-const client = new SuiJsonRpcClient({ network: 'testnet', url: rpcUrl });
+const client = new SuiGrpcClient({ network: 'testnet', baseUrl: rpcUrl });
 const tx = new Transaction();
 tx.setGasBudget(Number(process.env.SUI_BOOTSTRAP_GAS_BUDGET ?? '50000000'));
 tx.moveCall({
@@ -46,28 +46,29 @@ tx.moveCall({
 const result = await client.signAndExecuteTransaction({
   signer,
   transaction: tx,
-  options: {
-    showEffects: true,
-    showEvents: true,
-    showObjectChanges: true,
+  include: {
+    effects: true,
+    events: true,
+    objectTypes: true,
   },
 });
 
-if (result.effects?.status?.status !== 'success') {
-  throw new Error(result.effects?.status?.error ?? 'SmartTreasury bootstrap failed.');
+const executed = result.Transaction ?? result.FailedTransaction;
+if (result.$kind !== 'Transaction' || !executed.status.success) {
+  throw new Error(executed.status.error?.message ?? 'SmartTreasury bootstrap failed.');
 }
 
 const objectType = `${packageId}::smart_treasury::SmartTreasury<${coinType}>`;
-const treasury = result.objectChanges?.find(
-  (change) => change.type === 'created' && 'objectType' in change && change.objectType === objectType,
+const treasury = executed.effects.changedObjects.find(
+  (change) => change.idOperation === 'Created' && executed.objectTypes[change.objectId] === objectType,
 );
 
-if (!treasury || !('objectId' in treasury)) {
-  throw new Error(`Transaction succeeded but did not create ${objectType}. Digest: ${result.digest}`);
+if (!treasury) {
+  throw new Error(`Transaction succeeded but did not create ${objectType}. Digest: ${executed.digest}`);
 }
 
 console.log(JSON.stringify({
-  digest: result.digest,
+  digest: executed.digest,
   smartTreasurySuiId: treasury.objectId,
   objectType,
 }, null, 2));

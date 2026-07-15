@@ -314,6 +314,28 @@ async function runSuiCommand(args: string[], maxBuffer = 1024 * 1024 * 10) {
 
 type OperatorGasCoin = { id: string; balance: number };
 
+type SuiExecutionError = {
+  message: string;
+  MoveAbort?: { abortCode: string; location?: { module?: string; functionName?: string } } | null;
+};
+
+/**
+ * Render the gRPC Core API's structured ExecutionError into the legacy
+ * JSON-RPC error string format so humanizeSuiError's MoveAbort/ABORT_CODES
+ * matching keeps working unchanged.
+ */
+function describeExecutionError(error: SuiExecutionError | null | undefined): string {
+  if (!error) return 'Unknown Sui error';
+  const abort = error.MoveAbort;
+  if (abort) {
+    const fnName = abort.location?.functionName;
+    const location = [abort.location?.module, fnName].filter(Boolean).join('::') || 'unknown';
+    const fnSuffix = fnName ? ` function_name: Some("${fnName}")` : '';
+    return `MoveAbort(${location}, ${abort.abortCode})${fnSuffix} — ${error.message}`;
+  }
+  return error.message;
+}
+
 async function executeSdkTransaction(tx: Transaction) {
   const signer = getOperatorKeypair();
   if (!signer) throw new Error('OPERATOR_SUI_PRIVATE_KEY is required for SDK settlement.');
@@ -321,22 +343,31 @@ async function executeSdkTransaction(tx: Transaction) {
   const result = await suiClient.signAndExecuteTransaction({
     signer,
     transaction: tx,
-    options: {
-      showEffects: true,
-      showEvents: true,
-      showObjectChanges: true,
+    include: {
+      effects: true,
+      events: true,
     },
   });
 
-  if (result.effects?.status?.status !== 'success') {
-    throw new Error(humanizeSuiError(result.effects?.status?.error, result.errors?.join('\n') ?? ''));
+  const executed = result.Transaction ?? result.FailedTransaction;
+  if (result.$kind !== 'Transaction' || !executed.status.success) {
+    throw new Error(humanizeSuiError(describeExecutionError(executed.status.error), ''));
   }
 
   // Wait for the tx to be indexed so any objects it created/changed are
   // visible to follow-up transactions in the same flow (composed payments).
-  try { await suiClient.waitForTransaction({ digest: result.digest }); } catch {}
+  try { await suiClient.waitForTransaction({ digest: executed.digest }); } catch {}
 
-  return result;
+  // Normalize to the legacy JSON-RPC result shape the downstream settlement
+  // flows (resultEvents, composed payments, anchors) were written against.
+  return {
+    digest: executed.digest,
+    events: (executed.events ?? []).map((event) => ({
+      type: event.eventType,
+      parsedJson: event.json,
+    })),
+    objectChanges: (executed.effects?.changedObjects ?? []) as unknown[],
+  };
 }
 
 type SuiEventView = {
@@ -458,21 +489,15 @@ export async function confirmComposedPaymentOnSui(input: {
   const tx = new Transaction();
   tx.setGasBudget(process.env.SUI_COMPOSED_GAS_BUDGET ?? '30000000');
   const [paymentCoin] = tx.splitCoins(tx.gas, [paymentMist]);
-  const settlementReceipt = tx.moveCall({
+  // The deployed payment_intent::confirm_payment_intent settles the payment
+  // directly and returns nothing — there is no SettleReceipt hot-potato and no
+  // audit_anchor::anchor on the live package. The on-chain audit anchor comes
+  // from the AdminCap-gated audit_anchor::anchor_audit_hash call below.
+  tx.moveCall({
     target: `${packageId}::payment_intent::confirm_payment_intent`,
     arguments: [
       tx.object(input.intentId),
       paymentCoin,
-      tx.object('0x6'),
-    ],
-  });
-
-  tx.moveCall({
-    target: `${packageId}::audit_anchor::anchor`,
-    arguments: [
-      settlementReceipt,
-      tx.pure.vector('u8', utf8Bytes(input.auditHash)),
-      tx.pure.vector('u8', utf8Bytes(input.backingBlobId)),
       tx.object('0x6'),
     ],
   });
@@ -506,12 +531,11 @@ export async function confirmComposedPaymentOnSui(input: {
   const events = resultEvents(result);
   const paid = eventBySuffix(events, '::payment_intent::IntentConfirmed');
   const allocated = eventBySuffix(events, '::smart_treasury::TreasuryDeposited');
-  const settlementAnchored = eventBySuffix(events, '::audit_anchor::SettlementAnchored');
   const anchored = eventBySuffix(events, '::audit_anchor::AuditAnchored');
   const auditAnchorObjectId =
     typeof anchored?.data.anchor_object === 'string' ? anchored.data.anchor_object : null;
 
-  if (!paid || !settlementAnchored || !anchored || (treasuryAmountMist > 0 && !allocated)) {
+  if (!paid || !anchored || (treasuryAmountMist > 0 && !allocated)) {
     throw new Error(`Composed transaction succeeded but required proof events were missing. Digest: ${result.digest}`);
   }
 
@@ -659,13 +683,13 @@ async function listSdkGasCoins(address: string): Promise<OperatorGasCoin[]> {
   let cursor: string | null | undefined;
 
   do {
-    const page = await suiClient.getCoins({ owner: address, cursor, coinType: '0x2::sui::SUI' });
+    const page = await suiClient.listCoins({ owner: address, cursor, coinType: '0x2::sui::SUI' });
     coins.push(
-      ...page.data
-        .map((coin) => ({ id: coin.coinObjectId, balance: Number(coin.balance) }))
+      ...page.objects
+        .map((coin) => ({ id: coin.objectId, balance: Number(coin.balance) }))
         .filter((coin) => Number.isFinite(coin.balance) && coin.balance > 0),
     );
-    cursor = page.hasNextPage ? page.nextCursor : null;
+    cursor = page.hasNextPage ? page.cursor : null;
   } while (cursor);
 
   return coins.sort((a, b) => b.balance - a.balance);
@@ -765,10 +789,6 @@ type SuiCliCallOutput = {
 
 function moneyToMicro(value: number) {
   return Math.max(0, Math.round(value * 1_000_000));
-}
-
-function utf8Bytes(value: string) {
-  return Array.from(new TextEncoder().encode(value));
 }
 
 function requireSuiAddress(value: string, label: string) {
@@ -974,13 +994,10 @@ export async function recordBatchSettlementOnSui(input: {
   const SPLASH_PACKAGE_ID = configIdOrThrow('packageId', 'SPLASH_PACKAGE_ID');
   const SPLASH_TREASURY_ID = configIdOrThrow('treasuryId', 'SPLASH_TREASURY_ID');
   const SPLASH_PEG_STATE_ID = configIdOrThrow('pegStateId', 'SPLASH_PEG_STATE_ID');
-  const SPLASH_COMPLIANCE_CONFIG_ID = configIdOrThrow('complianceConfigId', 'SPLASH_COMPLIANCE_CONFIG_ID');
-  const DEEPBOOK_POOL_ID = configIdOrThrow('deepbookPoolId', 'DEEPBOOK_POOL_ID');
   const SPLASH_BUSINESS_ACCOUNT_ID = configIdOrThrow('businessAccountId', 'SPLASH_BUSINESS_ACCOUNT_ID');
-  if (!cfg.usdcType) throw new Error('USDC_TYPE is not configured. Set it in admin → Contract config (or in .env.local) and try again.');
-  const USDC_TYPE = cfg.usdcType;
-  if (!cfg.deepbookQuoteType) throw new Error('DEEPBOOK_QUOTE_TYPE is not configured. Set it in admin → Contract config.');
-  const DEEPBOOK_QUOTE_TYPE = cfg.deepbookQuoteType;
+  // The deployed batch path is settle_sui_batch: it pays recipients straight
+  // from the SUI-denominated SettlementPool (SPLASH_TREASURY_ID) and needs no
+  // DeepBook pool, compliance-config object, or quote-type argument.
   const SPLASH_TEST_RECIPIENT_ADDRESS = cfg.testRecipientAddress;
   const feeBps = resolveFeeBps({ feeBps: input.feeBps, targetCurrency: input.targetCurrency });
 
@@ -1021,15 +1038,12 @@ export async function recordBatchSettlementOnSui(input: {
       elements: payments,
     });
     tx.moveCall({
-      target: `${SPLASH_PACKAGE_ID}::settlement::settle_batch`,
-      typeArguments: [USDC_TYPE, DEEPBOOK_QUOTE_TYPE],
+      target: `${SPLASH_PACKAGE_ID}::settlement::settle_sui_batch`,
       arguments: [
         tx.object(SPLASH_ADMIN_CAP_ID),
         tx.object(SPLASH_TREASURY_ID),
         tx.object(SPLASH_BUSINESS_ACCOUNT_ID),
         tx.object(SPLASH_PEG_STATE_ID),
-        tx.object(SPLASH_COMPLIANCE_CONFIG_ID),
-        tx.object(DEEPBOOK_POOL_ID),
         paymentVector,
         tx.pure.u64(feeBps),
         tx.object('0x6'),
@@ -1072,16 +1086,13 @@ export async function recordBatchSettlementOnSui(input: {
     `[${paymentObjects.map((_, index) => `payment_${index}`).join(',')}]`,
     '--assign',
     'payments',
-    // AdminCap gates pooled liquidity; compliance + DeepBook guard the amount.
+    // AdminCap gates pooled liquidity; the pool pays recipients in SUI directly.
     '--move-call',
-    `${SPLASH_PACKAGE_ID}::settlement::settle_batch`,
-    `<${USDC_TYPE},${DEEPBOOK_QUOTE_TYPE}>`,
+    `${SPLASH_PACKAGE_ID}::settlement::settle_sui_batch`,
     `@${SPLASH_ADMIN_CAP_ID}`,
     `@${SPLASH_TREASURY_ID}`,
     `@${SPLASH_BUSINESS_ACCOUNT_ID}`,
     `@${SPLASH_PEG_STATE_ID}`,
-    `@${SPLASH_COMPLIANCE_CONFIG_ID}`,
-    `@${DEEPBOOK_POOL_ID}`,
     'payments',
     feeBps.toString(),
     '@0x6',
@@ -1093,7 +1104,7 @@ export async function recordBatchSettlementOnSui(input: {
   console.log('[Sui Batch Settlement] Calling sui client call with:', {
     package: SPLASH_PACKAGE_ID,
     module: 'settlement',
-    function: 'settle_batch',
+    function: 'settle_sui_batch',
     feeBps,
     targetCurrency: input.targetCurrency,
     args: ptbArgs,
@@ -1151,10 +1162,9 @@ export async function readComplianceControls(): Promise<ComplianceControls> {
   const config = getContractConfig();
   if (!config.complianceConfigId) return DEFAULT_COMPLIANCE_CONTROLS;
   try {
-    const object = await suiClient.getObject({ id: config.complianceConfigId, options: { showContent: true } });
-    const content = object.data?.content;
-    if (!content || content.dataType !== 'moveObject') return DEFAULT_COMPLIANCE_CONTROLS;
-    const fields = content.fields as Record<string, unknown>;
+    const { object } = await suiClient.getObject({ objectId: config.complianceConfigId, include: { json: true } });
+    const fields = object.json;
+    if (!fields) return DEFAULT_COMPLIANCE_CONTROLS;
     return {
       configured: true,
       maxDeviationPpm: Number(fields.max_deviation_ppm),

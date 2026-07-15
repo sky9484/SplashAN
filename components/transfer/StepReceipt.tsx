@@ -31,11 +31,14 @@ export default function StepReceipt({ state, reset }: { state: TransferState; re
         txDigest={digest ?? state.receiptObjectId ?? 'Pending'}
         sender="Splash operator"
         recipient={state.recipient.bank?.account ?? state.recipient.name}
+        recipientName={state.recipient.name}
         amount={state.amount.value}
         currency="USD"
         fee={state.quote?.fee ?? '0.00'}
         feeTier={state.funding.selection.feeTier}
         fundingSource={selectionLabel(state.funding.selection)}
+        network="Sui Testnet"
+        status={digest ? 'Settled' : 'Pending'}
         timestamp={issuedAt}
         reference={reference}
         explorerUrl={explorerUrl}

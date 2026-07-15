@@ -183,11 +183,11 @@ export async function verifyDailyAuditBatch(batchId: string, transferId: string)
 
   let anchorVerified = false;
   if (batch.anchorObjectId) {
-    const object = await suiClient.getObject({
-      id: batch.anchorObjectId,
-      options: { showContent: true },
+    const { object } = await suiClient.getObject({
+      objectId: batch.anchorObjectId,
+      include: { json: true },
     });
-    const content = JSON.stringify(object.data?.content ?? {});
+    const content = JSON.stringify(object.json ?? {});
     anchorVerified = content.includes(batch.ciphertextHash) && content.includes(batch.walrusBlobId);
   }
 

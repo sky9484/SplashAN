@@ -1,9 +1,11 @@
-import { SuiJsonRpcClient, getJsonRpcFullnodeUrl } from '@mysten/sui/jsonRpc';
+import { SuiGrpcClient } from '@mysten/sui/grpc';
 
 export type SuiNetwork = 'testnet' | 'mainnet';
 
 export const SUI_NETWORK: SuiNetwork = process.env.SUI_NETWORK === 'mainnet' ? 'mainnet' : 'testnet';
-export const SUI_RPC_URL = process.env.SUI_RPC_URL ?? getJsonRpcFullnodeUrl(SUI_NETWORK);
+// gRPC and the retired JSON-RPC share the same fullnode URLs, so an existing
+// SUI_RPC_URL override keeps working as the gRPC base URL.
+export const SUI_RPC_URL = process.env.SUI_RPC_URL ?? `https://fullnode.${SUI_NETWORK}.sui.io:443`;
 export const SPLASH_PACKAGE_ID = process.env.SPLASH_PACKAGE_ID ?? '';
 export const SPLASH_TREASURY_ID = process.env.SPLASH_TREASURY_ID ?? '';
 export const USDC_TYPE = process.env.USDC_TYPE ?? '0x2::sui::SUI';
@@ -16,9 +18,9 @@ export const OPERATOR_SUI_ADDRESS = process.env.OPERATOR_SUI_ADDRESS ?? '';
 
 export const isUsdtConfigured = () => Boolean(USDT_TYPE && USDT_BUFFER_ID);
 
-export const suiClient = new SuiJsonRpcClient({
+export const suiClient = new SuiGrpcClient({
   network: SUI_NETWORK,
-  url: SUI_RPC_URL,
+  baseUrl: SUI_RPC_URL,
 });
 
 export const formatSui = (amount: bigint | string | number, decimals = 6) => {

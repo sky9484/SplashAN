@@ -1194,6 +1194,7 @@ const SPLASH_ANSWERS: Array<{ test: RegExp; reply: string; skipIf?: RegExp }> = 
   {
     // Fees / pricing / cost
     test: /\b(fee|fees|pricing|price|cost|charge|commission|how much (do|does|will) (it|you|this) cost)\b/,
+    skipIf: /\b(gas|sponsor|network fee|hold sui|fund (a|my)? ?wallet|top ?up)\b/, // gas/sponsorship gets the dedicated answer below
     reply: 'Corridor fees start at 0.80% on the live USD to PHP testnet path (MYR, SGD, IDR, VND, THB, EUR and GBP stay modeled until partner rails activate). Batch runs quote one blended rate, typically 15-30 bps tighter. A hard on-chain ceiling caps any settlement fee at 2.00% — the contract aborts above it.',
   },
   {
@@ -1231,6 +1232,7 @@ const SPLASH_ANSWERS: Array<{ test: RegExp; reply: string; skipIf?: RegExp }> = 
   {
     // Settlement speed
     test: /\b(how (fast|long|quick)|speed|settle time|settlement time|finality|instant)\b/,
+    skipIf: /\b(withdraw|redeem|notice period|money out)\b/, // withdrawal timing gets the treasury-notice answer below
     reply: 'Sui finality anchors the settlement record in about 400ms. Delivery depends on the payout rail: bank payout lands in roughly 3-20 minutes on the PHP testnet path, a Splash receive account credits in seconds, and keeping funds as a Splash balance is immediate.',
   },
   {
@@ -1267,6 +1269,67 @@ const SPLASH_ANSWERS: Array<{ test: RegExp; reply: string; skipIf?: RegExp }> = 
     // Netting
     test: /\b(netting|net settle|offset)\b/,
     reply: 'Netting offsets opposing flows in a corridor so only the difference settles — fewer transfers, less spread. I can scan for netting opportunities and draft an unsigned netting settlement for approval; nothing nets without a human signature.',
+  },
+  // ── Extended desk knowledge (demo depth) ─────────────────────────────────
+  {
+    // Who / what is the agent
+    test: /\b(who are you|what are you|your name|0xwal|oxwal|what is 0xwal)\b/,
+    reply: 'I am 0xWal, the Splash treasury desk agent. I read balances, rates, invoices, counterparties and compliance state, and I draft unsigned proposals for you. I never sign or move money — a human approves every action, and there is no execution tool on my side.',
+  },
+  {
+    // Failed / stuck / reversed payment
+    test: /\b(fail(ed|s|ure)?|stuck|reverse|reversal|bounce|rejected|did ?n.?t (go|arrive|settle)|money (gone|lost))\b/,
+    reply: 'Settlement is atomic: the on-chain settle either completes in full or aborts and leaves your funds untouched — value is never left half-moved. If a downstream payout rail rejects after settlement, the amount returns to your Available balance and the attempt is logged with its reason on the History page. Point me at the transfer and I can read what happened.',
+  },
+  {
+    // Status / tracking
+    test: /\b(status|track|where is (my|the) (transfer|payment|payout|money)|has it (settled|arrived)|progress)\b/,
+    reply: 'Follow any transfer on the History page: drafted → approved → settled on Sui (about 400ms finality) → paid out on the rail. The receipt carries the on-chain digest, so you can verify the settlement independently at any time.',
+  },
+  {
+    // Cancel
+    test: /\b(cancel|stop (a|the|my) (transfer|payment|payout)|call it back|undo)\b/,
+    reply: 'You can cancel a transfer while it is still awaiting approval — open it in the approval queue and reject it, and nothing moves. Once it is signed and settled on Sui it is final; the only way back is a new payment to the original sender, which I can draft for you.',
+  },
+  {
+    // Refund
+    test: /\b(refund|money back|return (the|my) (funds|payment)|charge ?back)\b/,
+    reply: 'On-chain settlements are final, so a refund is itself a payment back to the original sender. Tell me the settled transfer and I will prepare an unsigned refund to the same verified counterparty for you to approve.',
+  },
+  {
+    // Cutoff / hours / when
+    test: /\b(cut ?off|business hours|what time|when (can|do) (i|we)|weekend|holiday|24\/?7|always on)\b/,
+    reply: 'Sui settlement runs around the clock — the on-chain record anchors in about 400ms at any hour. Delivery speed depends on the receiving rail: a Splash balance credit is immediate, and the PHP testnet bank path lands in roughly 3-20 minutes during rail hours.',
+  },
+  {
+    // Withdrawal notice period + fees for treasury
+    test: /\b(notice period|withdraw(al)? (time|fee|period|notice)|how long (to|does) (withdraw|redeem)|get (my )?money out)\b/,
+    reply: 'Moving idle cash into Smart Treasury is instant and carries no fee. Coming back out has a 1-3 business-day notice window, shown before you confirm, with no withdrawal fee — the notice is recorded so approvers can see exactly what was requested and when.',
+  },
+  {
+    // Batch CSV format
+    test: /\b(csv|file format|columns|template|how (do|to) (i|we) (upload|import)|batch format|payroll file)\b/,
+    reply: 'Batch payout reads a CSV with the columns name, address, country, purpose, amount. Every row is screened for AML lists, KYT thresholds, structuring patterns and corridor rules before anything settles, and the whole run is authorized once. Drop the file in the composer and I will screen it.',
+  },
+  {
+    // Who pays gas / sponsored
+    test: /\b(gas|who pays|network fee|do i need sui|hold sui|wallet funding|top ?up)\b/,
+    reply: 'Network gas is sponsored — nobody sending or receiving has to fund a wallet or hold SUI. You see a settlement fee on the corridor, never a separate gas charge.',
+  },
+  {
+    // Depeg protection
+    test: /\b(depeg|de-?peg|broken peg|peg (break|breaks|broke|protection|guard|drift|deviat)|stable ?coin (safe|stable|break))\b/,
+    reply: 'Settlement is peg-guarded. A fresh peg reading is pushed on chain in the same transaction as the payment, and the contract aborts if the peg drifts past the configured threshold — a broken peg can never settle, and the check is atomic with the transfer.',
+  },
+  {
+    // Volume / bulk pricing
+    test: /\b(volume|bulk pricing|discount|cheaper|high volume|monthly volume|enterprise pricing)\b/,
+    reply: 'Corridor pricing tightens with volume: a batch run quotes one blended rate, typically 15-30 bps inside single-transfer pricing, and the 2.00% on-chain fee ceiling always applies. Tell me your monthly volume and I can model the rate.',
+  },
+  {
+    // Data privacy / residency
+    test: /\b(privacy|private|gdpr|data residency|where is my data|store my data|encrypt(ed|ion)?|confidential)\b/,
+    reply: 'Sensitive documents never touch the chain in the clear — they are Seal-encrypted first, and only the ciphertext proof goes to Walrus with 7-year retention. Decryption is identity-gated: allowed parties open it, everyone else fails closed.',
   },
   {
     // Onboarding / getting started
