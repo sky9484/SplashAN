@@ -53,16 +53,16 @@ export default function StepReceipt({ state, reset }: { state: TransferState; re
       />
       {state.composedActions?.length ? (
         <section className="rounded-2xl border border-[#5C9EAD]/30 bg-[#5C9EAD]/10 p-5">
-          <div className="text-xs font-black uppercase tracking-[0.15em] text-[#326273]/55">Composed actions in this digest</div>
+          <div className="text-xs font-semibold uppercase tracking-[0.15em] text-[#326273]/55">Composed actions in this digest</div>
           <div className="mt-3 grid gap-3 md:grid-cols-3">
             {state.composedActions.map((action) => (
               <div key={`${action.kind}-${action.eventType}`} className="rounded-xl bg-white p-3">
-                <div className="text-sm font-extrabold text-[#326273]">{action.label}</div>
-                <pre className="mt-2 max-h-28 overflow-auto whitespace-pre-wrap break-all text-[10px] text-[#326273]/55">{JSON.stringify(action.data, null, 2)}</pre>
+                <div className="text-sm font-semibold text-[#326273]">{action.label}</div>
+                <pre className="mt-2 max-h-28 overflow-auto whitespace-pre-wrap break-all text-[13px] text-[#326273]/55">{JSON.stringify(action.data, null, 2)}</pre>
               </div>
             ))}
           </div>
-          <div className="mt-3 grid gap-2 text-[11px] text-[#326273]/60 md:grid-cols-3">
+          <div className="mt-3 grid gap-2 text-[13px] text-[#326273]/60 md:grid-cols-3">
             <div className="break-all"><strong>Intent:</strong> {state.paymentIntentId}</div>
             <div className="break-all"><strong>Walrus:</strong> {state.walrusBlobId}</div>
             <div className="break-all"><strong>Anchor:</strong> {state.auditAnchorId}</div>
@@ -70,19 +70,19 @@ export default function StepReceipt({ state, reset }: { state: TransferState; re
         </section>
       ) : null}
       <div className="flex flex-wrap gap-3">
-        <button onClick={() => print()} className="flex-1 min-w-[140px] rounded-lg bg-[#326273] py-3 font-bold text-white shadow-sm transition-colors hover:bg-[#264e5b]">Download PDF</button>
+        <button onClick={() => print()} className="flex-1 min-w-[140px] rounded-lg bg-[#326273] py-3 font-semibold text-white shadow-sm transition-colors hover:bg-[#264e5b]">Download PDF</button>
         {explorerUrl && (
           <a
             href={explorerUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex-1 min-w-[140px] inline-flex items-center justify-center gap-2 rounded-lg border border-[#5C9EAD] bg-white py-3 font-bold text-[#326273] hover:bg-[#5C9EAD]/10"
+            className="flex-1 min-w-[140px] inline-flex items-center justify-center gap-2 rounded-lg border border-[#5C9EAD] bg-white py-3 font-semibold text-[#326273] hover:bg-[#5C9EAD]/10"
           >
             View on Sui Explorer
             <ExternalLink className="h-4 w-4" />
           </a>
         )}
-        <button onClick={reset} className="flex-1 min-w-[140px] rounded-lg border border-[#326273]/20 py-3 font-semibold text-[#326273] hover:border-[#5C9EAD]">New transfer</button>
+        <button onClick={reset} className="flex-1 min-w-[140px] rounded-lg border border-[#326273]/20 py-3 font-medium text-[#326273] hover:border-[#5C9EAD]">New transfer</button>
       </div>
     </div>
   );

@@ -280,7 +280,7 @@ function matchResponse(input: string, fallbackIdxRef: React.MutableRefObject<num
 function formatText(text: string) {
   return text.split('\n').map((line, i) => {
     if (line.startsWith('**') && line.endsWith('**') && line.length > 4) {
-      return <p key={i} className="font-bold text-[#1F4452]">{line.slice(2, -2)}</p>;
+      return <p key={i} className="font-semibold text-[#1F4452]">{line.slice(2, -2)}</p>;
     }
     if (line.startsWith('• ') || line.startsWith('⚠ ')) {
       return <p key={i} className="pl-1">{line}</p>;
@@ -529,12 +529,12 @@ export default function CopilotPage() {
         <div>
           <span className="dash-kicker">AI copilot · MemWal</span>
           <h1 className="dash-title mt-2">0xWal</h1>
-          <p className="mt-0.5 text-xs text-[#326273]/50">
+          <p className="mt-0.5 text-[13px] text-[#326273]/50">
             Powered by Claude · grounded in your behavioral memory via MemWal
           </p>
         </div>
-        <div className="flex items-center gap-2 rounded-lg border border-[#326273]/10 bg-white px-3 py-2 text-[11px] text-[#326273]/50">
-          <Lock size={12} className="text-[#5C9EAD]" />
+        <div className="flex items-center gap-2 rounded-lg border border-[#326273]/10 bg-white px-3 py-2 text-[13px] text-[#326273]/50">
+          <Lock size={12} className="text-[var(--info)]" />
           <span>Behavioral patterns only · no financial records stored</span>
         </div>
       </header>
@@ -548,11 +548,11 @@ export default function CopilotPage() {
           {visibleSuggestions.length > 0 && (
             <div>
               <div className="mb-2 flex items-center justify-between">
-                <p className="text-[11px] font-bold uppercase tracking-widest text-[#326273]/40">
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-[#326273]/40">
                   {visibleSuggestions.length} active recommendation{visibleSuggestions.length !== 1 ? 's' : ''}
                 </p>
                 {visibleSuggestions.length > 1 && (
-                  <span className="text-[10px] font-semibold text-[#326273]/35">swipe to browse →</span>
+                  <span className="text-[13px] font-medium text-[#326273]/35">swipe to browse →</span>
                 )}
               </div>
               <div className="-mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-2 [scrollbar-width:none]">
@@ -565,8 +565,8 @@ export default function CopilotPage() {
                     <div className="flex items-start gap-2">
                       <span className={cn('mt-1.5 h-2 w-2 shrink-0 rounded-full', URGENCY_DOT[s.urgency])} />
                       <div>
-                        <div className="text-xs font-bold text-[#1F4452]">{s.title}</div>
-                        <div className="mt-0.5 text-[11px] text-[#326273]/60">{s.body}</div>
+                        <div className="text-[13px] font-semibold text-[#1F4452]">{s.title}</div>
+                        <div className="mt-0.5 text-[13px] text-[#326273]/60">{s.body}</div>
                       </div>
                     </div>
                     <button
@@ -582,15 +582,15 @@ export default function CopilotPage() {
                       <div className="h-1 w-20 overflow-hidden rounded-full bg-[#326273]/10">
                         <div className="h-full rounded-full bg-[#E39774]" style={{ width: `${s.confidence}%` }} />
                       </div>
-                      <span className="text-[10px] font-semibold text-[#326273]/45">{s.confidence}% confidence</span>
+                      <span className="text-[13px] font-medium text-[#326273]/45">{s.confidence}% confidence</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="rounded-full bg-[#326273]/8 px-1.5 py-0.5 text-[10px] font-semibold text-[#326273]/55">
+                      <span className="rounded-full bg-[#326273]/8 px-1.5 py-0.5 text-[13px] font-medium text-[#326273]/55">
                         {s.corridor}
                       </span>
                       <Link
                         href={s.href}
-                        className="flex items-center gap-1 rounded-lg bg-[#326273] px-2.5 py-1 text-[11px] font-bold text-white transition-colors hover:bg-[#264e5b]"
+                        className="flex items-center gap-1 rounded-lg bg-[#326273] px-2.5 py-1 text-[13px] font-semibold text-white transition-colors hover:bg-[#264e5b]"
                       >
                         {s.action} <ArrowRight size={10} />
                       </Link>
@@ -612,14 +612,14 @@ export default function CopilotPage() {
                   <Bot size={15} className="text-[#efc46f]" />
                 </div>
                 <div>
-                  <div className="text-xs font-bold text-white">0xWal</div>
-                  <div className="flex items-center gap-1.5 text-[10px] text-white/55">
+                  <div className="text-[13px] font-semibold text-white">0xWal</div>
+                  <div className="flex items-center gap-1.5 text-[13px] text-white/55">
                     <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
                     {streaming ? 'Typing…' : thinking ? 'Recalling memory…' : (memStatus ?? 'Active · MemWal synced')}
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-1.5 text-[10px] text-white/45">
+              <div className="flex items-center gap-1.5 text-[13px] text-white/45">
                 <Sparkles size={11} /> Claude · MemWal v2
               </div>
             </div>
@@ -643,7 +643,7 @@ export default function CopilotPage() {
                     )}
                     <div
                       className={cn(
-                        'max-w-[82%] rounded-2xl px-3.5 py-2.5 text-xs leading-5',
+                        'max-w-[82%] rounded-2xl px-3.5 py-2.5 text-[13px] leading-5',
                         msg.role === 'assistant'
                           ? 'border border-[#0c3e48]/8 bg-white text-[#1F4452] shadow-sm'
                           : 'bg-gradient-to-br from-[#0c3e48] to-[#0d6370] text-white shadow-sm'
@@ -651,7 +651,7 @@ export default function CopilotPage() {
                     >
                       {msg.role === 'assistant' ? (
                         isStreamingThis ? (
-                          <div className="whitespace-pre-wrap text-xs leading-5 text-[#1F4452]">
+                          <div className="whitespace-pre-wrap text-[13px] leading-5 text-[#1F4452]">
                             {msg.text}
                             <span className="ml-0.5 inline-block h-3 w-0.5 animate-pulse bg-[#326273]/50" />
                           </div>
@@ -661,7 +661,7 @@ export default function CopilotPage() {
                       ) : (
                         <p>{msg.text}</p>
                       )}
-                      <div className={cn('mt-1 text-[10px]', msg.role === 'assistant' ? 'text-[#326273]/35' : 'text-white/40')}>
+                      <div className={cn('mt-1 text-[13px]', msg.role === 'assistant' ? 'text-[#326273]/35' : 'text-white/40')}>
                         {msg.time}
                       </div>
                     </div>
@@ -693,7 +693,7 @@ export default function CopilotPage() {
                     type="button"
                     disabled={busy}
                     onClick={() => sendMessage(chip)}
-                    className="shrink-0 rounded-full border border-[#326273]/10 bg-[#F6F0ED] px-2.5 py-1 text-[11px] font-medium text-[#326273]/70 transition-colors hover:border-[#5C9EAD]/40 hover:text-[#326273] disabled:opacity-40"
+                    className="shrink-0 rounded-full border border-[#326273]/10 bg-[#F6F0ED] px-2.5 py-1 text-[13px] font-medium text-[#326273]/70 transition-colors hover:border-[#5C9EAD]/40 hover:text-[#326273] disabled:opacity-40"
                   >
                     {chip}
                   </button>
@@ -735,38 +735,38 @@ export default function CopilotPage() {
           <div className="dash-block p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Brain size={15} className="text-[#5C9EAD]" />
-                <h2 className="text-sm font-bold text-[#1F4452]">MemWal Memory</h2>
+                <Brain size={15} className="text-[var(--info)]" />
+                <h2 className="text-sm font-semibold text-[#1F4452]">MemWal Memory</h2>
               </div>
               <button
                 type="button"
                 onClick={handleSync}
                 disabled={syncing}
-                className="flex items-center gap-1 text-[10px] font-semibold text-[#5C9EAD] transition-opacity hover:text-[#326273] disabled:opacity-60"
+                className="flex items-center gap-1 text-[13px] font-medium text-[var(--info)] transition-opacity hover:text-[#326273] disabled:opacity-60"
               >
                 <RefreshCw size={10} className={syncing ? 'animate-spin' : ''} />
                 {syncing ? 'Syncing…' : 'Sync'}
               </button>
             </div>
-            <p className="mt-1 text-[11px] text-[#326273]/50">
+            <p className="mt-1 text-[13px] text-[#326273]/50">
               {syncing ? 'Syncing behavioral patterns from Walrus…' : 'Behavioral patterns from your last 8 weeks'}
             </p>
             <div className="mt-3 space-y-3">
               {MEMORY_PATTERNS.map(({ label, value, sub, icon: Icon, bar }) => (
                 <div key={label}>
                   <div className="flex items-start gap-2">
-                    <Icon size={12} className="mt-0.5 shrink-0 text-[#5C9EAD]" />
+                    <Icon size={12} className="mt-0.5 shrink-0 text-[var(--info)]" />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-1">
-                        <span className="text-[11px] text-[#326273]/50">{label}</span>
-                        <span className="text-[11px] font-bold text-[#1F4452]">{value}</span>
+                        <span className="text-[13px] text-[#326273]/50">{label}</span>
+                        <span className="text-[13px] font-semibold text-[#1F4452]">{value}</span>
                       </div>
                       {bar > 0 && (
                         <div className="mt-1 h-1 overflow-hidden rounded-full bg-[#F6F0ED]">
                           <div className="h-full rounded-full bg-[#5C9EAD]" style={{ width: `${bar}%` }} />
                         </div>
                       )}
-                      <div className="text-[10px] text-[#326273]/35">{sub}</div>
+                      <div className="text-[13px] text-[#326273]/35">{sub}</div>
                     </div>
                   </div>
                 </div>
@@ -776,7 +776,7 @@ export default function CopilotPage() {
 
           {/* Settings */}
           <div className="dash-block p-4">
-            <h2 className="text-sm font-bold text-[#1F4452]">Copilot Settings</h2>
+            <h2 className="text-sm font-semibold text-[#1F4452]">Copilot Settings</h2>
             <div className="mt-3 space-y-3">
               {[
                 { label: 'Behavioral memory',       sub: 'MemWal pattern learning',    state: memoryOn,  toggle: () => setMemoryOn((v) => !v)  },
@@ -784,8 +784,8 @@ export default function CopilotPage() {
               ].map(({ label, sub, state, toggle }) => (
                 <div key={label} className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="text-xs font-semibold text-[#1F4452]">{label}</div>
-                    <div className="text-[10px] text-[#326273]/45">{sub}</div>
+                    <div className="text-[13px] font-medium text-[#1F4452]">{label}</div>
+                    <div className="text-[13px] text-[#326273]/45">{sub}</div>
                   </div>
                   <button
                     type="button"
@@ -808,7 +808,7 @@ export default function CopilotPage() {
               ))}
             </div>
             <div className="mt-3 rounded-lg border border-[#326273]/8 px-3 py-2.5">
-              <div className="text-[11px] font-semibold text-[#326273]">Memory retention</div>
+              <div className="text-[13px] font-medium text-[#326273]">Memory retention</div>
               <div className="mt-1.5 flex gap-1.5">
                 {(['4 weeks', '8 weeks', '12 weeks'] as const).map((w) => (
                   <button
@@ -816,7 +816,7 @@ export default function CopilotPage() {
                     type="button"
                     onClick={() => setRetention(w)}
                     className={cn(
-                      'flex-1 rounded-md py-1 text-[10px] font-bold transition-colors',
+                      'flex-1 rounded-md py-1 text-[13px] font-semibold transition-colors',
                       retention === w
                         ? 'bg-[#326273] text-white'
                         : 'bg-[#F6F0ED] text-[#326273]/60 hover:bg-[#326273]/10'
@@ -827,7 +827,7 @@ export default function CopilotPage() {
                 ))}
               </div>
               {retention !== '8 weeks' && (
-                <p className="mt-1.5 text-[10px] text-[#326273]/45">
+                <p className="mt-1.5 text-[13px] text-[#326273]/45">
                   Retention updated to {retention}. Patterns older than this window will be pruned at next sync.
                 </p>
               )}
@@ -837,22 +837,22 @@ export default function CopilotPage() {
           {/* What MemWal stores */}
           <div className="dash-block p-4">
             <div className="flex items-center gap-2">
-              <Lock size={14} className="text-[#5C9EAD]" />
-              <h2 className="text-sm font-bold text-[#1F4452]">What MemWal Stores</h2>
+              <Lock size={14} className="text-[var(--info)]" />
+              <h2 className="text-sm font-semibold text-[#1F4452]">What MemWal Stores</h2>
             </div>
             <div className="mt-3 space-y-2">
               <div>
-                <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-emerald-600">✓ Stored (behavioral)</div>
+                <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-600">✓ Stored (behavioral)</div>
                 {['Corridor frequency & timing', 'Batch size patterns', 'Rate sensitivity bands', 'Optimal transfer windows'].map((item) => (
-                  <div key={item} className="flex items-center gap-1.5 py-0.5 text-[11px] text-[#326273]/65">
+                  <div key={item} className="flex items-center gap-1.5 py-0.5 text-[13px] text-[#326273]/65">
                     <CheckCircle2 size={10} className="text-emerald-500" /> {item}
                   </div>
                 ))}
               </div>
               <div className="border-t border-[#326273]/8 pt-2">
-                <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-red-500">✗ Never stored</div>
+                <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-red-500">✗ Never stored</div>
                 {['Invoice PDFs or content', 'Recipient bank details', 'Financial account numbers', 'KYB documents'].map((item) => (
-                  <div key={item} className="flex items-center gap-1.5 py-0.5 text-[11px] text-[#326273]/65">
+                  <div key={item} className="flex items-center gap-1.5 py-0.5 text-[13px] text-[#326273]/65">
                     <X size={10} className="text-red-400" /> {item}
                   </div>
                 ))}
@@ -870,7 +870,7 @@ export default function CopilotPage() {
               <Link
                 key={href}
                 href={href}
-                className="flex w-full items-center justify-between rounded-lg border border-[#326273]/10 bg-white px-3 py-2.5 text-xs font-semibold text-[#326273] transition-colors hover:border-[#5C9EAD]/40 hover:text-[#5C9EAD]"
+                className="flex w-full items-center justify-between rounded-lg border border-[#326273]/10 bg-white px-3 py-2.5 text-[13px] font-medium text-[#326273] transition-colors hover:border-[#5C9EAD]/40 hover:text-[var(--info)]"
               >
                 <div className="flex items-center gap-2"><Icon size={13} /> {label}</div>
                 <ChevronRight size={13} className="text-[#326273]/30" />

@@ -178,21 +178,21 @@ export default function TransferPage() {
         <div className="grid gap-5 p-5 md:grid-cols-[minmax(0,1fr)_300px] md:p-6">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-2 rounded-md border border-white/20 bg-white/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-white/75">
+              <span className="inline-flex items-center gap-2 rounded-md border border-white/20 bg-white/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/75">
                 Payment intent
               </span>
-              <span className="inline-flex items-center gap-2 rounded-md border border-[#8FD7C7]/30 bg-[#8FD7C7]/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-[#D9FFF6]">
+              <span className="inline-flex items-center gap-2 rounded-md border border-[#8FD7C7]/30 bg-[#8FD7C7]/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#D9FFF6]">
                 <BadgeCheck className="h-3.5 w-3.5" />
                 {transferStatus}
               </span>
             </div>
-            <h1 className="mt-4 text-3xl font-black tracking-tight text-white md:text-4xl">
+            <h1 className="mt-4 text-3xl font-bold tracking-tight text-white md:text-4xl">
               Send a payout
             </h1>
             <p className="mt-2 max-w-2xl text-sm font-medium leading-6 text-white/70">
               Capture the beneficiary, choose delivery, lock the USD quote, and finish with an audit-ready receipt.
             </p>
-            <div className="mt-5 flex flex-wrap items-center gap-2 text-xs font-bold text-white/70">
+            <div className="mt-5 flex flex-wrap items-center gap-2 text-[13px] font-semibold text-white/70">
               <span className="rounded-md border border-white/20 bg-white/10 px-3 py-2 font-mono text-white">
                 USD -&gt; {state.amount.targetCurrency}
               </span>
@@ -207,13 +207,13 @@ export default function TransferPage() {
 
           <div className="grid content-between gap-4 border-t border-white/20 pt-4 md:border-l md:border-t-0 md:pl-5 md:pt-0">
             <div>
-              <div className="text-[10px] font-black uppercase tracking-[0.18em] text-white/50">Current step</div>
+              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/50">Current step</div>
               <div className="mt-2 flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="truncate text-xl font-black text-white">{currentStepLabel}</div>
-                  <div className="mt-1 text-xs font-semibold text-white/55">Step {state.step} of 5</div>
+                  <div className="truncate text-xl font-bold text-white">{currentStepLabel}</div>
+                  <div className="mt-1 text-[13px] font-medium text-white/55">Step {state.step} of 5</div>
                 </div>
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[#E39774] text-sm font-black text-white">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[#E39774] text-sm font-bold text-white">
                   {state.step}/5
                 </div>
               </div>
@@ -261,19 +261,19 @@ export default function TransferPage() {
             <div className="border-b border-white/10 p-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <div className="text-[10px] font-black uppercase tracking-[0.18em] text-white/50">Live transfer</div>
-                  <div className="mt-2 text-xl font-black">{amountLabel}</div>
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/50">Live transfer</div>
+                  <div className="mt-2 text-xl font-bold">{amountLabel}</div>
                 </div>
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white/10 text-[#8FD7C7]">
                   <WalletCards className="h-5 w-5" />
                 </div>
               </div>
-              <div className="mt-3 min-w-0 text-xs font-semibold text-white/60">
+              <div className="mt-3 min-w-0 text-[13px] font-medium text-white/60">
                 <span className="block truncate">To {recipientLabel}</span>
                 <span className="mt-1 block font-mono text-white/80">USD -&gt; {state.amount.targetCurrency}</span>
               </div>
             </div>
-            <div className="grid grid-cols-2 border-b border-white/10 text-[11px]">
+            <div className="grid grid-cols-2 border-b border-white/10 text-[13px]">
               <Pill label="Target" value={state.amount.targetCurrency} />
               <Pill label="Country" value={destinationLabel} />
             </div>
@@ -307,8 +307,8 @@ function SummaryMetric({ icon: Icon, label, value }: { icon: LucideIcon; label: 
         <Icon className="h-4 w-4" />
       </span>
       <span className="min-w-0">
-        <span className="block text-[10px] font-black uppercase tracking-[0.16em] text-white/45">{label}</span>
-        <span className="mt-1 block truncate text-sm font-black text-white">{value}</span>
+        <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-white/45">{label}</span>
+        <span className="mt-1 block truncate text-sm font-bold text-white">{value}</span>
       </span>
     </div>
   );
@@ -318,7 +318,7 @@ function Pill({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0 border-r border-white/10 px-4 py-3 last:border-r-0">
       <div className="text-[10px] uppercase tracking-wide text-white/55">{label}</div>
-      <div className="mt-0.5 truncate font-mono text-sm font-semibold text-white">{value}</div>
+      <div className="mt-0.5 truncate font-mono text-sm font-medium text-white">{value}</div>
     </div>
   );
 }
@@ -338,8 +338,8 @@ function RouteLine({ source, target }: { source: string; target: string }) {
 function RouteNode({ label, value, alignRight = false }: { label: string; value: string; alignRight?: boolean }) {
   return (
     <div className={alignRight ? 'min-w-0 text-right' : 'min-w-0'}>
-      <div className="text-[10px] font-black uppercase tracking-[0.15em] text-white/45">{label}</div>
-      <div className="mt-1 truncate font-mono text-sm font-black text-white">{value}</div>
+      <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-white/45">{label}</div>
+      <div className="mt-1 truncate font-mono text-sm font-bold text-white">{value}</div>
     </div>
   );
 }
@@ -353,12 +353,12 @@ function SignalRow({ icon: Icon, title, metric, body }: { icon: LucideIcon; titl
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-3">
-            <div className="text-sm font-black text-[#326273]">{title}</div>
-            <div className="shrink-0 rounded-md bg-[#326273]/10 px-2 py-1 font-mono text-[10px] font-black text-[#326273]">
+            <div className="text-sm font-bold text-[#326273]">{title}</div>
+            <div className="shrink-0 rounded-md bg-[#326273]/10 px-2 py-1 font-mono text-[13px] font-bold text-[#326273]">
               {metric}
             </div>
           </div>
-          <p className="mt-1 text-xs leading-5 text-[#326273]/65">{body}</p>
+          <p className="mt-1 text-[13px] leading-5 text-[#326273]/65">{body}</p>
         </div>
       </div>
     </div>
@@ -381,7 +381,7 @@ function Stepper({ current }: { current: number }) {
             className={`relative flex min-h-[74px] items-center gap-3 px-4 py-3 transition-colors ${active ? 'bg-[#0c3e48]/[0.06]' : 'bg-transparent'} ${last ? '' : 'border-b border-[#326273]/10 sm:border-b-0 sm:border-r'}`}
           >
             <span
-              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-black transition-all ${done
+              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[13px] font-bold transition-all ${done
                 ? 'bg-[#5C9EAD] text-white shadow-md shadow-[#5C9EAD]/30'
                 : active
                 ? 'bg-[#E39774] text-white shadow-md shadow-[#E39774]/30'
@@ -390,10 +390,10 @@ function Stepper({ current }: { current: number }) {
               {done ? <Check className="h-4 w-4" /> : step}
             </span>
             <div className="min-w-0 flex-1">
-              <div className={`text-[10px] font-black uppercase tracking-[0.18em] ${active ? 'text-[#E39774]' : done ? 'text-[#5C9EAD]' : 'text-[#326273]/45'}`}>
+              <div className={`text-[10px] font-semibold uppercase tracking-[0.18em] ${active ? 'text-[#E39774]' : done ? 'text-[var(--info)]' : 'text-[#326273]/45'}`}>
                 Step {step}
               </div>
-              <div className={`mt-0.5 truncate text-sm font-black leading-tight ${active || done ? 'text-[#326273]' : 'text-[#326273]/55'}`}>
+              <div className={`mt-0.5 truncate text-sm font-bold leading-tight ${active || done ? 'text-[#326273]' : 'text-[#326273]/55'}`}>
                 {label}
               </div>
             </div>

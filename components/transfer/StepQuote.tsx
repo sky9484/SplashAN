@@ -20,8 +20,8 @@ const BASE_RATES: Record<TransferState['amount']['targetCurrency'], number> = {
   GBP: 0.789,
 };
 
-const primaryActionClass = 'inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#0C3E48] px-5 py-3 text-sm font-extrabold text-white shadow-[0_14px_30px_rgba(12,62,72,0.22)] transition-all hover:-translate-y-0.5 hover:bg-[#145D6A] hover:shadow-[0_18px_34px_rgba(12,62,72,0.26)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#5C9EAD]/28 disabled:cursor-not-allowed disabled:bg-[#326273]/45 disabled:text-white/70 disabled:shadow-none disabled:hover:translate-y-0';
-const secondaryActionClass = 'inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-[#326273]/18 bg-white px-5 py-3 text-sm font-bold text-[#0C3E48] shadow-[0_10px_22px_rgba(12,62,72,0.06)] transition-all hover:-translate-y-0.5 hover:border-[#5C9EAD]/70 hover:bg-[#EAF7F8] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#5C9EAD]/20 disabled:cursor-not-allowed disabled:bg-[#F6F0ED] disabled:text-[#326273]/45 disabled:shadow-none disabled:hover:translate-y-0';
+const primaryActionClass = 'inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#0C3E48] px-5 py-3 text-sm font-semibold text-white shadow-[0_14px_30px_rgba(12,62,72,0.22)] transition-all hover:-translate-y-0.5 hover:bg-[#145D6A] hover:shadow-[0_18px_34px_rgba(12,62,72,0.26)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#5C9EAD]/28 disabled:cursor-not-allowed disabled:bg-[#326273]/45 disabled:text-white/70 disabled:shadow-none disabled:hover:translate-y-0';
+const secondaryActionClass = 'inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-[#326273]/18 bg-white px-5 py-3 text-sm font-semibold text-[#0C3E48] shadow-[0_10px_22px_rgba(12,62,72,0.06)] transition-all hover:-translate-y-0.5 hover:border-[#5C9EAD]/70 hover:bg-[#EAF7F8] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#5C9EAD]/20 disabled:cursor-not-allowed disabled:bg-[#F6F0ED] disabled:text-[#326273]/45 disabled:shadow-none disabled:hover:translate-y-0';
 
 export default function StepQuote({
   state,
@@ -264,7 +264,7 @@ export default function StepQuote({
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <h2 className="text-xl font-bold text-[#326273]">Quote, review and send</h2>
+        <h2 className="text-xl font-semibold text-[#326273]">Quote, review and send</h2>
         <p className="mt-1 text-sm text-[#326273]/60">Choose USD or USDC for this transfer. Provider and rail details stay below the selected option.</p>
       </div>
 
@@ -297,7 +297,7 @@ export default function StepQuote({
           value={(
             <span className="inline-flex items-center justify-end gap-2">
               {feeValue}
-              {isQuoteRefreshing ? <Loader2 className="size-3.5 animate-spin text-[#5C9EAD]" aria-label="Refreshing quote" /> : null}
+              {isQuoteRefreshing ? <Loader2 className="size-3.5 animate-spin text-[var(--info)]" aria-label="Refreshing quote" /> : null}
             </span>
           )}
         />
@@ -306,23 +306,23 @@ export default function StepQuote({
             <span className="text-[#326273]/60">FX rate</span>
             <div className="flex items-center gap-2">
               <span className="font-mono font-medium text-[#326273]">1 USD to {liveRate.toLocaleString(undefined, { maximumFractionDigits: state.amount.targetCurrency === 'IDR' || state.amount.targetCurrency === 'VND' ? 0 : 3 })} {state.amount.targetCurrency}</span>
-              {rateDirection !== 'neutral' ? <TrendingUp className={rateDirection === 'up' ? 'text-[#5C9EAD]' : 'rotate-180 text-[#E39774]'} /> : null}
+              {rateDirection !== 'neutral' ? <TrendingUp className={rateDirection === 'up' ? 'text-[var(--info)]' : 'rotate-180 text-[#E39774]'} /> : null}
             </div>
           </div>
         </HoverPopup>
         <div className="h-px bg-[#326273]/10" />
         <Row label="Recipient receives" value={`${state.quote.netReceived} ${state.amount.targetCurrency}`} bold />
-        <div className="mt-2 flex items-center gap-2 text-xs text-[#326273]/60">
-          {isQuoteRefreshing ? <Loader2 className="size-3.5 animate-spin text-[#5C9EAD]" aria-hidden="true" /> : <Info className="size-3.5" aria-hidden="true" />}
+        <div className="mt-2 flex items-center gap-2 text-[13px] text-[#326273]/60">
+          {isQuoteRefreshing ? <Loader2 className="size-3.5 animate-spin text-[var(--info)]" aria-hidden="true" /> : <Info className="size-3.5" aria-hidden="true" />}
           {isQuoteRefreshing
             ? `Updating quote for ${selectedFundingLabel}.`
             : state.rateHold?.state === 'ACTIVE' ? `Rate hold active until ${new Date(state.rateHold.holdUntil).toLocaleString()}.` : 'Quote valid for 30 seconds.'}
         </div>
       </div>
 
-      <button type="button" disabled={holdBusy || isQuoteRefreshing || state.rateHold?.state === 'ACTIVE'} onClick={() => void holdRate()} className="group flex min-h-12 w-full items-center justify-between gap-3 rounded-xl border border-[#5C9EAD]/35 bg-white px-4 py-3 text-left font-bold text-[#0C3E48] shadow-[0_10px_24px_rgba(12,62,72,0.06)] transition-all hover:-translate-y-0.5 hover:border-[#5C9EAD]/80 hover:bg-[#EAF7F8] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#5C9EAD]/20 disabled:cursor-not-allowed disabled:border-[#326273]/10 disabled:bg-[#F6F0ED] disabled:text-[#326273]/50 disabled:shadow-none disabled:hover:translate-y-0">
-        <span className="flex items-center gap-3"><Clock3 className="size-4 text-[#5C9EAD]" aria-hidden="true" />{state.rateHold?.state === 'ACTIVE' ? 'Rate hold active' : 'Hold this rate 48h'}</span>
-        <span className="font-mono text-xs text-[#326273]/55">{liveRate.toLocaleString()}</span>
+      <button type="button" disabled={holdBusy || isQuoteRefreshing || state.rateHold?.state === 'ACTIVE'} onClick={() => void holdRate()} className="group flex min-h-12 w-full items-center justify-between gap-3 rounded-xl border border-[#5C9EAD]/35 bg-white px-4 py-3 text-left font-semibold text-[#0C3E48] shadow-[0_10px_24px_rgba(12,62,72,0.06)] transition-all hover:-translate-y-0.5 hover:border-[#5C9EAD]/80 hover:bg-[#EAF7F8] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#5C9EAD]/20 disabled:cursor-not-allowed disabled:border-[#326273]/10 disabled:bg-[#F6F0ED] disabled:text-[#326273]/50 disabled:shadow-none disabled:hover:translate-y-0">
+        <span className="flex items-center gap-3"><Clock3 className="size-4 text-[var(--info)]" aria-hidden="true" />{state.rateHold?.state === 'ACTIVE' ? 'Rate hold active' : 'Hold this rate 48h'}</span>
+        <span className="font-mono text-[13px] text-[#326273]/55">{liveRate.toLocaleString()}</span>
       </button>
 
       <div className="rounded-xl border border-[#5C9EAD]/20 bg-[#5C9EAD]/10 p-4 text-sm text-[#326273]/75">
@@ -354,7 +354,7 @@ export default function StepQuote({
       {isSending && !depositOpen ? (
         <div className="flex flex-col gap-3 rounded-2xl border border-[#5C9EAD]/25 bg-[#5C9EAD]/10 p-4">
           <div className="h-3 overflow-hidden rounded-full bg-white"><div className="h-full rounded-full bg-[#5C9EAD] transition-all" style={{ width: `${progress}%` }} /></div>
-          <div className="flex items-center gap-2 text-sm font-semibold text-[#326273]/70"><Loader2 className="animate-spin" /> Debiting source and preparing settlement...</div>
+          <div className="flex items-center gap-2 text-sm font-medium text-[#326273]/70"><Loader2 className="animate-spin" /> Debiting source and preparing settlement...</div>
         </div>
       ) : null}
 
@@ -363,8 +363,8 @@ export default function StepQuote({
           <div className="w-full max-w-2xl rounded-3xl bg-white p-6 text-[#326273] shadow-2xl">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <div className="mb-2 inline-flex rounded-full bg-[#E39774]/10 px-3 py-1 text-xs font-bold uppercase tracking-wide text-[#E39774]">{selection.type === 'fiat' ? 'Provider deposit' : 'USDC deposit'}</div>
-                <h3 className="text-2xl font-extrabold">{selection.type === 'fiat' ? `Continue with ${selection.provider}` : selection.type === 'stablecoin' ? `Deposit ${selection.asset}` : 'Settle from Splash balance'}</h3>
+                <div className="mb-2 inline-flex rounded-full bg-[#E39774]/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[#E39774]">{selection.type === 'fiat' ? 'Provider deposit' : 'USDC deposit'}</div>
+                <h3 className="text-2xl font-semibold">{selection.type === 'fiat' ? `Continue with ${selection.provider}` : selection.type === 'stablecoin' ? `Deposit ${selection.asset}` : 'Settle from Splash balance'}</h3>
                 <p className="mt-1 text-sm text-[#326273]/60">{selection.type === 'fiat' ? 'Provider funding is confirmed before settlement.' : 'Send USDC over the selected rail using the push-only deposit address.'}</p>
               </div>
               <button type="button" aria-label="Close funding dialog" onClick={() => !isSending && setDepositOpen(false)} className="inline-flex size-9 shrink-0 items-center justify-center rounded-full text-[#326273]/55 transition hover:bg-[#F6F0ED] hover:text-[#0C3E48] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#5C9EAD]/20 disabled:cursor-not-allowed disabled:opacity-45" disabled={isSending}>
@@ -373,18 +373,18 @@ export default function StepQuote({
             </div>
 
             <div className="mt-5 rounded-2xl bg-[#326273] p-5 text-white">
-              <div className="flex items-center justify-between"><span className="text-sm text-white/65">Transfer amount</span><span className="text-2xl font-bold">${state.amount.value}</span></div>
-              <div className="mt-3 flex items-center justify-between text-sm"><span className="text-white/65">Fee tier</span><span className="font-semibold">{selection.feeTier}</span></div>
+              <div className="flex items-center justify-between"><span className="text-sm text-white/65">Transfer amount</span><span className="text-2xl font-semibold">${state.amount.value}</span></div>
+              <div className="mt-3 flex items-center justify-between text-sm"><span className="text-white/65">Fee tier</span><span className="font-medium">{selection.feeTier}</span></div>
             </div>
 
             {selection.type === 'stablecoin' ? (
               <div className="mt-5 grid gap-4 sm:grid-cols-[224px_1fr] sm:items-center">
                 {state.funding.qrDataUrl ? <Image unoptimized src={state.funding.qrDataUrl} alt={`QR code for ${selection.asset} deposit`} width={224} height={224} className="mx-auto size-56 rounded-2xl border border-[#326273]/10 bg-[#F6F0ED] p-2" /> : null}
                 <div className="min-w-0">
-                  <div className="text-xs font-bold uppercase tracking-wide text-[#326273]/55">Deposit address</div>
-                  <div className="mt-2 break-all rounded-xl bg-[#F6F0ED] p-3 font-['DejaVu_Sans_Mono',monospace] text-xs text-[#326273]">{state.funding.depositAddress}</div>
-                  <button type="button" onClick={() => { void navigator.clipboard.writeText(state.funding.depositAddress ?? ''); toast.success('Deposit address copied'); }} className="mt-2 inline-flex items-center gap-2 rounded-lg px-1 py-1 text-xs font-bold text-[#237284] transition hover:bg-[#5C9EAD]/10 hover:text-[#0C3E48] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#5C9EAD]/20"><Copy className="size-3.5" aria-hidden="true" /> Copy address</button>
-                  <div className="mt-4 flex flex-wrap gap-2 text-xs font-bold">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-[#326273]/55">Deposit address</div>
+                  <div className="mt-2 break-all rounded-xl bg-[#F6F0ED] p-3 font-['DejaVu_Sans_Mono',monospace] text-[13px] text-[#326273]">{state.funding.depositAddress}</div>
+                  <button type="button" onClick={() => { void navigator.clipboard.writeText(state.funding.depositAddress ?? ''); toast.success('Deposit address copied'); }} className="mt-2 inline-flex items-center gap-2 rounded-lg px-1 py-1 text-[13px] font-semibold text-[#237284] transition hover:bg-[#5C9EAD]/10 hover:text-[#0C3E48] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#5C9EAD]/20"><Copy className="size-3.5" aria-hidden="true" /> Copy address</button>
+                  <div className="mt-4 flex flex-wrap gap-2 text-[13px] font-semibold">
                     <span className="rounded-full bg-[#5C9EAD]/10 px-3 py-1">{selection.rail}{selection.sourceChain ? ` / ${selection.sourceChain}` : ''}</span>
                     <span className="rounded-full bg-[#F6F0ED] px-3 py-1">{state.funding.sessionStatus}</span>
                   </div>
@@ -395,7 +395,7 @@ export default function StepQuote({
             {isSending ? (
               <div className="mt-5 flex flex-col gap-3">
                 <div className="h-3 overflow-hidden rounded-full bg-[#F6F0ED]"><div className="h-full rounded-full bg-[#5C9EAD] transition-all" style={{ width: `${progress}%` }} /></div>
-                <div className="flex items-center gap-2 text-sm font-semibold text-[#326273]/70">{progress >= 100 ? <CheckCircle2 /> : <Loader2 className="animate-spin" />} Confirming funding...</div>
+                <div className="flex items-center gap-2 text-sm font-medium text-[#326273]/70">{progress >= 100 ? <CheckCircle2 /> : <Loader2 className="animate-spin" />} Confirming funding...</div>
               </div>
             ) : null}
 
@@ -434,7 +434,7 @@ function Row({ label, value, bold, mono }: { label: string; value: ReactNode; bo
   return (
     <div className="flex justify-between gap-4">
       <span className="text-[#326273]/60">{label}</span>
-      <span className={`${bold ? 'text-base font-bold' : 'font-medium'} ${mono ? 'break-all font-mono text-xs' : ''} text-right text-[#326273]`}>{value}</span>
+      <span className={`${bold ? 'text-base font-semibold' : 'font-medium'} ${mono ? 'break-all font-mono text-[13px]' : ''} text-right text-[#326273]`}>{value}</span>
     </div>
   );
 }

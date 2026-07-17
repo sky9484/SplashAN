@@ -92,6 +92,20 @@ async function filesUnder(directory) {
   return files;
 }
 
+// W9.0 coral rule: #E39774 (and the --coral token) is brand accent only —
+// 0xWal identity and marketing highlights. A line that pairs coral with
+// risk/error/warning semantics is a state leak; states use the semantic
+// tokens (--ok/--warn/--error/--pending/--info).
+const coralRiskContext = /risk|error|danger|warn|blocked|failed|reject|halt|untrusted|review/i;
+function coralRiskViolations(text) {
+  const found = [];
+  for (const line of text.split('\n')) {
+    if (!/#E39774|var\(--coral\)/i.test(line)) continue;
+    if (coralRiskContext.test(line)) found.push(line.trim().slice(0, 90));
+  }
+  return found;
+}
+
 const violations = [];
 for (const root of roots) {
   for (const file of await filesUnder(root)) {
@@ -108,6 +122,9 @@ for (const root of roots) {
     if (root === 'app' || root === 'components') {
       for (const hex of hexViolations(text)) {
         violations.push(`${relative('.', file)}: new arbitrary hex ${hex} — use styles/tokens.css variables or extend the baseline deliberately`);
+      }
+      for (const line of coralRiskViolations(text)) {
+        violations.push(`${relative('.', file)}: coral used with risk/error semantics — coral is brand accent only; use --ok/--warn/--error/--pending/--info tokens (${line})`);
       }
     }
     for (const line of explorerLiteralViolations(text)) {

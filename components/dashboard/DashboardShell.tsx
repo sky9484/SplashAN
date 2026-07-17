@@ -108,10 +108,10 @@ export default function DashboardShell({ children, session }: DashboardShellProp
           />
           {!collapsed && (
             <span className="grid text-left">
-              <strong className="text-xl font-bold tracking-tight text-white">
+              <strong className="text-xl font-semibold tracking-tight text-white">
                 Splash<span className="text-[#5C9EAD]">.</span>
               </strong>
-              <small className="text-[8px] font-bold uppercase tracking-[0.18em] text-white/40">Global settlement engine</small>
+              <small className="text-[8px] font-semibold uppercase tracking-[0.18em] text-white/40">Global settlement engine</small>
             </span>
           )}
         </button>
@@ -121,7 +121,7 @@ export default function DashboardShell({ children, session }: DashboardShellProp
           {navGroups.map((group) => (
             <div key={group.title}>
               {!collapsed && (
-                <div className="mb-1 px-2 text-[10px] font-bold uppercase tracking-widest text-white/25">
+                <div className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-widest text-white/25">
                   {group.title}
                 </div>
               )}
@@ -150,7 +150,7 @@ export default function DashboardShell({ children, session }: DashboardShellProp
                           <span className="flex-1 font-medium">{label}</span>
                           {badge && (
                             <span
-                              className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+                              className={`rounded-full px-1.5 py-0.5 text-[13px] font-semibold ${
                                 badge === 'New'
                                   ? 'bg-[#E39774]/25 text-[#E39774]'
                                   : 'bg-[#5C9EAD]/20 text-[#5C9EAD]'
@@ -231,7 +231,7 @@ export default function DashboardShell({ children, session }: DashboardShellProp
             loading="eager"
             unoptimized
           />
-          <span className="text-lg font-bold text-white">
+          <span className="text-lg font-semibold text-white">
             Splash<span className="text-[#5C9EAD]">.</span>
           </span>
         </div>
@@ -257,11 +257,11 @@ export default function DashboardShell({ children, session }: DashboardShellProp
                   onClick={() => setMobileOpen(false)}
                   href={href}
                   className={`flex items-center gap-3 rounded-xl px-4 py-3 text-white transition-colors hover:bg-white/10 ${
-                    pathname === href ? 'bg-white/15 text-[#5C9EAD]' : ''
+                    pathname === href ? 'bg-white/15' : ''
                   }`}
                 >
                   <Icon size={20} />
-                  <span className="font-semibold">{label}</span>
+                  <span className="font-medium">{label}</span>
                 </Link>
               ))}
             </nav>
@@ -271,7 +271,7 @@ export default function DashboardShell({ children, session }: DashboardShellProp
               className="flex items-center gap-3 rounded-xl px-4 py-3 text-white transition-colors hover:bg-white/10 hover:text-[#E39774]"
             >
               <LogOut size={20} />
-              <span className="font-semibold">Log out</span>
+              <span className="font-medium">Log out</span>
             </button>
           </div>
         </div>

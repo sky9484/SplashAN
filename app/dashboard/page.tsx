@@ -363,13 +363,13 @@ export default function OxwalDeskPage() {
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="dash-kicker">Operating desk · AI</span>
-                <span className="inline-flex items-center gap-2 rounded-md bg-[#0c3e48] px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-white">
+                <span className="inline-flex items-center gap-2 rounded-md bg-[#0c3e48] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden="true" />
                   0xWal online
                 </span>
               </div>
               <h1 className="dash-title mt-3 text-3xl md:text-4xl">Finance command desk</h1>
-              <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-[#326273]/62">
+              <p className="mt-2 max-w-2xl text-sm font-medium leading-6 text-[#326273]/62">
                 Read financial state, prepare unsigned proposals, and route approvals from one operating surface.
               </p>
             </div>
@@ -392,12 +392,12 @@ export default function OxwalDeskPage() {
             <div className="flex items-center justify-between gap-3 border-b border-[#326273]/10 px-4 py-3">
               <div className="flex items-center gap-2">
                 <BotAvatar size={24} />
-                <h2 className="text-sm font-black text-[#1F4452]">0xWal</h2>
-                <span className="font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-[#326273]/45">
+                <h2 className="text-sm font-bold text-[#1F4452]">0xWal</h2>
+                <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-[#326273]/45">
                   prepares · you approve
                 </span>
               </div>
-              <Link href="/queue" className="text-xs font-black text-[#326273] underline-offset-4 hover:underline">
+              <Link href="/queue" className="text-[13px] font-bold text-[#326273] underline-offset-4 hover:underline">
                 Approval queue
               </Link>
             </div>
@@ -421,7 +421,7 @@ export default function OxwalDeskPage() {
               {streamingText && (
                 <div className="flex gap-2">
                   <BotAvatar />
-                  <div className="max-w-[88%] rounded-lg rounded-tl-sm border border-[#5C9EAD]/30 bg-[#5C9EAD]/10 px-3 py-2 text-sm font-semibold leading-6 text-[#326273]">
+                  <div className="max-w-[88%] rounded-lg rounded-tl-sm border border-[#5C9EAD]/30 bg-[#5C9EAD]/10 px-3 py-2 text-sm font-medium leading-6 text-[#326273]">
                     <span className="whitespace-pre-wrap">{streamingText}</span>
                     <span className="ml-0.5 inline-block h-3 w-0.5 animate-pulse bg-[#0d6370]/60" aria-hidden="true" />
                   </div>
@@ -449,8 +449,8 @@ export default function OxwalDeskPage() {
         <MemWalBehaviorCard compact />
         <div className="dash-block p-4">
           <div className="flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4 text-[#5C9EAD]" />
-            <h2 className="text-sm font-black text-[#1F4452]">Control state</h2>
+            <ShieldCheck className="h-4 w-4 text-[var(--info)]" />
+            <h2 className="text-sm font-bold text-[#1F4452]">Control state</h2>
           </div>
           <div className="mt-3 divide-y divide-[#326273]/10 text-sm">
             <ControlRow icon={CheckCircle2} label="Tool boundary" value="Read + propose" />
@@ -459,15 +459,15 @@ export default function OxwalDeskPage() {
           </div>
         </div>
         <div className="rounded-2xl border border-[#0c3e48] bg-[#0c3e48] p-4 text-white shadow-[6px_7px_0_rgba(12,62,72,0.18)]">
-          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#efc46f]/80">Approval surface</p>
-          <div className="mt-2 text-2xl font-black">Maker-checker</div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#efc46f]/80">Approval surface</p>
+          <div className="mt-2 text-2xl font-bold">Maker-checker</div>
           {deskStats.needsApproval > 0 ? (
-            <p className="mt-2 text-xs font-semibold leading-5 text-white/78">
+            <p className="mt-2 text-[13px] font-medium leading-5 text-white/78">
               {deskStats.needsApproval} unsigned {deskStats.needsApproval === 1 ? 'proposal is' : 'proposals are'} waiting
               for your approval.
             </p>
           ) : (
-            <p className="mt-2 text-xs font-semibold leading-5 text-white/62">
+            <p className="mt-2 text-[13px] font-medium leading-5 text-white/62">
               Pending proposals, compliance holds, expiring quotes, failed settlements, and anomaly halts live in the queue.
             </p>
           )}
@@ -502,7 +502,7 @@ function ThreadRow({
 }) {
   if (item.kind === 'user') {
     return (
-      <div className="ml-auto max-w-[86%] rounded-lg rounded-tr-sm bg-[#1F4452] px-3 py-2 text-sm font-semibold leading-6 text-white">
+      <div className="ml-auto max-w-[86%] rounded-lg rounded-tr-sm bg-[#1F4452] px-3 py-2 text-sm font-medium leading-6 text-white">
         {item.text}
       </div>
     );
@@ -512,7 +512,7 @@ function ThreadRow({
     return (
       <div className="flex gap-2">
         <BotAvatar />
-        <div className="max-w-[88%] whitespace-pre-wrap rounded-lg rounded-tl-sm border border-[#326273]/12 bg-[#F6F0ED] px-3 py-2 text-sm font-semibold leading-6 text-[#326273]">
+        <div className="max-w-[88%] whitespace-pre-wrap rounded-lg rounded-tl-sm border border-[#326273]/12 bg-[#F6F0ED] px-3 py-2 text-sm font-medium leading-6 text-[#326273]">
           {item.text}
         </div>
       </div>
@@ -525,8 +525,8 @@ function ThreadRow({
         <span
           className={
             item.tone === 'propose'
-              ? 'inline-flex items-center gap-1.5 rounded-md border border-[#5C9EAD]/35 bg-[#5C9EAD]/10 px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-[#326273]'
-              : 'inline-flex items-center gap-1.5 rounded-md border border-[#326273]/14 bg-white px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-[#326273]/70'
+              ? 'inline-flex items-center gap-1.5 rounded-md border border-[#5C9EAD]/35 bg-[#5C9EAD]/10 px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-[#326273]'
+              : 'inline-flex items-center gap-1.5 rounded-md border border-[#326273]/14 bg-white px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-[#326273]/70'
           }
         >
           <span className="h-1 w-1 rounded-full bg-current" aria-hidden="true" />
@@ -539,7 +539,7 @@ function ThreadRow({
   if (item.kind === 'notice') {
     return (
       <div className="flex flex-wrap items-center gap-2 pl-8">
-        <span className="inline-flex items-center gap-1.5 rounded-md border border-[#E39774]/55 bg-[#E39774]/15 px-2.5 py-1.5 text-xs font-bold leading-5 text-[#9A4A2D]">
+        <span className="inline-flex items-center gap-1.5 rounded-md border border-[#E39774]/55 bg-[#E39774]/15 px-2.5 py-1.5 text-[13px] font-semibold leading-5 text-[#9A4A2D]">
           <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
           {item.text}
         </span>
@@ -547,7 +547,7 @@ function ThreadRow({
           <button
             type="button"
             onClick={() => onRetry(item.retryPrompt!)}
-            className="inline-flex items-center gap-1.5 rounded-md border border-[#326273]/20 bg-white px-2.5 py-1.5 text-xs font-black text-[#326273] transition hover:border-[#5C9EAD]"
+            className="inline-flex items-center gap-1.5 rounded-md border border-[#326273]/20 bg-white px-2.5 py-1.5 text-[13px] font-bold text-[#326273] transition hover:border-[#5C9EAD]"
           >
             <RotateCcw className="h-3.5 w-3.5" />
             Try again
@@ -560,13 +560,13 @@ function ThreadRow({
   if (item.kind === 'session-expired') {
     return (
       <div className="flex flex-wrap items-center gap-2 pl-8">
-        <span className="inline-flex items-center gap-1.5 rounded-md border border-[#E39774]/55 bg-[#E39774]/15 px-2.5 py-1.5 text-xs font-bold leading-5 text-[#9A4A2D]">
+        <span className="inline-flex items-center gap-1.5 rounded-md border border-[#E39774]/55 bg-[#E39774]/15 px-2.5 py-1.5 text-[13px] font-semibold leading-5 text-[#9A4A2D]">
           <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
           Your session ended, so 0xWal paused. Sign in again to pick up where you left off.
         </span>
         <Link
           href="/login"
-          className="rounded-md bg-[#1F4452] px-2.5 py-1.5 text-xs font-black text-white transition hover:bg-[#326273]"
+          className="rounded-md bg-[#1F4452] px-2.5 py-1.5 text-[13px] font-bold text-white transition hover:bg-[#326273]"
         >
           Sign in again
         </Link>
@@ -583,7 +583,7 @@ function ThreadRow({
   return (
     <div className="space-y-1.5">
       <div className="flex items-center gap-2 pl-8">
-        <span className="inline-flex items-center gap-1.5 rounded-md border border-[#efc46f]/60 bg-[#efc46f]/15 px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-[#9A4A2D]">
+        <span className="inline-flex items-center gap-1.5 rounded-md border border-[#efc46f]/60 bg-[#efc46f]/15 px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-[#9A4A2D]">
           {approval?.state === 'approved' ? 'Signed · queued for settlement' : 'Unsigned proposal'}
         </span>
       </div>
@@ -591,24 +591,24 @@ function ThreadRow({
 
       {(!approval || approval.state === 'waiting') && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-[#326273]/14 bg-white px-3 py-2.5">
-          <Clock3 className="h-4 w-4 shrink-0 text-[#5C9EAD]" />
-          <span className="text-xs font-bold leading-5 text-[#326273]">
+          <Clock3 className="h-4 w-4 shrink-0 text-[var(--info)]" />
+          <span className="text-[13px] font-semibold leading-5 text-[#326273]">
             Approve here for the next{' '}
-            <span className="font-mono font-black tabular-nums text-[#1F4452]">{formatCountdown(remainingMs)}</span>
+            <span className="font-mono font-bold tabular-nums text-[#1F4452]">{formatCountdown(remainingMs)}</span>
             {' '}— after that it waits in the approval queue.
           </span>
           <div className="ml-auto flex items-center gap-2">
             <button
               type="button"
               onClick={() => onApprove(proposal)}
-              className="inline-flex h-9 items-center gap-1.5 rounded-md bg-[#1F4452] px-3.5 text-xs font-black text-white transition hover:bg-[#326273] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#5C9EAD]/30"
+              className="inline-flex h-9 items-center gap-1.5 rounded-md bg-[#1F4452] px-3.5 text-[13px] font-bold text-white transition hover:bg-[#326273] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#5C9EAD]/30"
             >
               <CheckCircle2 className="h-4 w-4" />
               Approve now
             </button>
             <Link
               href="/queue"
-              className="rounded-md border border-[#326273]/20 px-3 py-2 text-xs font-black text-[#326273] transition hover:border-[#5C9EAD]"
+              className="rounded-md border border-[#326273]/20 px-3 py-2 text-[13px] font-bold text-[#326273] transition hover:border-[#5C9EAD]"
             >
               Review in queue
             </Link>
@@ -617,34 +617,34 @@ function ThreadRow({
       )}
 
       {approval?.state === 'approving' && (
-        <div className="flex items-center gap-2 rounded-lg border border-[#326273]/14 bg-white px-3 py-2.5 text-xs font-bold text-[#326273]">
+        <div className="flex items-center gap-2 rounded-lg border border-[#326273]/14 bg-white px-3 py-2.5 text-[13px] font-semibold text-[#326273]">
           <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#5C9EAD] border-t-transparent" aria-hidden="true" />
           Recording your signature…
         </div>
       )}
 
       {approval?.state === 'approved' && (
-        <div className="flex items-center gap-2 rounded-lg border border-[#5C9EAD]/40 bg-[#5C9EAD]/10 px-3 py-2.5 text-xs font-black text-[#326273]">
-          <CheckCircle2 className="h-4 w-4 shrink-0 text-[#5C9EAD]" />
+        <div className="flex items-center gap-2 rounded-lg border border-[#5C9EAD]/40 bg-[#5C9EAD]/10 px-3 py-2.5 text-[13px] font-bold text-[#326273]">
+          <CheckCircle2 className="h-4 w-4 shrink-0 text-[var(--info)]" />
           Approved — signed and submitted for settlement. The receipt lands in History.
         </div>
       )}
 
       {approval?.state === 'expired' && (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-[#326273]/14 bg-[#F6F0ED] px-3 py-2.5 text-xs font-bold text-[#326273]">
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-[#326273]/14 bg-[#F6F0ED] px-3 py-2.5 text-[13px] font-semibold text-[#326273]">
           <Clock3 className="h-4 w-4 shrink-0 text-[#326273]/50" />
           The in-chat window passed — this proposal now waits in the maker-checker queue.
-          <Link href="/queue" className="ml-auto rounded-md bg-[#1F4452] px-3 py-1.5 text-xs font-black text-white">
+          <Link href="/queue" className="ml-auto rounded-md bg-[#1F4452] px-3 py-1.5 text-[13px] font-bold text-white">
             Open queue
           </Link>
         </div>
       )}
 
       {approval?.state === 'blocked' && (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-[#E39774]/55 bg-[#E39774]/12 px-3 py-2.5 text-xs font-bold text-[#9A4A2D]">
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-[#E39774]/55 bg-[#E39774]/12 px-3 py-2.5 text-[13px] font-semibold text-[#9A4A2D]">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           {approval.note ?? 'Policy requires this one to go through the approval queue.'}
-          <Link href="/queue" className="ml-auto rounded-md bg-[#1F4452] px-3 py-1.5 text-xs font-black text-white">
+          <Link href="/queue" className="ml-auto rounded-md bg-[#1F4452] px-3 py-1.5 text-[13px] font-bold text-white">
             Open queue
           </Link>
         </div>
@@ -667,10 +667,10 @@ function BotAvatar({ size = 24 }: { size?: number }) {
 function DeskStat({ label, value, caution = false }: { label: string; value: number; caution?: boolean }) {
   return (
     <div className="min-w-0 border-r border-[#326273]/10 px-3 py-2 last:border-r-0">
-      <div className={caution ? 'text-2xl font-black text-[#E39774]' : 'text-2xl font-black text-[#1F4452]'}>
+      <div className={caution ? 'text-2xl font-bold text-[#E39774]' : 'text-2xl font-bold text-[#1F4452]'}>
         {value}
       </div>
-      <div className="mt-0.5 text-[10px] font-black uppercase tracking-normal text-[#326273]/50">{label}</div>
+      <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-normal text-[#326273]/50">{label}</div>
     </div>
   );
 }
@@ -679,10 +679,10 @@ function ControlRow({ icon: Icon, label, value }: { icon: LucideIcon; label: str
   return (
     <div className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
       <div className="flex items-center gap-2">
-        <Icon className="h-4 w-4 text-[#5C9EAD]" />
-        <span className="font-black text-[#326273]">{label}</span>
+        <Icon className="h-4 w-4 text-[var(--info)]" />
+        <span className="font-bold text-[#326273]">{label}</span>
       </div>
-      <span className="font-mono text-xs font-black text-[#1F4452]">{value}</span>
+      <span className="font-mono text-[13px] font-bold text-[#1F4452]">{value}</span>
     </div>
   );
 }

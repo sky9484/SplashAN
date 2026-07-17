@@ -89,7 +89,7 @@ export default function InvoicesPage() {
           </p>
         </div>
         {view === 'vault' && (
-          <button onClick={() => setCreateOpen(true)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-accent px-5 py-3 text-sm font-black text-card shadow-lg shadow-accent/20">
+          <button onClick={() => setCreateOpen(true)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-accent px-5 py-3 text-sm font-bold text-card shadow-lg shadow-accent/20">
             <FilePlus2 className="h-4 w-4" /> Create invoice
           </button>
         )}
@@ -106,7 +106,7 @@ export default function InvoicesPage() {
             type="button"
             aria-pressed={view === key}
             onClick={() => setView(key)}
-            className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-black transition ${
+            className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-bold transition ${
               view === key ? 'bg-foreground text-card shadow-sm' : 'text-foreground/55 hover:text-foreground'
             }`}
           >
@@ -127,8 +127,8 @@ export default function InvoicesPage() {
           { label: 'Settled', value: totals.settled, icon: CheckCircle2 },
         ].map(({ label, value, icon: Icon }) => (
           <div key={label} className="dash-block p-4">
-            <div className="flex items-center justify-between"><span className="text-[10px] font-black uppercase tracking-[0.16em] text-foreground/45">{label}</span><Icon className="h-4 w-4 text-primary" /></div>
-            <div className="dash-num mt-2 text-2xl font-black">{value}</div>
+            <div className="flex items-center justify-between"><span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-foreground/45">{label}</span><Icon className="h-4 w-4 text-primary" /></div>
+            <div className="dash-num mt-2 text-2xl font-bold">{value}</div>
           </div>
         ))}
       </section>
@@ -137,7 +137,7 @@ export default function InvoicesPage() {
         <div className="flex flex-col gap-3 border-b border-foreground/10 p-4 md:flex-row md:items-center md:justify-between">
           <div className="flex flex-wrap gap-2">
             {(['all', 'draft', 'sent', 'paid', 'settled', 'overdue'] as const).map((value) => (
-              <button key={value} onClick={() => setFilter(value)} className={`rounded-full px-3 py-1.5 text-xs font-black capitalize ${filter === value ? 'bg-foreground text-card' : 'bg-muted/50 text-foreground/55'}`}>
+              <button key={value} onClick={() => setFilter(value)} className={`rounded-full px-3 py-1.5 text-[13px] font-bold capitalize ${filter === value ? 'bg-foreground text-card' : 'bg-muted/50 text-foreground/55'}`}>
                 {value}
               </button>
             ))}
@@ -150,7 +150,7 @@ export default function InvoicesPage() {
 
         <div className="overflow-x-auto">
           <table className="w-full min-w-[820px] text-sm">
-            <thead className="bg-muted/40 text-left text-[10px] font-black uppercase tracking-[0.14em] text-foreground/45">
+            <thead className="bg-muted/40 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-foreground/45">
               <tr><th className="px-4 py-3">Payer</th><th className="px-4 py-3">Amount</th><th className="px-4 py-3">Due</th><th className="px-4 py-3">Proof</th><th className="px-4 py-3">Status</th><th className="px-4 py-3 text-right">Action</th></tr>
             </thead>
             <tbody>
@@ -161,13 +161,13 @@ export default function InvoicesPage() {
                     <td className="px-4 py-4"><strong>${Number(invoice.amountUsd).toLocaleString()}</strong><small className="mt-1 block text-foreground/45">USD → {invoice.targetCurrency}</small></td>
                     <td className="px-4 py-4 text-foreground/60">{invoice.dueDate}</td>
                     <td className="px-4 py-4">
-                      {invoice.walrusBlobId ? <span className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-bold text-primary"><ShieldCheck className="h-3 w-3" /> Seal + Walrus</span> : <span className="text-xs text-foreground/35">No document</span>}
+                      {invoice.walrusBlobId ? <span className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-2.5 py-1 text-[13px] font-semibold text-primary"><ShieldCheck className="h-3 w-3" /> Seal + Walrus</span> : <span className="text-[13px] text-foreground/35">No document</span>}
                     </td>
-                    <td className="px-4 py-4"><span className={`rounded-full px-2.5 py-1 text-xs font-black capitalize ${statusStyle[invoice.status]}`}>{invoice.status}</span>{invoice.demo && <span className="ml-2"><StatusBadge status="demo" /></span>}</td>
+                    <td className="px-4 py-4"><span className={`rounded-full px-2.5 py-1 text-[13px] font-bold capitalize ${statusStyle[invoice.status]}`}>{invoice.status}</span>{invoice.demo && <span className="ml-2"><StatusBadge status="demo" /></span>}</td>
                     <td className="px-4 py-4">
                       <div className="flex justify-end gap-2">
-                        <button onClick={() => copyPayLink(invoice)} className="inline-flex items-center gap-1 rounded-lg border border-foreground/10 bg-card px-3 py-2 text-xs font-black"><Copy className="h-3.5 w-3.5" /> Pay link</button>
-                        {invoice.status === 'paid' && <button onClick={() => statusMutation.mutate({ id: invoice.id, status: 'settled' })} className="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-2 text-xs font-black text-card"><CheckCircle2 className="h-3.5 w-3.5" /> Settle</button>}
+                        <button onClick={() => copyPayLink(invoice)} className="inline-flex items-center gap-1 rounded-lg border border-foreground/10 bg-card px-3 py-2 text-[13px] font-bold"><Copy className="h-3.5 w-3.5" /> Pay link</button>
+                        {invoice.status === 'paid' && <button onClick={() => statusMutation.mutate({ id: invoice.id, status: 'settled' })} className="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-2 text-[13px] font-bold text-card"><CheckCircle2 className="h-3.5 w-3.5" /> Settle</button>}
                       </div>
                     </td>
                   </tr>
@@ -210,7 +210,7 @@ function CreateInvoiceModal({ close, onCreated }: { close: () => void; onCreated
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/35 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}>
       <div className="dash-surface max-h-[90vh] w-full max-w-2xl overflow-y-auto p-6">
-        <div className="flex items-start justify-between"><div><span className="dash-kicker">New payment request</span><h2 className="mt-2 text-2xl font-black">Create invoice</h2></div><button onClick={close} className="rounded-full p-2 hover:bg-muted"><X className="h-5 w-5" /></button></div>
+        <div className="flex items-start justify-between"><div><span className="dash-kicker">New payment request</span><h2 className="mt-2 text-2xl font-bold">Create invoice</h2></div><button onClick={close} className="rounded-full p-2 hover:bg-muted"><X className="h-5 w-5" /></button></div>
         <div className="mt-6 grid gap-4 sm:grid-cols-2">
           <Field label="Issuer organisation"><input value={form.issuerOrg} onChange={(e) => setForm({ ...form, issuerOrg: e.target.value })} /></Field>
           <Field label="Payer organisation"><input value={form.payerOrgName} onChange={(e) => setForm({ ...form, payerOrgName: e.target.value })} /></Field>
@@ -225,12 +225,12 @@ function CreateInvoiceModal({ close, onCreated }: { close: () => void; onCreated
           <input type="file" accept=".pdf,image/*" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) void fileToBase64(file); }} />
           {documentBase64 && <CheckCircle2 className="ml-auto h-5 w-5 text-primary" />}
         </label>
-        <button disabled={submitting} onClick={create} className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-accent px-5 py-3 font-black text-card disabled:opacity-50"><Send className="h-4 w-4" /> {submitting ? 'Creating...' : 'Create secure pay link'}</button>
+        <button disabled={submitting} onClick={create} className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-accent px-5 py-3 font-bold text-card disabled:opacity-50"><Send className="h-4 w-4" /> {submitting ? 'Creating...' : 'Create secure pay link'}</button>
       </div>
     </div>
   );
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <label className="mt-4 block text-xs font-black uppercase tracking-[0.12em] text-foreground/50">{label}<div className="mt-1 [&_input]:w-full [&_input]:rounded-xl [&_input]:border [&_input]:border-foreground/15 [&_input]:bg-card [&_input]:px-3 [&_input]:py-3 [&_input]:text-sm [&_input]:font-medium [&_select]:w-full [&_select]:rounded-xl [&_select]:border [&_select]:border-foreground/15 [&_select]:bg-card [&_select]:px-3 [&_select]:py-3 [&_textarea]:min-h-20 [&_textarea]:w-full [&_textarea]:rounded-xl [&_textarea]:border [&_textarea]:border-foreground/15 [&_textarea]:bg-card [&_textarea]:px-3 [&_textarea]:py-3">{children}</div></label>;
+  return <label className="mt-4 block text-xs font-semibold uppercase tracking-[0.12em] text-foreground/50">{label}<div className="mt-1 [&_input]:w-full [&_input]:rounded-xl [&_input]:border [&_input]:border-foreground/15 [&_input]:bg-card [&_input]:px-3 [&_input]:py-3 [&_input]:text-sm [&_input]:font-medium [&_select]:w-full [&_select]:rounded-xl [&_select]:border [&_select]:border-foreground/15 [&_select]:bg-card [&_select]:px-3 [&_select]:py-3 [&_textarea]:min-h-20 [&_textarea]:w-full [&_textarea]:rounded-xl [&_textarea]:border [&_textarea]:border-foreground/15 [&_textarea]:bg-card [&_textarea]:px-3 [&_textarea]:py-3">{children}</div></label>;
 }

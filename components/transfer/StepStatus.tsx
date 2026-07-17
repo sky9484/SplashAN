@@ -122,18 +122,18 @@ export default function StepStatus({ state, set, next }: { state: TransferState;
       <div className="rounded-3xl bg-[#326273] p-6 text-white">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-wide text-[#5C9EAD]">
+            <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[var(--info)]">
               {status === 'success' ? <CheckCircle2 className="h-3.5 w-3.5" /> : status === 'failed' ? <XCircle className="h-3.5 w-3.5" /> : <Loader2 className="h-3.5 w-3.5 animate-spin" />}
               Live settlement
             </div>
-            <h2 className="mt-3 text-2xl font-extrabold">{status === 'success' ? 'Recipient payment confirmed' : status === 'failed' ? 'Settlement failed' : 'Moving money now'}</h2>
+            <h2 className="mt-3 text-2xl font-semibold">{status === 'success' ? 'Recipient payment confirmed' : status === 'failed' ? 'Settlement failed' : 'Moving money now'}</h2>
             <p className="mt-1 text-sm text-white/65">
               {status === 'success' ? 'Payment is confirmed. Redirecting to receipt...' : status === 'failed' ? 'No funds were released. Please retry this transfer.' : 'The selected source is being finalized through Splash on Sui.'}
             </p>
           </div>
           <div className="rounded-2xl bg-white/10 px-4 py-3 text-sm">
             <div className="text-white/55">Recipient receives</div>
-            <div className="mt-1 text-xl font-bold">{state.quote?.netReceived ?? '0.00'} {state.amount.targetCurrency}</div>
+            <div className="mt-1 text-xl font-semibold">{state.quote?.netReceived ?? '0.00'} {state.amount.targetCurrency}</div>
           </div>
         </div>
       </div>
@@ -145,15 +145,15 @@ export default function StepStatus({ state, set, next }: { state: TransferState;
           const active = activeIndex === index && status !== 'failed';
 
           return (
-            <div key={stage.label} className={`grid grid-cols-[auto_1fr_auto] items-center gap-4 rounded-2xl border p-4 transition-all ${complete ? 'border-[#5C9EAD]/30 bg-[#5C9EAD]/10' : active ? 'border-[#E39774]/35 bg-[#E39774]/10 shadow-lg shadow-[#E39774]/10' : status === 'failed' ? 'border-red-500/20 bg-red-500/5' : 'border-[#326273]/10 bg-[#F6F0ED]'}`}>
-              <div className={`flex h-11 w-11 items-center justify-center rounded-2xl ${complete ? 'bg-[#5C9EAD] text-white' : active ? 'bg-[#E39774] text-white' : 'bg-white text-[#326273]/50'}`}>
+            <div key={stage.label} className={`grid grid-cols-[auto_1fr_auto] items-center gap-4 rounded-2xl border p-4 transition-all ${complete ? 'border-[var(--ok)] bg-[var(--ok-bg)]' : active ? 'border-[var(--info)] bg-[var(--info-bg)] shadow-lg shadow-[#326273]/10' : status === 'failed' ? 'border-[var(--error)] bg-[var(--error-bg)]' : 'border-[#326273]/10 bg-[#F6F0ED]'}`}>
+              <div className={`flex h-11 w-11 items-center justify-center rounded-2xl ${complete ? 'bg-[var(--ok)] text-white' : active ? 'bg-[var(--info)] text-white' : 'bg-white text-[#326273]/50'}`}>
                 {complete ? <CheckCircle2 className="h-5 w-5" /> : active ? <Loader2 className="h-5 w-5 animate-spin" /> : <Icon className="h-5 w-5" />}
               </div>
               <div>
-                <div className="font-bold text-[#326273]">{stage.label}</div>
-                <div className="mt-1 text-xs text-[#326273]/60">{stage.detail}</div>
+                <div className="font-semibold text-[#326273]">{stage.label}</div>
+                <div className="mt-1 text-[13px] text-[#326273]/60">{stage.detail}</div>
               </div>
-              <div className={`rounded-full px-3 py-1 text-xs font-bold ${complete ? 'bg-[#5C9EAD]/15 text-[#5C9EAD]' : active ? 'bg-[#E39774]/15 text-[#E39774]' : 'bg-white text-[#326273]/45'}`}>
+              <div className={`rounded-full px-3 py-1 text-[13px] font-semibold ${complete ? 'bg-[var(--ok-bg)] text-[var(--ok)]' : active ? 'bg-[var(--info-bg)] text-[var(--info)]' : 'bg-white text-[#326273]/45'}`}>
                 {complete ? 'Done' : active ? 'Live' : 'Waiting'}
               </div>
             </div>
@@ -163,34 +163,34 @@ export default function StepStatus({ state, set, next }: { state: TransferState;
 
       {failureReason && (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-          <div className="mb-1 font-bold">Error detail</div>
-          <div className="font-mono text-xs leading-5 break-all">{failureReason}</div>
+          <div className="mb-1 font-semibold">Error detail</div>
+          <div className="font-mono text-[13px] leading-5 break-all">{failureReason}</div>
         </div>
       )}
 
       {heldDurationMs !== null && (
-        <div className="rounded-2xl border border-primary/25 bg-primary/10 p-4 text-sm font-black text-foreground">
+        <div className="rounded-2xl border border-primary/25 bg-primary/10 p-4 text-sm font-bold text-foreground">
           Pass-through held duration: {(heldDurationMs / 1000).toFixed(1)}s
         </div>
       )}
 
       {state.composedActions?.length ? (
         <section className="rounded-3xl border-2 border-[#5C9EAD]/35 bg-[#5C9EAD]/10 p-5">
-          <div className="text-[11px] font-black uppercase tracking-[0.16em] text-[#326273]/55">One composed Sui transaction</div>
-          <h3 className="mt-1 text-lg font-extrabold text-[#0c3e48]">Pay, allocate, and prove</h3>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#326273]/55">One composed Sui transaction</div>
+          <h3 className="mt-1 text-lg font-semibold text-[#0c3e48]">Pay, allocate, and prove</h3>
           <div className="mt-4 grid gap-3 md:grid-cols-3">
             {state.composedActions.map((action, index) => (
               <div key={`${action.kind}-${action.eventType}`} className="rounded-2xl border border-[#326273]/10 bg-white p-4">
-                <div className="text-xs font-black text-[#E39774]">0{index + 1}</div>
-                <div className="mt-1 text-sm font-extrabold text-[#326273]">{action.label}</div>
-                <div className="mt-2 break-all font-mono text-[10px] text-[#326273]/50">{action.eventType}</div>
+                <div className="text-[13px] font-bold text-[#E39774]">0{index + 1}</div>
+                <div className="mt-1 text-sm font-semibold text-[#326273]">{action.label}</div>
+                <div className="mt-2 break-all font-mono text-[13px] text-[#326273]/50">{action.eventType}</div>
               </div>
             ))}
           </div>
         </section>
       ) : null}
 
-      {state.transferIntentId && <div className="break-all rounded-2xl bg-[#F6F0ED] p-4 font-mono text-xs text-[#326273]/55">Transfer intent: {state.transferIntentId}</div>}
+      {state.transferIntentId && <div className="break-all rounded-2xl bg-[#F6F0ED] p-4 font-mono text-[13px] text-[#326273]/55">Transfer intent: {state.transferIntentId}</div>}
     </div>
   );
 }

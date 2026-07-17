@@ -67,7 +67,7 @@ function stateIndex(state: TransferIntentState) {
 
 function StateIcon({ state }: { state: TransferIntentState }) {
   if (state === 'SETTLED' || state === 'DISBURSED' || state === 'CREDITED') {
-    return <CheckCircle2 className="text-[#5C9EAD]" size={18} />;
+    return <CheckCircle2 className="text-[var(--info)]" size={18} />;
   }
   if (state === 'FAILED' || state === 'REFUNDED') {
     return <XCircle className="text-red-500" size={18} />;
@@ -81,27 +81,27 @@ function StateIcon({ state }: { state: TransferIntentState }) {
 function StateBadge({ state }: { state: TransferIntentState }) {
   if (state === 'SETTLED' || state === 'DISBURSED' || state === 'CREDITED') {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-[#5C9EAD]/10 px-2.5 py-0.5 text-xs font-semibold text-[#5C9EAD]">
+      <span className="inline-flex items-center gap-1 rounded-full bg-[#5C9EAD]/10 px-2.5 py-0.5 text-[13px] font-medium text-[var(--info)]">
         <CheckCircle2 size={11} /> {state}
       </span>
     );
   }
   if (state === 'FAILED') {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-600">
+      <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-[13px] font-medium text-red-600">
         <XCircle size={11} /> FAILED
       </span>
     );
   }
   if (state === 'REFUNDING' || state === 'REFUNDED') {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-[#E39774]/10 px-2.5 py-0.5 text-xs font-semibold text-[#E39774]">
+      <span className="inline-flex items-center gap-1 rounded-full bg-[#E39774]/10 px-2.5 py-0.5 text-[13px] font-medium text-[#E39774]">
         <AlertTriangle size={11} /> {state}
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-[#326273]/10 px-2.5 py-0.5 text-xs font-semibold text-[#326273]/70">
+    <span className="inline-flex items-center gap-1 rounded-full bg-[#326273]/10 px-2.5 py-0.5 text-[13px] font-medium text-[#326273]/70">
       <Clock size={11} /> {state}
     </span>
   );
@@ -120,8 +120,8 @@ function ProgressSteps({ state }: { state: TransferIntentState }) {
         return (
           <div key={label} className="flex shrink-0 items-center gap-0.5">
             <div
-              className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold transition-colors
-                ${done ? 'bg-[#5C9EAD] text-white' : active ? 'border-2 border-[#5C9EAD] bg-white text-[#5C9EAD]' : 'bg-[#326273]/10 text-[#326273]/40'}`}
+              className={`flex h-5 w-5 items-center justify-center rounded-full text-[13px] font-semibold transition-colors
+                ${done ? 'bg-[#5C9EAD] text-white' : active ? 'border-2 border-[#5C9EAD] bg-white text-[var(--info)]' : 'bg-[#326273]/10 text-[#326273]/40'}`}
               title={label}
             >
               {done ? '✓' : index + 1}
@@ -145,11 +145,11 @@ function TransferCard({ record }: { record: TransferIntentRecord & { heldDuratio
             <StateIcon state={record.state} />
           </div>
           <div className="min-w-0">
-            <div className="font-bold text-[#326273]">{record.recipientName}</div>
-            <div className="mt-0.5 text-xs text-[#326273]/60">
+            <div className="font-semibold text-[#326273]">{record.recipientName}</div>
+            <div className="mt-0.5 text-[13px] text-[#326273]/60">
               {record.targetCurrency} {record.targetAmount} · USD {record.sourceAmountUsd}
             </div>
-            <div className="mt-0.5 font-mono text-[11px] text-[#326273]/40">{record.id}</div>
+            <div className="mt-0.5 font-mono text-[13px] text-[#326273]/40">{record.id}</div>
           </div>
         </div>
         <div className="shrink-0">
@@ -160,11 +160,11 @@ function TransferCard({ record }: { record: TransferIntentRecord & { heldDuratio
       <ProgressSteps state={record.state} />
 
       {record.state === 'FAILED' && record.failureReason && (
-        <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
-          <span className="font-semibold">Failure reason: </span>
+        <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-[13px] text-red-700">
+          <span className="font-medium">Failure reason: </span>
           {record.failureReason}
           {record.failedAtState && (
-            <span className="ml-2 rounded bg-red-100 px-1.5 py-0.5 font-mono text-[10px]">
+            <span className="ml-2 rounded bg-red-100 px-1.5 py-0.5 font-mono text-[13px]">
               at {record.failedAtState}
             </span>
           )}
@@ -173,7 +173,7 @@ function TransferCard({ record }: { record: TransferIntentRecord & { heldDuratio
 
       {record.suiTxDigest && (
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <div className="min-w-0 flex-1 break-all rounded-lg bg-[#F6F0ED] px-3 py-1.5 font-mono text-[11px] text-[#326273]/60">
+          <div className="min-w-0 flex-1 break-all rounded-lg bg-[#F6F0ED] px-3 py-1.5 font-mono text-[13px] text-[#326273]/60">
             {record.suiTxDigest}
           </div>
           <ExplorerLinks digest={record.suiTxDigest} />
@@ -181,13 +181,13 @@ function TransferCard({ record }: { record: TransferIntentRecord & { heldDuratio
       )}
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <span className="rounded-full bg-foreground/8 px-2.5 py-1 text-[11px] font-black text-foreground/60">{record.deliveryTier.replaceAll('_', ' ')}</span>
+        <span className="rounded-full bg-foreground/8 px-2.5 py-1 text-[13px] font-bold text-foreground/60">{record.deliveryTier.replaceAll('_', ' ')}</span>
         {record.demo && <StatusBadge status="demo" />}
-        {record.heldDurationMs != null && <span className="rounded-full bg-primary/15 px-2.5 py-1 text-[11px] font-black text-primary">Held: {(record.heldDurationMs / 1000).toFixed(1)}s</span>}
-        <Link href={`/dashboard/audit/${record.id}`} className="rounded-full border border-primary/20 px-2.5 py-1 text-[11px] font-black text-primary">Audit</Link>
+        {record.heldDurationMs != null && <span className="rounded-full bg-primary/15 px-2.5 py-1 text-[13px] font-bold text-primary">Held: {(record.heldDurationMs / 1000).toFixed(1)}s</span>}
+        <Link href={`/dashboard/audit/${record.id}`} className="rounded-full border border-primary/20 px-2.5 py-1 text-[13px] font-bold text-primary">Audit</Link>
       </div>
 
-      <div className="mt-3 flex items-center justify-between text-[11px] text-[#326273]/40">
+      <div className="mt-3 flex items-center justify-between text-[13px] text-[#326273]/40">
         <span>{new Date(record.createdAt).toLocaleString()}</span>
         {record.exchangeRate && <span>Rate: {record.exchangeRate}</span>}
       </div>
@@ -314,11 +314,11 @@ export default function HistoryPage() {
         description="All your single transfers — live status, on-chain proofs, and failure reasons."
         actions={
           <>
-            <button type="button" onClick={() => void exportReconciliation('csv')} className="dash-btn dash-btn-ghost !px-3 !py-2 !text-xs">
+            <button type="button" onClick={() => void exportReconciliation('csv')} className="dash-btn dash-btn-ghost !px-3 !py-2 !text-[13px]">
               <Download size={14} />
               Export CSV
             </button>
-            <button type="button" onClick={() => void exportReconciliation('json')} className="dash-btn dash-btn-ghost !px-3 !py-2 !text-xs">
+            <button type="button" onClick={() => void exportReconciliation('json')} className="dash-btn dash-btn-ghost !px-3 !py-2 !text-[13px]">
               <Download size={14} />
               Export JSON
             </button>
@@ -326,12 +326,12 @@ export default function HistoryPage() {
               type="button"
               onClick={() => void fetchTransfers(filter, true)}
               disabled={refreshing}
-              className="dash-btn dash-btn-ghost !px-3 !py-2 !text-xs"
+              className="dash-btn dash-btn-ghost !px-3 !py-2 !text-[13px]"
             >
               <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
               Refresh
             </button>
-            <Link href="/dashboard/transfer" className="dash-btn !px-3 !py-2 !text-xs">
+            <Link href="/dashboard/transfer" className="dash-btn !px-3 !py-2 !text-[13px]">
               <ArrowUpRight size={14} />
               New transfer
             </Link>
@@ -343,7 +343,7 @@ export default function HistoryPage() {
       <div className="grid grid-cols-2 gap-3 dash-reveal-stagger md:grid-cols-4">
         <DashStat label="Total" value={String(data?.total ?? 0)} valueClassName="text-[#326273]" />
         <DashStat label="Pending" value={String(counts.pending)} valueClassName="text-[#E39774]" />
-        <DashStat label="Settled" value={String(counts.successful)} valueClassName="text-[#5C9EAD]" />
+        <DashStat label="Settled" value={String(counts.successful)} valueClassName="text-[var(--info)]" />
         <DashStat label="Failed" value={String(counts.failed)} valueClassName="text-red-500" />
       </div>
 
@@ -354,7 +354,7 @@ export default function HistoryPage() {
             key={value}
             type="button"
             onClick={() => setFilter(value)}
-            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-colors
+            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-colors
               ${filter === value
                 ? 'bg-[#326273] text-white'
                 : 'border border-[#326273]/10 bg-white text-[#326273]/70 hover:border-[#5C9EAD]/40 hover:text-[#326273]'
@@ -364,7 +364,7 @@ export default function HistoryPage() {
             {label}
             {value !== 'all' && (
               <span
-                className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold
+                className={`rounded-full px-1.5 py-0.5 text-[13px] font-semibold
                   ${filter === value ? 'bg-white/20 text-white' : 'bg-[#326273]/10 text-[#326273]/60'}`}
               >
                 {counts[value]}
@@ -377,34 +377,34 @@ export default function HistoryPage() {
       <section className="dash-surface p-5">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
-            <div className="flex items-center gap-2 text-sm font-black text-[#326273]">
-              <Database size={17} className="text-[#5C9EAD]" />
+            <div className="flex items-center gap-2 text-sm font-bold text-[#326273]">
+              <Database size={17} className="text-[var(--info)]" />
               Daily audit batches
             </div>
-            <p className="mt-1 text-xs text-[#326273]/60">
+            <p className="mt-1 text-[13px] text-[#326273]/60">
               Completed payments are Merkle-batched, access-controlled, stored on Walrus, then anchored on Sui.
             </p>
           </div>
-          <span className="rounded-full bg-[#5C9EAD]/10 px-3 py-1 text-[11px] font-black text-[#326273]">
+          <span className="rounded-full bg-[#5C9EAD]/10 px-3 py-1 text-[13px] font-bold text-[#326273]">
             {auditBatches.length} anchored batch{auditBatches.length === 1 ? '' : 'es'}
           </span>
         </div>
         <div className="mt-4 space-y-3">
           {auditBatches.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-[#326273]/15 p-4 text-xs text-[#326273]/55">
+            <div className="rounded-xl border border-dashed border-[#326273]/15 p-4 text-[13px] text-[#326273]/55">
               No daily batch has been generated yet. The CRON-gated audit batch job creates one after real settlements complete.
             </div>
           ) : auditBatches.map((batch) => (
             <div key={batch.id} className="rounded-xl border border-[#326273]/10 bg-[#F6F0ED] p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <div className="font-black text-[#326273]">{batch.date} · {batch.settlementCount} settlement{batch.settlementCount === 1 ? '' : 's'}</div>
-                  <div className="mt-1 break-all font-mono text-[10px] text-[#326273]/50">Merkle root {batch.merkleRoot}</div>
+                  <div className="font-bold text-[#326273]">{batch.date} · {batch.settlementCount} settlement{batch.settlementCount === 1 ? '' : 's'}</div>
+                  <div className="mt-1 break-all font-mono text-[13px] text-[#326273]/50">Merkle root {batch.merkleRoot}</div>
                 </div>
                 <div className="flex gap-2">
                   <StatusBadge status={batch.walrusMode} />
                   <StatusBadge status={batch.sealMode} />
-                  <a href={`https://testnet.suivision.xyz/txblock/${batch.anchorDigest}`} target="_blank" rel="noreferrer" className="rounded-lg bg-white px-3 py-2 text-[11px] font-black text-[#326273]">
+                  <a href={`https://testnet.suivision.xyz/txblock/${batch.anchorDigest}`} target="_blank" rel="noreferrer" className="rounded-lg bg-white px-3 py-2 text-[13px] font-bold text-[#326273]">
                     Anchor tx
                   </a>
                 </div>
@@ -413,7 +413,7 @@ export default function HistoryPage() {
                 {batch.leaves.map((leaf) => {
                   const key = `${batch.id}:${leaf.transferId}`;
                   return (
-                    <button key={leaf.transferId} type="button" onClick={() => void verifyInclusion(batch, leaf.transferId)} className="inline-flex items-center gap-1.5 rounded-lg bg-[#326273] px-3 py-2 text-[11px] font-black text-white">
+                    <button key={leaf.transferId} type="button" onClick={() => void verifyInclusion(batch, leaf.transferId)} className="inline-flex items-center gap-1.5 rounded-lg bg-[#326273] px-3 py-2 text-[13px] font-bold text-white">
                       <BadgeCheck size={13} />
                       {verification[key] ?? `Verify ${leaf.transferId.slice(0, 14)}…`}
                     </button>
@@ -428,14 +428,14 @@ export default function HistoryPage() {
       {/* List */}
       {loading ? (
         <div className="flex items-center justify-center py-20">
-          <Loader2 className="animate-spin text-[#5C9EAD]" size={28} />
+          <Loader2 className="animate-spin text-[var(--info)]" size={28} />
         </div>
       ) : !data?.items.length ? (
         <div className="dash-surface p-16 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#5C9EAD]/10 text-[#5C9EAD]">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#5C9EAD]/10 text-[var(--info)]">
             <History size={24} />
           </div>
-          <div className="font-bold text-[#326273]">No transfers yet</div>
+          <div className="font-semibold text-[#326273]">No transfers yet</div>
           <p className="mt-1 text-sm text-[#326273]/60">
             {filter === 'all'
               ? 'Your transfers will appear here once you make your first payment.'
@@ -444,7 +444,7 @@ export default function HistoryPage() {
           {filter === 'all' && (
             <Link
               href="/dashboard/transfer"
-              className="mt-4 inline-flex items-center gap-2 rounded-lg bg-[#326273] px-4 py-2 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[#264e5b]"
+              className="mt-4 inline-flex items-center gap-2 rounded-lg bg-[#326273] px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#264e5b]"
             >
               <ArrowUpRight size={14} />
               Make your first transfer
