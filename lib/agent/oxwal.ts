@@ -4,6 +4,7 @@ import { composeAndSimulateProposal } from '../chain/compose.ts';
 import { estimateNettingSavedUsd, getCorridorFeeBps, getUsdCorridorByCurrency } from '../fx/corridors.ts';
 import { getUsdyNetApyPct } from '../server/usdy.ts';
 import { InMemoryProposalStore } from '../queue/proposal-state.ts';
+import { makeProposalWriter } from '../queue/proposal-persistence.ts';
 import type {
   ComplianceResult,
   EvidenceItem,
@@ -483,11 +484,14 @@ const proposalStoreGlobal = globalThis as ProposalStoreGlobal;
 proposalStoreGlobal.oxwalProposalStore ??= new InMemoryProposalStore();
 
 export function resetOxwalProposalStore() {
-  proposalStoreGlobal.oxwalProposalStore = new InMemoryProposalStore();
+  proposalStoreGlobal.oxwalProposalStore = new InMemoryProposalStore(makeProposalWriter());
 }
 
 function proposalStore() {
-  proposalStoreGlobal.oxwalProposalStore ??= new InMemoryProposalStore();
+  // W1: with DATABASE_URL set, mutations write through to Postgres so a
+  // pending approval survives a cold start (hydration happens in the async
+  // server contexts via ensureProposalStoreHydrated).
+  proposalStoreGlobal.oxwalProposalStore ??= new InMemoryProposalStore(makeProposalWriter());
   return proposalStoreGlobal.oxwalProposalStore;
 }
 

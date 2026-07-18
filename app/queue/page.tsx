@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 
 import type { ProposalExplain, SimulationResult, UnsignedProposal } from '@/lib/agent/types';
 import { getOxwalProposalStore } from '@/lib/agent/oxwal';
+import { ensureProposalStoreHydrated } from '@/lib/queue/proposal-persistence';
 import { buildApprovalQueue, queueLanes, type QueueLane } from '@/lib/queue/approval-queue';
 import { getCustomerSession } from '@/lib/server/customer-auth';
 import ApprovalQueueBoard, { type QueueItem, type QueueLaneData } from '@/components/queue/ApprovalQueueBoard';
@@ -153,10 +154,13 @@ export default async function QueuePage() {
     redirect('/login');
   }
 
-  // Live proposals 0xWal drafted this session (in-memory store). Anything the
-  // operator did not approve inside the 2-minute chat window — or walked away
-  // from — surfaces here as real maker-checker work.
-  const liveProposals: QueueItem[] = getOxwalProposalStore()
+  // Live proposals 0xWal drafted this session. With DATABASE_URL set (W1),
+  // the store write-throughs to Postgres and rehydrates here after a cold
+  // start — a pending approval survives a restart. Anything the operator did
+  // not approve inside the 2-minute chat window surfaces as maker-checker work.
+  const proposalStore = getOxwalProposalStore();
+  await ensureProposalStoreHydrated(proposalStore);
+  const liveProposals: QueueItem[] = proposalStore
     .list()
     .filter((item) => item.status === 'SIMULATED' || item.status === 'POLICY_EVALUATED' || item.status === 'PENDING_APPROVAL')
     .map((item) => ({

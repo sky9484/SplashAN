@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import type { ComplianceResult, OrgPolicy, ProposalKind, UserRole } from '@/lib/agent/types';
 import { getOxwalProposalStore } from '@/lib/agent/oxwal';
+import { ensureProposalStoreHydrated } from '@/lib/queue/proposal-persistence';
 import { requireCustomerRequest } from '@/lib/server/customer-auth';
 import { readJsonBody } from '@/lib/server/http';
 import { authorizeProposalSubmission } from '@/lib/safety/submit-guard';
@@ -86,6 +87,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!parsed.success) return json({ error: 'Invalid proposal submission' }, 400);
 
   const store = getOxwalProposalStore();
+  // W1: after a cold start, open proposals live in Postgres until first touch.
+  await ensureProposalStoreHydrated(store);
   const proposal = store.get(id);
   if (!proposal) return json({ error: 'Proposal not found' }, 404);
   if (!proposal.simulation) return json({ error: 'Proposal must be simulated before submission' }, 409);
@@ -142,8 +145,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           signedAt,
         });
     const submitted = store.transition(signed.id, { type: 'SUBMIT' });
+    // W1: the approval/submission is durable before we tell the client so a
+    // crash right after this response cannot lose it.
+    await store.flush();
     return json({ proposal: submitted, policyDecision });
   } catch (error) {
+    await store.flush();
     return json({ error: error instanceof Error ? error.message : 'Proposal submission blocked' }, 409);
   }
 }

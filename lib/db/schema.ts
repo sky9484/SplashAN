@@ -33,9 +33,6 @@ const timestamps = {
 
 export const userRole = pgEnum('user_role', ['maker', 'checker', 'admin', 'viewer']);
 export const kybStatus = pgEnum('kyb_status', ['none', 'pending', 'basic', 'full', 'rejected']);
-export const proposalStatus = pgEnum('proposal_status', [
-  'DRAFT', 'SIMULATED', 'POLICY_EVALUATED', 'PENDING_APPROVAL', 'APPROVED', 'SIGNED', 'SUBMITTED', 'REJECTED', 'EXPIRED', 'FAILED',
-]);
 export const intentState = pgEnum('intent_state', [
   'AUTHORIZED', 'DEPOSIT_CONFIRMED', 'EXCHANGING', 'EXCHANGED', 'QUEUED', 'SETTLING', 'SETTLED',
   'SWEEPING', 'DISBURSED', 'CREDITED', 'FAILED', 'REFUNDING', 'REFUNDED', 'OPS_HOLD', 'COMPLIANCE_HOLD',
@@ -151,13 +148,16 @@ export const proposals = pgTable('proposals', {
   orgId: text('org_id').notNull().references(() => organizations.id),
   idempotencyKey: text('idempotency_key').notNull(),
   kind: text('kind').notNull(),
-  status: proposalStatus('status').notNull(),
+  /** Text, not enum: the agent lifecycle (DRAFTED…ANCHORED/REVERSED) is the
+   *  authority (lib/queue/proposal-state.ts); freeze to an enum post-W6. */
+  status: text('status').notNull(),
   tier: text('tier').notNull(),
   corridor: text('corridor'),
   createdBy: text('created_by').notNull(),
   unsignedTxBytes: text('unsigned_tx_bytes'),
   explain: jsonb('explain').notNull(),
   simulation: jsonb('simulation'),
+  settlement: jsonb('settlement'),
   requiredApprovers: bigint('required_approvers', { mode: 'number' }).notNull().default(1),
   expiresAt: timestamp('expires_at', { withTimezone: true }),
   ...timestamps,

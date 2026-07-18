@@ -188,6 +188,42 @@ export function transitionProposal(
 export class InMemoryProposalStore {
   private readonly proposalsById = new Map<string, UnsignedProposal>();
   private readonly idsByIdempotencyKey = new Map<string, string>();
+  /** W1 — durable write-through hook: called after every mutation with the
+   *  latest proposal state. Persistence failures must not break the demo
+   *  path, so the hook's promise is tracked (flush) but never thrown here. */
+  private lastWrite: Promise<unknown> = Promise.resolve();
+  private readonly onWrite?: (proposal: UnsignedProposal) => Promise<void>;
+
+  constructor(onWrite?: (proposal: UnsignedProposal) => Promise<void>) {
+    this.onWrite = onWrite;
+  }
+
+  private recordWrite(proposal: UnsignedProposal) {
+    if (!this.onWrite) return;
+    this.lastWrite = this.lastWrite
+      .then(() => this.onWrite!(proposal))
+      .catch((error) => {
+        console.error('[proposal-store] persistence write failed', error);
+      });
+  }
+
+  /** Await durable persistence of every mutation issued so far. Mutating API
+   *  routes call this before responding so a crash right after the response
+   *  cannot lose an approval. */
+  flush(): Promise<unknown> {
+    return this.lastWrite;
+  }
+
+  /** Boot hydration (W1): seed the hot in-memory map from the database
+   *  without re-triggering writes. Existing entries win — live state is
+   *  newer than anything loaded later. */
+  hydrate(proposals: UnsignedProposal[]) {
+    for (const proposal of proposals) {
+      if (this.proposalsById.has(proposal.id)) continue;
+      this.proposalsById.set(proposal.id, proposal);
+      this.idsByIdempotencyKey.set(proposal.idempotencyKey, proposal.id);
+    }
+  }
 
   create(proposal: UnsignedProposal): UnsignedProposal {
     const existingId = this.idsByIdempotencyKey.get(proposal.idempotencyKey);
@@ -203,6 +239,7 @@ export class InMemoryProposalStore {
 
     this.proposalsById.set(proposal.id, proposal);
     this.idsByIdempotencyKey.set(proposal.idempotencyKey, proposal.id);
+    this.recordWrite(proposal);
     return proposal;
   }
 
@@ -220,6 +257,7 @@ export class InMemoryProposalStore {
 
     const next = transitionProposal(proposal, event);
     this.proposalsById.set(id, next);
+    this.recordWrite(next);
     return next;
   }
 }
