@@ -31,7 +31,7 @@ const INFORMATION = [
   {
     icon: WalletCards,
     label: 'Custody',
-    text: 'held 1:1 in segregated custody, never commingled, never lent, reconciled daily',
+    text: 'licensed partners are the system of record for customer funds · reconciled daily',
   },
   {
     icon: Landmark,

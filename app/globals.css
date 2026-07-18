@@ -7972,3 +7972,73 @@ button.iso-product-row {
 @media (prefers-reduced-motion: reduce) {
   .tr-flow-dot { animation: none; opacity: 0; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   Fintech polish layer (demo-day) — pure CSS, no markup changes.
+   Sharper elevation, standardized focus, tinted selection/scrollbars.
+   Tokens only; states stay on --ok/--warn/--error/--pending/--info.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* Crisper card elevation: tighter contact shadow + soft ambient, finer line. */
+.fintech-dashboard-shell .dash-surface,
+.fintech-dashboard-shell .dash-block {
+  border-color: rgba(31, 68, 82, .10);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, .8) inset,
+    0 1px 2px rgba(31, 68, 82, .05),
+    0 12px 32px rgba(9, 45, 54, .07);
+}
+
+.fintech-dashboard-shell .dash-block-interactive {
+  transition: transform var(--dur-base) var(--ease-standard), box-shadow var(--dur-base) var(--ease-standard), border-color var(--dur-base) var(--ease-standard);
+}
+
+.fintech-dashboard-shell .dash-block-interactive:hover {
+  transform: translateY(-2px);
+  border-color: rgba(92, 158, 173, .35);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, .8) inset,
+    0 2px 4px rgba(31, 68, 82, .06),
+    0 18px 44px rgba(9, 45, 54, .12);
+}
+
+/* One focus language across the whole dashboard (keyboard = first-class). */
+.fintech-dashboard-shell a:focus-visible,
+.fintech-dashboard-shell button:focus-visible,
+.fintech-dashboard-shell input:focus-visible,
+.fintech-dashboard-shell select:focus-visible,
+.fintech-dashboard-shell [role="button"]:focus-visible,
+.fintech-dashboard-shell summary:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(92, 158, 173, .38);
+  border-radius: var(--r-sm);
+}
+
+/* Brand-tinted text selection — small cue, expensive feel. */
+.fintech-dashboard-shell ::selection {
+  background: rgba(92, 158, 173, .28);
+  color: var(--ink);
+}
+
+/* Thin, tinted scrollbars inside dashboard scroll regions. */
+.fintech-dashboard-shell *::-webkit-scrollbar { width: 8px; height: 8px; }
+.fintech-dashboard-shell *::-webkit-scrollbar-track { background: transparent; }
+.fintech-dashboard-shell *::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(50, 98, 115, .28);
+}
+.fintech-dashboard-shell *::-webkit-scrollbar-thumb:hover { background: rgba(50, 98, 115, .45); }
+
+/* Table rows: calmer hover + hairline discipline for data-dense views. */
+.fintech-dashboard-shell tbody tr { transition: background-color var(--dur-fast) var(--ease-standard); }
+
+/* Numeric tabular alignment safety net for any stat the money class missed. */
+.fintech-dashboard-shell .dash-surface strong,
+.fintech-dashboard-shell .dash-block strong {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fintech-dashboard-shell .dash-block-interactive,
+  .fintech-dashboard-shell .dash-block-interactive:hover { transition: none; transform: none; }
+}

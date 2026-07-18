@@ -153,20 +153,27 @@ Walrus — real, verifiable, 7-year retention — before any money is recommende
 
 ---
 
-## 5 · Treasury  (Finance → Treasury)  — brief
+## 5 · Treasury  (Finance → Treasury)  — now FULLY interactive
 
 **Goal:** idle USD earns a variable T-bill yield; withdrawals are controlled.
+(`TREASURY_EXECUTION_ENABLED=true` is set in `.env.local` — verified live:
+allocate, withdrawal notice, and cancel all work against the sandbox ledger.)
 
-1. Sidebar → **Treasury**.
-2. Show the **Available (USD, instant, 0%)** vs **Smart Treasury (variable Ondo
-   USDY yield)** split, and the projection.
-3. Mention withdrawals take 1–3 business days and settlement is approval-gated
-   (`TREASURY_EXECUTION_ENABLED=false` today, so this section is read/allocate-only —
-   don't attempt a live withdrawal in the demo).
+1. Sidebar → **Treasury**. Show **Available (USD, instant, 0%)** vs
+   **Smart Treasury (variable Ondo USDY yield)** and the projection.
+2. **Allocate live:** enter `2000` → Move to Treasury. Both balances update
+   instantly — Available drops, Smart Treasury grows.
+3. **Withdraw live:** switch to Withdraw, enter `500` → a **notice** appears
+   with the 1–2 business-day window. This is the control story: withdrawal is
+   a scheduled, cancellable notice — not an instant drain.
+4. **Cancel it** → funds return to Treasury, notice clears. (Also keeps the
+   sandbox ledger tidy between runs.)
+5. End on the collapsed trust line at the bottom — click **"Splash
+   orchestrates — we never hold your funds."** to unfold the partner path.
 
-**Talking point:** "Operating cash stays instant; surplus earns a real T-bill-backed
-yield, and moving it out is a controlled, auditable action — not a button that
-drains the account."
+**Talking point:** "Operating cash stays instant; surplus earns a real
+T-bill-backed yield, and moving it out is a controlled, auditable action — a
+notice window you can cancel, not a button that drains the account."
 
 ---
 

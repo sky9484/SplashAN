@@ -27,6 +27,10 @@ const banned = [
   /save 62%/i,
   /84,?600/,
   /mainnet (?:live|now)/i,
+  // W9.6 claims pass: custody language beyond partner-of-record framing is
+  // banned — licensed partners are the system of record for customer funds.
+  /segregated custody/i,
+  /never commingled/i,
 ];
 
 // Fixed-APY guard: any "<number>% APY" must be immediately preceded by
@@ -155,6 +159,31 @@ for (const root of roots) {
 }
 
 // ── Soft warnings (non-fatal) ──────────────────────────────────────────────
+// W2 pre-work: float math on money is the debt mainnet cannot carry. Until
+// the W2 sweep lands (bigint minor units via lib/money/), WARN on every
+// parseFloat/Number(...) touching an amount-named identifier in the money
+// paths so no NEW debt lands unnoticed. W2 flips this to a hard failure.
+const moneyFloatWarnings = [];
+{
+  const moneyRoots = ['lib/server', 'lib/fx'];
+  const moneyFloatPattern = /(?:parseFloat|Number)\s*\(\s*[^)]*(?:amount|Amount|price|Price|fee|Fee|balance|Balance)/;
+  for (const root of moneyRoots) {
+    for (const file of await filesUnder(root)) {
+      const text = await readFile(file, 'utf8');
+      let line = 0;
+      for (const raw of text.split('\n')) {
+        line += 1;
+        if (moneyFloatPattern.test(raw)) {
+          moneyFloatWarnings.push(`${relative('.', file)}:${line} float math on a money identifier — migrate to bigint minor units (W2)`);
+        }
+      }
+    }
+  }
+}
+if (moneyFloatWarnings.length > 0) {
+  console.warn(`⚠ W2 debt (non-fatal, ${moneyFloatWarnings.length} site(s)):\n` + moneyFloatWarnings.join('\n') + '\n');
+}
+
 // USD-first stance: "stablecoin" is fine as a settlement mechanism but must
 // never be the headline value in customer-facing components. Flag drift so
 // it stays visible; do not fail the build.

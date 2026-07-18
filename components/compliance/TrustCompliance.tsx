@@ -39,7 +39,7 @@ const LICENSE_PATH = [
 const CONTROLS = [
   { label: 'Human approval', body: 'Every payment is prepared by 0xWal and released only by a human on the Action Queue — maker-checker, with dual approval above your threshold.' },
   { label: 'Corridor gating', body: 'Corridors arm and pause under explicit controls; settlement halts on a peg deviation or compliance flag before any value moves.' },
-  { label: 'Segregated custody', body: 'Client funds sit with licensed partners under 2-of-3 key governance — never commingled with operating balances.' },
+  { label: 'Partner custody', body: 'Licensed partners are the system of record for client funds, with 2-of-3 key governance on Splash-side controls.' },
 ];
 
 export default function TrustCompliance() {
