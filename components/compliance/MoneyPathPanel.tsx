@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowRight, Landmark, Repeat, Send, ShieldCheck } from 'lucide-react';
+import { ArrowRight, ChevronDown, Landmark, Repeat, Send, ShieldCheck } from 'lucide-react';
 
 import {
   MONEY_PATH_HEADER,
@@ -14,6 +14,9 @@ import {
  * update in one place. The Splash step carries the locked honesty sentence
  * (enforced by scripts/check-copy.mjs).
  *
+ * Collapsed by default: only the header line shows until the operator clicks
+ * it — the partner path is reassurance, not workflow, so it must not shout.
+ *
  * Mounts: treasury page, funding/deposit flow (compact), and linked from the
  * receipt's verify section (W9.2).
  */
@@ -22,12 +25,18 @@ const STEP_ICONS = [Landmark, Repeat, Send, ShieldCheck] as const;
 
 export default function MoneyPathPanel({ compact = false }: { compact?: boolean }) {
   return (
-    <section
+    <details
       aria-label="Where your money sits"
-      className="overflow-hidden rounded-xl border border-[#326273]/14 bg-white"
+      className="group overflow-hidden rounded-xl border border-[#326273]/14 bg-white"
     >
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#326273]/10 bg-[#F6F0ED]/70 px-4 py-3">
-        <h2 className="text-sm font-semibold text-[#1F4452]">{MONEY_PATH_HEADER}</h2>
+      <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2 bg-[#F6F0ED]/70 px-4 py-3 [&::-webkit-details-marker]:hidden">
+        <span className="flex items-center gap-2 text-sm font-semibold text-[#1F4452]">
+          <ShieldCheck size={15} className="shrink-0 text-[var(--info)]" aria-hidden="true" />
+          {MONEY_PATH_HEADER}
+        </span>
+        <ChevronDown size={15} aria-hidden="true" className="shrink-0 text-[#326273]/45 transition-transform group-open:rotate-180" />
+      </summary>
+      <div className="flex justify-end border-t border-[#326273]/10 px-4 pt-2">
         <Link
           href="/trust"
           className="text-[13px] font-medium text-[var(--info)] underline-offset-4 hover:underline"
@@ -64,6 +73,6 @@ export default function MoneyPathPanel({ compact = false }: { compact?: boolean 
           );
         })}
       </ol>
-    </section>
+    </details>
   );
 }
