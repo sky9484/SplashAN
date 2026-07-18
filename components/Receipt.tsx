@@ -1,7 +1,18 @@
 "use client";
 
 import { forwardRef } from "react";
-import { ShieldCheck, Check, ArrowRight, Landmark, Hash, Clock } from "lucide-react";
+import { ShieldCheck, Check, ArrowRight, Landmark, Clock, ChevronDown } from "lucide-react";
+
+/**
+ * W9.2 — settlement receipt with a business face and a proof layer.
+ *
+ * The face speaks operator language only: who got paid, how much, when,
+ * at what rate, approved by whom. Raw chain vocabulary (digest, blob ids)
+ * lives exclusively inside the collapsed "Verify independently" section,
+ * renamed to business terms: "Settlement record" and "Tamper-evident
+ * archive". The network line comes from the runtime profile so it flips to
+ * "Sui mainnet" at launch without a code change.
+ */
 
 export type ReceiptProps = {
   txDigest: string;
@@ -21,15 +32,27 @@ export type ReceiptProps = {
   status?: 'Settled' | 'Pending';
   targetCurrency?: string;
   fxRate?: string | number;
+  /** W9.2 business-face fields. */
+  amountToPayee?: string;
+  invoiceRef?: string;
+  invoiceClosedOnDelivery?: boolean;
+  approvedBy?: string;
+  sentAt?: string;
+  deliveredAt?: string;
+  /** W9.2 proof-layer fields (render inside "Verify independently" only). */
+  walrusBlobId?: string;
+  sealedState?: string;
+  networkLine?: string;
 };
 
 const INK = '#1F4452';
 const SLATE = '#326273';
 const TEAL = '#5C9EAD';
-const CORAL = '#E39774';
 const OK = '#2E7D6B';
+const OK_BG = '#E4F1ED';
 const LINE = '#E5DCD6';
 const MUTE = '#6B7C85';
+const MUTE_BG = '#EDEFF0';
 
 function toNumber(value: string | number | undefined): number | null {
   if (value === undefined) return null;
@@ -43,29 +66,32 @@ function money(value: string | number | undefined): string {
   return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function formatTimestamp(iso: string): string {
+function formatTimestamp(iso: string | undefined): string {
   if (!iso) return '—';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleString('en-US', {
     year: 'numeric', month: 'short', day: 'numeric',
-    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour: '2-digit', minute: '2-digit',
     timeZoneName: 'short',
   });
 }
 
 const SettlementReceipt = forwardRef<HTMLDivElement, ReceiptProps>(function SettlementReceipt(props, ref) {
   const {
-    amount, fee, currency, network = 'Sui Testnet', status = 'Settled',
+    amount, fee, currency, status = 'Settled',
     feeTier = 'STANDARD', recipientName, txDigest, explorerUrl, fxRate, targetCurrency,
+    amountToPayee, invoiceRef, invoiceClosedOnDelivery, approvedBy, sentAt, deliveredAt,
+    walrusBlobId, sealedState, networkLine,
   } = props;
 
   const amountNum = toNumber(amount);
   const feeNum = toNumber(fee) ?? 0;
+  const totalCost = amountNum !== null ? amountNum + 0 : null; // total cost = amount sent (fee is inside)
   const net = amountNum !== null ? amountNum - feeNum : null;
-  const feePct = amountNum && amountNum > 0 ? (feeNum / amountNum) * 100 : null;
-  const settled = status === 'Settled';
+  const delivered = status === 'Settled';
   const isPendingDigest = !txDigest || txDigest === 'Pending';
+  const payeeLine = amountToPayee ?? (net !== null ? `${money(net)} ${targetCurrency ?? currency}` : '—');
 
   return (
     <div
@@ -73,53 +99,38 @@ const SettlementReceipt = forwardRef<HTMLDivElement, ReceiptProps>(function Sett
       className="relative mx-auto max-w-xl overflow-hidden rounded-2xl bg-white font-sans text-[#1F4452] shadow-[0_12px_32px_rgb(31_68_82_/.12)] [print-color-adjust:exact] [-webkit-print-color-adjust:exact]"
       style={{ fontVariantNumeric: 'tabular-nums' }}
     >
-      {/* Brand accent bar */}
-      <div className="h-1.5 w-full" style={{ background: `linear-gradient(90deg, ${SLATE} 0%, ${TEAL} 55%, ${CORAL} 100%)` }} />
+      <div className="h-1.5 w-full" style={{ background: `linear-gradient(90deg, ${SLATE} 0%, ${TEAL} 100%)` }} />
 
       <div className="px-8 pt-7 pb-6 sm:px-10">
-        {/* Header */}
+        {/* Header: brand, receipt id, Delivered status */}
         <header className="flex items-start justify-between gap-4">
           <div>
-            <div className="text-2xl font-extrabold tracking-[-0.01em]">
+            <div className="text-2xl font-semibold tracking-[-0.01em]">
               SPLASH<span style={{ color: TEAL }}>.</span>
             </div>
-            <div className="mt-1 text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ color: MUTE }}>
-              Settlement Receipt
+            <div className="mt-1 text-[11px] font-medium uppercase tracking-[0.16em]" style={{ color: MUTE }}>
+              Payment receipt{props.reference ? ` · ${props.reference}` : ''}
             </div>
           </div>
           <span
-            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold"
-            style={settled ? { color: OK, background: '#E4F1ED' } : { color: MUTE, background: '#EDEFF0' }}
+            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-semibold"
+            style={delivered ? { color: OK, background: OK_BG } : { color: MUTE, background: MUTE_BG }}
           >
-            {settled ? <ShieldCheck className="h-3.5 w-3.5" /> : <Clock className="h-3.5 w-3.5" />}
-            {settled ? 'Settled on-chain' : 'Pending'}
+            {delivered ? <Check className="h-3.5 w-3.5" /> : <Clock className="h-3.5 w-3.5" />}
+            {delivered ? 'Delivered' : 'In progress'}
           </span>
         </header>
 
-        {/* Hero amount */}
+        {/* Amount to payee */}
         <section className="mt-7">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: MUTE }}>
-            Amount settled
+          <div className="text-[11px] font-medium uppercase tracking-[0.14em]" style={{ color: MUTE }}>
+            Amount to payee
           </div>
           <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-4xl font-extrabold tracking-[-0.02em]">{money(amount)}</span>
-            <span className="text-lg font-bold" style={{ color: SLATE }}>{currency}</span>
+            <span className="text-4xl font-semibold tracking-[-0.02em]">{payeeLine}</span>
           </div>
-
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            <div className="rounded-xl px-4 py-3" style={{ background: '#FBF7F5', border: `1px solid ${LINE}` }}>
-              <div className="text-[10px] font-semibold uppercase tracking-[0.12em]" style={{ color: MUTE }}>Delivered to recipient</div>
-              <div className="mt-0.5 text-base font-bold">{net !== null ? money(net) : '—'} <span className="text-xs font-semibold" style={{ color: MUTE }}>{currency}</span></div>
-            </div>
-            <div className="rounded-xl px-4 py-3" style={{ background: '#FBF7F5', border: `1px solid ${LINE}` }}>
-              <div className="text-[10px] font-semibold uppercase tracking-[0.12em]" style={{ color: MUTE }}>
-                Network fee{feeTier === 'DISCOUNT' ? ' · discount' : ''}
-              </div>
-              <div className="mt-0.5 text-base font-bold">
-                {money(fee)} <span className="text-xs font-semibold" style={{ color: MUTE }}>{currency}</span>
-                {feePct !== null && <span className="ml-1 text-xs font-semibold" style={{ color: TEAL }}>({feePct.toFixed(2)}%)</span>}
-              </div>
-            </div>
+          <div className="mt-1 text-sm font-medium" style={{ color: SLATE }}>
+            to {recipientName ?? props.recipient}
           </div>
         </section>
 
@@ -130,63 +141,101 @@ const SettlementReceipt = forwardRef<HTMLDivElement, ReceiptProps>(function Sett
           <span className="absolute -right-10 top-1/2 h-5 w-5 -translate-y-1/2 rounded-full bg-[#F6F0ED]" />
         </div>
 
-        {/* Detail grid */}
+        {/* Business detail grid */}
         <dl className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
-          <Field label="From"><span className="font-semibold">{props.sender}</span></Field>
-          <Field label="To">
-            <span className="font-semibold">{recipientName ?? props.recipient}</span>
-            {recipientName && recipientName !== props.recipient && (
-              <span className="mt-0.5 block font-mono text-xs" style={{ color: MUTE }}>{props.recipient}</span>
-            )}
-          </Field>
+          <Field label="Paid by"><span className="font-medium">{props.sender}</span></Field>
           <Field label="Payment source">
-            <span className="inline-flex items-center gap-1.5 font-semibold">
+            <span className="inline-flex items-center gap-1.5 font-medium">
               <Landmark className="h-3.5 w-3.5" style={{ color: TEAL }} />
               {props.fundingSource ?? 'Bank USD'}
             </span>
           </Field>
-          <Field label="Settlement network"><span className="font-semibold">{network}</span></Field>
+          {invoiceRef ? (
+            <Field label="Invoice">
+              <span className="font-medium">{invoiceRef}</span>
+              {invoiceClosedOnDelivery ? (
+                <span className="mt-0.5 block text-[13px] font-medium" style={{ color: OK }}>Closed on delivery</span>
+              ) : null}
+            </Field>
+          ) : null}
+          <Field label="Sent">
+            <span className="font-medium">{formatTimestamp(sentAt ?? props.timestamp)}</span>
+          </Field>
+          <Field label="Delivered">
+            <span className="font-medium">{delivered ? formatTimestamp(deliveredAt ?? props.timestamp) : 'In progress'}</span>
+          </Field>
           {fxRate !== undefined && (
-            <Field label={`FX rate${targetCurrency ? ` (${currency}→${targetCurrency})` : ''}`}>
-              <span className="font-semibold">{money(fxRate)}</span>
+            <Field label={`Rate applied${targetCurrency ? ` (${currency}→${targetCurrency})` : ''}`}>
+              <span className="font-medium">{money(fxRate)}</span>
             </Field>
           )}
-          <Field label="Reference"><span className="font-mono text-xs font-semibold">{props.reference ?? '—'}</span></Field>
+          <Field label={`Total cost${feeTier === 'DISCOUNT' ? ' · discount tier' : ''}`}>
+            <span className="font-medium">
+              {totalCost !== null ? `${money(totalCost)} ${currency}` : '—'}
+              <span className="ml-1 text-[13px]" style={{ color: MUTE }}>incl. {money(fee)} fee</span>
+            </span>
+          </Field>
+          <Field label="Approved by">
+            <span className="font-medium">{approvedBy ?? 'Operator'}</span>
+            <span className="mt-0.5 block text-[13px] font-medium" style={{ color: MUTE }}>maker-checker</span>
+          </Field>
         </dl>
 
-        {/* Timeline */}
+        {/* Delivery strip */}
         <div className="mt-6 flex items-center justify-between rounded-xl px-4 py-3" style={{ background: '#E7EEF1' }}>
-          <TimelineStep label="Initiated" done />
+          <TimelineStep label="Approved" done />
           <TimelineArrow />
-          <TimelineStep label="Settled · ~400ms" done={settled} />
+          <TimelineStep label="Sent" done={delivered} />
           <TimelineArrow />
-          <TimelineStep label="Delivered" done={settled} />
+          <TimelineStep label="Delivered" done={delivered} />
         </div>
 
-        {/* On-chain proof */}
-        <section className="mt-5 rounded-xl p-4" style={{ border: `1px solid ${LINE}`, background: '#FFFFFF' }}>
-          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.1em]" style={{ color: SLATE }}>
-            <ShieldCheck className="h-4 w-4" style={{ color: OK }} />
-            On-chain proof
-          </div>
-          <div className="mt-2 flex items-start gap-2">
-            <Hash className="mt-0.5 h-3.5 w-3.5 shrink-0" style={{ color: MUTE }} />
-            <div className="min-w-0">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.12em]" style={{ color: MUTE }}>Transaction digest</div>
-              <div className="break-all font-mono text-xs font-semibold" style={{ color: INK }}>
-                {isPendingDigest ? 'Pending finality' : txDigest}
+        {/* Proof layer — the ONLY place raw chain vocabulary may appear. */}
+        <details className="group mt-5 rounded-xl" style={{ border: `1px solid ${LINE}` }}>
+          <summary className="flex cursor-pointer items-center justify-between gap-2 px-4 py-3 text-xs font-semibold uppercase tracking-[0.1em]" style={{ color: SLATE }}>
+            <span className="inline-flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4" style={{ color: OK }} />
+              Verify independently
+            </span>
+            <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" style={{ color: MUTE }} />
+          </summary>
+          <div className="space-y-3 border-t px-4 py-3" style={{ borderColor: LINE }}>
+            <div>
+              <div className="text-[11px] font-medium uppercase tracking-[0.12em]" style={{ color: MUTE }}>Settlement record</div>
+              <div className="mt-0.5 break-all font-mono text-[13px] font-medium" style={{ color: INK }}>
+                {isPendingDigest ? 'Awaiting settlement record' : txDigest}
               </div>
+              {explorerUrl && !isPendingDigest ? (
+                <a href={explorerUrl} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block break-all font-mono text-[13px] underline-offset-2 hover:underline" style={{ color: TEAL }}>
+                  {explorerUrl}
+                </a>
+              ) : null}
+            </div>
+            <div>
+              <div className="text-[11px] font-medium uppercase tracking-[0.12em]" style={{ color: MUTE }}>Tamper-evident archive</div>
+              <div className="mt-0.5 break-all font-mono text-[13px] font-medium" style={{ color: INK }}>
+                {walrusBlobId ?? 'Archived with the daily audit batch'}
+              </div>
+              {sealedState ? (
+                <div className="mt-0.5 text-[13px] font-medium" style={{ color: OK }}>{sealedState}</div>
+              ) : null}
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <div className="text-[11px] font-medium uppercase tracking-[0.12em]" style={{ color: MUTE }}>Network</div>
+                <div className="mt-0.5 text-[13px] font-medium" style={{ color: INK }}>{networkLine ?? 'Sui · sandbox, no customer funds'}</div>
+              </div>
+              <a href="/trust" className="text-[13px] font-medium underline-offset-2 hover:underline" style={{ color: TEAL }}>
+                Where your money sits
+              </a>
             </div>
           </div>
-          {explorerUrl && (
-            <div className="mt-2 break-all font-mono text-[11px]" style={{ color: TEAL }}>{explorerUrl}</div>
-          )}
-        </section>
+        </details>
 
         {/* Footer */}
-        <footer className="mt-5 flex items-center justify-between gap-4 text-[10px]" style={{ color: MUTE }}>
+        <footer className="mt-5 flex items-center justify-between gap-4 text-[13px]" style={{ color: MUTE }}>
           <span>Issued {formatTimestamp(props.timestamp)}</span>
-          <span className="text-right">Immutable record anchored on {network}. Verify the digest independently at any time.</span>
+          <span className="text-right">This record is tamper-evident. Verify it independently at any time.</span>
         </footer>
       </div>
     </div>
@@ -196,7 +245,7 @@ const SettlementReceipt = forwardRef<HTMLDivElement, ReceiptProps>(function Sett
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <dt className="text-[10px] font-semibold uppercase tracking-[0.12em]" style={{ color: MUTE }}>{label}</dt>
+      <dt className="text-[10px] font-medium uppercase tracking-[0.12em]" style={{ color: MUTE }}>{label}</dt>
       <dd className="mt-0.5 break-words">{children}</dd>
     </div>
   );
@@ -207,11 +256,11 @@ function TimelineStep({ label, done }: { label: string; done?: boolean }) {
     <div className="flex flex-1 flex-col items-center gap-1 text-center">
       <span
         className="flex h-6 w-6 items-center justify-center rounded-full"
-        style={done ? { background: OK, color: '#FFFFFF' } : { background: '#EDEFF0', color: MUTE }}
+        style={done ? { background: OK, color: '#FFFFFF' } : { background: MUTE_BG, color: MUTE }}
       >
         {done ? <Check className="h-3.5 w-3.5" /> : <Clock className="h-3 w-3" />}
       </span>
-      <span className="text-[10px] font-semibold leading-tight" style={{ color: done ? SLATE : MUTE }}>{label}</span>
+      <span className="text-[13px] font-medium leading-tight" style={{ color: done ? SLATE : MUTE }}>{label}</span>
     </div>
   );
 }

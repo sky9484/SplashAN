@@ -352,8 +352,8 @@ export default function FloatingCopilot() {
               <Image src="/cinematic/agent-bot-cut.png" alt="" width={512} height={512} className="h-6 w-auto" />
             </div>
             <div>
-              <div className="text-xs font-bold text-white">0xWal</div>
-              <div className="flex items-center gap-1.5 text-[10px] text-white/50">
+              <div className="text-[13px] font-semibold text-white">0xWal</div>
+              <div className="flex items-center gap-1.5 text-[13px] text-white/50">
                 <span
                   className={cn(
                     'h-1.5 w-1.5 rounded-full',
@@ -387,11 +387,11 @@ export default function FloatingCopilot() {
             className="flex shrink-0 items-center gap-2.5 border-b border-[#efc46f]/50 bg-[#efc46f]/15 px-4 py-2.5 transition-colors hover:bg-[#efc46f]/25"
           >
             <BellRing size={14} className="shrink-0 text-[#9A4A2D]" />
-            <span className="min-w-0 flex-1 text-[11px] font-bold leading-4 text-[#0c3e48]">
+            <span className="min-w-0 flex-1 text-[13px] font-semibold leading-4 text-[#0c3e48]">
               {pending.count === 1 ? '1 unsigned proposal waits' : `${pending.count} unsigned proposals wait`} for your approval
               {pending.label ? ` — ${pending.label}` : ''}
             </span>
-            <span className="shrink-0 rounded-md bg-[#0c3e48] px-2 py-1 text-[10px] font-black uppercase tracking-[0.1em] text-white">
+            <span className="shrink-0 rounded-md bg-[#0c3e48] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-white">
               Queue
             </span>
           </Link>
@@ -405,10 +405,10 @@ export default function FloatingCopilot() {
             { k: 'Treasury', v: 'USDY', s: 'Variable' },
           ].map((cell) => (
             <div key={cell.k} className="px-3 py-2">
-              <div className="font-mono text-[8px] font-bold uppercase tracking-[0.14em] text-[#0d6370]">
+              <div className="font-mono text-[8px] font-semibold uppercase tracking-[0.14em] text-[#0d6370]">
                 {cell.k}
               </div>
-              <div className="mt-0.5 text-[12px] font-black leading-none text-[#0c3e48]">{cell.v}</div>
+              <div className="mt-0.5 text-[12px] font-bold leading-none text-[#0c3e48]">{cell.v}</div>
               <div className="mt-0.5 font-mono text-[7px] uppercase tracking-[0.1em] text-[#0c3e48]/45">
                 {cell.s}
               </div>
@@ -437,7 +437,7 @@ export default function FloatingCopilot() {
                 )}
                 <div
                   className={cn(
-                    'max-w-[82%] px-3 py-2 text-[11px] leading-[1.5]',
+                    'max-w-[82%] px-3 py-2 text-[13px] leading-[1.5]',
                     msg.role === 'assistant'
                       ? 'rounded-xl rounded-tl-sm border border-[#0c3e48]/10 border-l-2 border-l-[#0d6370] bg-[#fffdf9] text-[#0c3e48] shadow-[2px_2px_0_rgba(8,54,64,0.06)]'
                       : 'rounded-xl rounded-tr-sm bg-[#0c3e48] text-white shadow-[2px_2px_0_rgba(8,54,64,0.18)]'
@@ -499,7 +499,7 @@ export default function FloatingCopilot() {
       <div className="fixed bottom-4 right-4 z-50 flex items-end gap-2.5">
         {/* Nudge bubble (closed only) */}
         {!open && nudge && (
-          <span className="mb-2 animate-[copilot-nudge_.3s_ease] rounded-2xl rounded-br-sm bg-[#0c3e48] px-3.5 py-2 text-sm font-semibold tracking-tight text-white shadow-[0_10px_24px_rgba(8,54,64,0.3)]">
+          <span className="mb-2 animate-[copilot-nudge_.3s_ease] rounded-2xl rounded-br-sm bg-[#0c3e48] px-3.5 py-2 text-sm font-medium tracking-tight text-white shadow-[0_10px_24px_rgba(8,54,64,0.3)]">
             {nudge}
           </span>
         )}
@@ -540,7 +540,7 @@ export default function FloatingCopilot() {
           {/* Closed-state indicator: approval count when work is waiting,
               otherwise the ambient pulse dot */}
           {!open && hasReminder && (
-            <span className="absolute -right-0.5 -top-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-[#E39774] px-1 font-mono text-[10px] font-black text-white ring-2 ring-white/80">
+            <span className="absolute -right-0.5 -top-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-[#E39774] px-1 font-mono text-[13px] font-bold text-white ring-2 ring-white/80">
               {pending.count > 9 ? '9+' : pending.count}
             </span>
           )}

@@ -2,45 +2,52 @@
 
 Covers, in order: **1) Transfer · 2) Batch payout · 3) 0xWal · 4) Invoice loop · 5) Treasury.**
 Login: `demo@splash.finance` / `Demo@12345`.
+Branch: `w9/type-color-discipline` (the polished surfaces — PR #3).
 
 ---
 
-## Pre-flight (do this 10 min before, once)
+## Pre-flight — VERIFIED 2026-07-18 (day before demo)
 
-Two switches decide how "real" the demo is. Pick per section.
+Full rehearsal run on this branch, all live:
 
-### A. 0xWal AI answers
-The Anthropic API key currently has **no credits**, so 0xWal's model calls fail and
-fall back to the built-in local planner. 0xWal still **always replies** — scripted
-intents (e.g. "do a batch payout") and the local planner cover the demo — but
-open-ended AI answers won't be "smart". Two options:
+- ✅ **Real on-chain settlement WORKS.** `SUI_SETTLEMENT_MODE=live`; the §1
+  scenario ($500 → Acme Manufacturing PH) ran AUTHORIZED→SETTLING→**DISBURSED
+  in ~12s** with digest `GbWivrGc…` resolving **200 on testnet.suivision.xyz**.
+  No `SUI_SETTLEMENT_MODE=simulate` needed. (Fallback if testnet is sick on the
+  day: set `SUI_SETTLEMENT_MODE=simulate` + restart — flow completes with a
+  labelled SIM_ receipt.)
+- ✅ **0xWal answers with REAL Claude** (`source: "claude"` verified) — the API
+  key has credits. Scripted intents also verified. If the API misbehaves on the
+  day, add `OXWAL_FORCE_LOCAL=true` to `.env.local` + restart: deterministic
+  planner, every scripted flow still works.
+- ✅ Every route in the script returns 200 after login; demo files exist
+  (`public/batch-payout-all-clear.csv`, `samples/invoice-acme-ph-5000.html`).
+- ✅ Share-link receipt opens logged-out with the live digest; treasury shows the
+  collapsed "Where your money sits" panel; timeline shows real per-stage
+  timestamps.
+- ℹ️ `NEXT_PUBLIC_DEMO_MODE` is **off**, so lists start sparse and every flow
+  creates real records live (more convincing). Set it `=true` + restart only if
+  you want pre-seeded dashboard numbers.
 
-- **Bulletproof demo (recommended):** add `OXWAL_FORCE_LOCAL=true` to `.env.local`.
-  0xWal then uses the deterministic planner only — instant, no API dependency, no
-  failed-call delay. Every scripted flow below still works.
-- **Full AI:** top up credits at the Anthropic console. Then remove
-  `OXWAL_FORCE_LOCAL`. Open-ended questions get real Claude answers.
+Boot: `npm run dev` (Node runs with `--use-system-ca` per package config).
+Restart the dev server after any `.env.local` change.
 
-### B. Real on-chain settlement (Transfer + Batch)
-Real settlement needs the **current contract object IDs** from the republished
-Move package. `.env.local` is missing `SPLASH_COMPLIANCE_CONFIG_ID`,
-`DEEPBOOK_POOL_ID`, and `DEEPBOOK_QUOTE_TYPE`, and the IDs that are set may be
-stale. So today, Transfer and Batch settlement **fail on-chain** (`SPLASH_COMPLIANCE_CONFIG_ID is not configured`).
+### NEW since this script was written (the W9 upgrades — extra beats to show)
 
-- **For real digests + explorer links:** drop your `data/contract-config.json`
-  (the file with the republished package's IDs — package, treasury, business
-  account, peg state, compliance config, admin cap, deepbook pool + quote type)
-  into `data/`. The app hot-reloads it. Requires a funded operator key and a
-  liquid testnet DeepBook pool.
-- **For a demo that always completes:** set `SUI_SETTLEMENT_MODE=simulate` in
-  `.env.local`. Transfer/Batch then finish with a labelled `SIM_` receipt and the
-  full UI flow, no on-chain dependency. (Invoice-loop Walrus is **real either way** —
-  see §4.)
-
-> **Invoice loop Walrus is already live** — verified this session: uploading an
-> invoice produced a real Walrus blob (`mode: live`, 5 epochs). No config needed.
-
-Restart the dev server after any `.env.local` change: `npm run dev`.
+- **§1 Quote step** is now a comparison card: big mono amount, all-in fee with
+  %, "Supplier receives", and a **Splash vs Fintech vs Bank wire strip**
+  (labelled illustrative baseline) plus a maker-checker note reading your real
+  approval threshold. Say: "and here's what this payment costs anywhere else."
+- **§1 Status** is a human timeline — Payment approved → Funds converted →
+  Sent to the Philippines → Delivered — with **real timestamps per stage**.
+- **§1 Receipt** has a business face + collapsed "**Verify independently**"
+  proof layer (Settlement record, Tamper-evident archive, network line), a
+  "**PDF for your accountant**" button, and "**Share with supplier**" — click
+  it, open the copied link in an incognito window: same receipt, no login.
+  That incognito reveal is the strongest new wow moment.
+- **§5 Treasury** ends with a one-line trust panel — click "Splash orchestrates
+  — we never hold your funds." to unfold the Airwallex → Hata → PDAX·GCash →
+  Splash partner path.
 
 ---
 

@@ -5590,6 +5590,17 @@ body {
 .dash-btn-ghost:hover { background-color: #fffdf9; border-color: rgba(13, 99, 112, .45); box-shadow: 0 6px 0 rgba(12, 62, 72, .16); }
 .dash-btn-ghost:active { box-shadow: 0 2px 0 rgba(12, 62, 72, .14); }
 
+/* W9.0 — money figures: one shared class everywhere an amount renders.
+   Geist Mono + tabular figures so columns of amounts align digit-for-digit;
+   right-aligned when it is a table cell. */
+.money {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+td.money,
+th.money { text-align: right; }
+
 @media (prefers-reduced-motion: reduce) {
   .dash-btn, .dash-btn-gold, .dash-btn-ghost { transition: none; }
 }

@@ -214,11 +214,11 @@ export default async function QueuePage() {
           <div className="flex items-center gap-3">
             <Image src="/splash-main-icon.png" alt="Splash" width={40} height={39} className="h-10 w-10 object-contain" />
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-[#5C9EAD]">0xWal control room</p>
-              <h1 className="text-3xl font-black tracking-normal text-[#1F4452]">Approval queue</h1>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--info)]">0xWal control room</p>
+              <h1 className="text-3xl font-bold tracking-normal text-[#1F4452]">Approval queue</h1>
             </div>
           </div>
-          <nav className="flex flex-wrap items-center gap-2 text-sm font-bold">
+          <nav className="flex flex-wrap items-center gap-2 text-sm font-semibold">
             <Link className="rounded-md border border-[#326273]/20 px-3 py-2 text-[#326273]" href="/dashboard">0xWal</Link>
             <Link className="rounded-md bg-[#1F4452] px-3 py-2 text-white" href="/dashboard">Dashboard</Link>
           </nav>

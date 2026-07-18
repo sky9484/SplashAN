@@ -19,7 +19,7 @@ const statusLabels: Record<SupportTicketStatus, string> = {
 
 function statusClass(status: SupportTicketStatus) {
   if (status === 'REPLIED' || status === 'CLOSED') return 'border-[#5C9EAD]/30 bg-[#5C9EAD]/10 text-[#326273]';
-  if (status === 'IN_REVIEW') return 'border-[#E39774]/40 bg-[#E39774]/10 text-[#9d5f43]';
+  if (status === 'IN_REVIEW') return 'border-[var(--warn)] bg-[var(--warn-bg)] text-[var(--warn)]';
   return 'border-red-500/20 bg-red-500/10 text-red-700';
 }
 

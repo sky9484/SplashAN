@@ -92,7 +92,42 @@ async function filesUnder(directory) {
   return files;
 }
 
+// W9.0 coral rule: #E39774 (and the --coral token) is brand accent only —
+// 0xWal identity and marketing highlights. A line that pairs coral with
+// risk/error/warning semantics is a state leak; states use the semantic
+// tokens (--ok/--warn/--error/--pending/--info).
+const coralRiskContext = /risk|error|danger|warn|blocked|failed|reject|halt|untrusted|review/i;
+function coralRiskViolations(text) {
+  const found = [];
+  for (const line of text.split('\n')) {
+    if (!/#E39774|var\(--coral\)/i.test(line)) continue;
+    if (coralRiskContext.test(line)) found.push(line.trim().slice(0, 90));
+  }
+  return found;
+}
+
 const violations = [];
+
+// W9.4 money-path guard: the trust panel's locked sentences must stay in
+// content/money-path.ts verbatim — removal or paraphrase fails the build.
+{
+  const MONEY_PATH_FILE = 'content/money-path.ts';
+  const REQUIRED_MONEY_PATH_LINES = [
+    'Labuan FSA license in process. Splash is not yet a licensed money-services business.',
+    'Splash orchestrates — we never hold your funds.',
+  ];
+  try {
+    const moneyPath = await readFile(MONEY_PATH_FILE, 'utf8');
+    for (const line of REQUIRED_MONEY_PATH_LINES) {
+      if (!moneyPath.includes(line)) {
+        violations.push(`${MONEY_PATH_FILE}: required locked sentence missing — "${line}" may not be removed or paraphrased`);
+      }
+    }
+  } catch {
+    violations.push(`${MONEY_PATH_FILE}: file missing — the money-path trust config is required (W9.4)`);
+  }
+}
+
 for (const root of roots) {
   for (const file of await filesUnder(root)) {
     const text = await readFile(file, 'utf8');
@@ -108,6 +143,9 @@ for (const root of roots) {
     if (root === 'app' || root === 'components') {
       for (const hex of hexViolations(text)) {
         violations.push(`${relative('.', file)}: new arbitrary hex ${hex} — use styles/tokens.css variables or extend the baseline deliberately`);
+      }
+      for (const line of coralRiskViolations(text)) {
+        violations.push(`${relative('.', file)}: coral used with risk/error semantics — coral is brand accent only; use --ok/--warn/--error/--pending/--info tokens (${line})`);
       }
     }
     for (const line of explorerLiteralViolations(text)) {
