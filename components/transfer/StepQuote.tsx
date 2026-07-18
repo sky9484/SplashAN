@@ -1,13 +1,16 @@
 'use client';
 
 import Image from 'next/image';
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ArrowLeft, CheckCircle2, Clock3, Copy, Info, Loader2, RefreshCw, Send, ShieldCheck, TrendingUp, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 import type { TransferState } from '@/app/dashboard/transfer/page';
 import FundingSelector from '@/components/funding/FundingSelector';
 import HoverPopup from '@/components/HoverPopup';
+import { SourceBadge } from '@/components/SourceBadge';
+import { baselineCostUsd, getComparisonBaseline } from '@/lib/fx/comparison-baselines';
+import { lockedCopy } from '@/content/claims';
 
 const BASE_RATES: Record<TransferState['amount']['targetCurrency'], number> = {
   MYR: 4.71,
@@ -54,6 +57,30 @@ export default function StepQuote({
   const [liveRate, setLiveRate] = useState(BASE_RATES[state.amount.targetCurrency]);
   const [rateDirection] = useState<'up' | 'down' | 'neutral'>('neutral');
   const [holdBusy, setHoldBusy] = useState(false);
+  // Maker-checker note beside the CTA reads the REAL threshold from operating
+  // settings — never a hardcoded figure (W9.1).
+  const [approvalPolicy, setApprovalPolicy] = useState<{ thresholdUsd: number; dual: boolean } | null>(null);
+  // Live countdown for the rate-lock chip while a hold is active.
+  const [lockNowMs, setLockNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    let active = true;
+    void fetch('/api/settings')
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body: { approvalThresholdUsd?: number; requireDualApproval?: boolean } | null) => {
+        if (!active || !body || typeof body.approvalThresholdUsd !== 'number') return;
+        setApprovalPolicy({ thresholdUsd: body.approvalThresholdUsd, dual: body.requireDualApproval ?? true });
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, []);
+
+  const holdActive = state.rateHold?.state === 'ACTIVE' && state.rateHold.corridorCurrency === state.amount.targetCurrency;
+  useEffect(() => {
+    if (!holdActive) return;
+    const interval = window.setInterval(() => setLockNowMs(Date.now()), 30_000);
+    return () => window.clearInterval(interval);
+  }, [holdActive]);
 
   useEffect(() => {
     let cancelled = false;
@@ -261,6 +288,18 @@ export default function StepQuote({
   const selectedFundingLabel = selectionLabel(selection);
   const feeValue = state.deliveryTier === 'STORED_BALANCE' ? '$0.00 transfer fee' : `$${state.quote.fee}`;
 
+  // Everything below derives from the live quote object — no duplicated math.
+  const sendAmountUsd = Number.parseFloat(state.amount.value || '0');
+  const quoteFeeUsd = Number.parseFloat(state.quote.fee || '0');
+  const allInFeePct = sendAmountUsd > 0 && Number.isFinite(quoteFeeUsd)
+    ? (quoteFeeUsd / sendAmountUsd) * 100
+    : 0;
+  const lockRemainingLabel = holdActive && state.rateHold
+    ? formatLockRemaining(new Date(state.rateHold.holdUntil).getTime() - lockNowMs)
+    : null;
+  const baseline = getComparisonBaseline(state.amount.targetCurrency);
+  const rateDecimals = state.amount.targetCurrency === 'IDR' || state.amount.targetCurrency === 'VND' ? 0 : 3;
+
   return (
     <div className="flex flex-col gap-5">
       <div>
@@ -286,39 +325,104 @@ export default function StepQuote({
         }}
       />
 
-      <div className="flex flex-col gap-3 rounded-xl bg-[#F6F0ED] p-5 text-sm">
-        <HoverPopup title="Recipient" content="The person or business receiving this transfer. Verify the name matches your records."><Row label="Recipient" value={state.recipient.name} /></HoverPopup>
-        <HoverPopup title="Country" content="Destination country for this transfer."><Row label="Country" value={state.recipient.country} /></HoverPopup>
-        <HoverPopup title="Target reference" content="Recipient bank account number."><Row label="Target" value={state.recipient.bank?.account ?? '-'} mono /></HoverPopup>
-        <div className="h-px bg-[#326273]/10" />
-        <Row label="You send" value={`$${state.amount.value}`} />
-        <Row
-          label={`Splash fees (${selection.feeTier})`}
-          value={(
-            <span className="inline-flex items-center justify-end gap-2">
-              {feeValue}
-              {isQuoteRefreshing ? <Loader2 className="size-3.5 animate-spin text-[var(--info)]" aria-label="Refreshing quote" /> : null}
+      {/* Comparison card (W9.1 mockup 1): recipient → display amount → rate
+          lock → all-in fee → supplier receives. All figures derive from the
+          live quote object. */}
+      <div className="rounded-xl bg-[#F6F0ED] p-5 text-sm">
+        <HoverPopup title="Recipient" content="The business receiving this payment. Verify the name matches your records.">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <span className="text-base font-semibold text-[#1F4452]">{state.recipient.name || 'Supplier pending'}</span>
+            <span className="text-[13px] font-medium text-[#326273]/60">
+              {state.recipient.country}
+              {state.recipient.bank?.account ? <span className="money"> · {state.recipient.bank.account}</span> : null}
             </span>
-          )}
-        />
-        <HoverPopup title="Live FX rate" content="Rate may change when you refresh or authorize unless a rate hold is active.">
-          <div className="flex items-center justify-between gap-4">
-            <span className="text-[#326273]/60">FX rate</span>
-            <div className="flex items-center gap-2">
-              <span className="font-mono font-medium text-[#326273]">1 USD to {liveRate.toLocaleString(undefined, { maximumFractionDigits: state.amount.targetCurrency === 'IDR' || state.amount.targetCurrency === 'VND' ? 0 : 3 })} {state.amount.targetCurrency}</span>
-              {rateDirection !== 'neutral' ? <TrendingUp className={rateDirection === 'up' ? 'text-[var(--info)]' : 'rotate-180 text-[#E39774]'} /> : null}
-            </div>
           </div>
         </HoverPopup>
-        <div className="h-px bg-[#326273]/10" />
-        <Row label="Recipient receives" value={`${state.quote.netReceived} ${state.amount.targetCurrency}`} bold />
-        <div className="mt-2 flex items-center gap-2 text-[13px] text-[#326273]/60">
+
+        <div className="money mt-3 text-3xl font-semibold tracking-tight text-[#1F4452]">
+          ${state.amount.value || '0'}
+          <span className="ml-2 text-sm font-medium text-[#326273]/55">USD</span>
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+          <HoverPopup title="Live FX rate" content="Rate may change when you refresh or authorize unless a rate hold is active.">
+            <span className="money text-sm font-medium text-[#326273]">
+              1 USD = {liveRate.toLocaleString(undefined, { maximumFractionDigits: rateDecimals })} {state.amount.targetCurrency}
+            </span>
+          </HoverPopup>
+          {holdActive && lockRemainingLabel ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--ok-bg)] px-2.5 py-1 text-[13px] font-medium text-[var(--ok)]">
+              <Clock3 className="size-3.5" aria-hidden="true" />
+              Rate locked · {lockRemainingLabel}
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-[13px] font-medium text-[#326273]/60">
+              <Clock3 className="size-3.5" aria-hidden="true" />
+              Quote valid for 30 seconds
+            </span>
+          )}
+          {rateDirection !== 'neutral' ? <TrendingUp className={rateDirection === 'up' ? 'text-[var(--info)]' : 'rotate-180 text-[var(--warn)]'} /> : null}
+        </div>
+
+        <div className="mt-4 h-px bg-[#326273]/10" />
+
+        <div className="mt-3 flex items-center justify-between gap-4">
+          <span className="text-[#326273]/60">All-in fee ({selection.feeTier})</span>
+          <span className="money inline-flex items-center gap-2 font-medium text-[#326273]">
+            {feeValue}
+            {sendAmountUsd > 0 ? <span className="text-[13px] text-[#326273]/55">({allInFeePct.toFixed(2)}%)</span> : null}
+            {isQuoteRefreshing ? <Loader2 className="size-3.5 animate-spin text-[var(--info)]" aria-label="Refreshing quote" /> : null}
+          </span>
+        </div>
+
+        <div className="mt-3 flex items-baseline justify-between gap-4">
+          <span className="font-medium text-[#326273]">Supplier receives</span>
+          <span className="money text-xl font-semibold text-[#1F4452]">
+            {state.quote.netReceived} {state.amount.targetCurrency}
+          </span>
+        </div>
+
+        <div className="mt-3 flex items-center gap-2 text-[13px] text-[#326273]/60">
           {isQuoteRefreshing ? <Loader2 className="size-3.5 animate-spin text-[var(--info)]" aria-hidden="true" /> : <Info className="size-3.5" aria-hidden="true" />}
           {isQuoteRefreshing
             ? `Updating quote for ${selectedFundingLabel}.`
-            : state.rateHold?.state === 'ACTIVE' ? `Rate hold active until ${new Date(state.rateHold.holdUntil).toLocaleString()}.` : 'Quote valid for 30 seconds.'}
+            : holdActive && state.rateHold ? `Rate hold active until ${new Date(state.rateHold.holdUntil).toLocaleString()}.` : `Funding from ${selectedFundingLabel}.`}
         </div>
       </div>
+
+      {/* Comparison strip — generic categories only; hidden when the corridor
+          has no reviewed baseline. Named competitors stay off until sourced
+          numbers are approved into the claims register. */}
+      {baseline && sendAmountUsd > 0 ? (
+        <div className="overflow-hidden rounded-xl border border-[#326273]/12 bg-white">
+          <div className="grid grid-cols-[1.2fr_1fr_1fr] gap-0 border-b border-[#326273]/10 bg-[#F6F0ED]/70 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#326273]/55">
+            <span>Route</span>
+            <span className="text-right">Cost</span>
+            <span className="text-right">Delivery</span>
+          </div>
+          <div className="divide-y divide-[#326273]/8 text-sm">
+            <div className="grid grid-cols-[1.2fr_1fr_1fr] items-center px-4 py-2.5 bg-[var(--ok-bg)]/50">
+              <span className="font-semibold text-[#1F4452]">Splash</span>
+              <span className="money text-right font-semibold text-[#1F4452]">{feeValue}</span>
+              <span className="text-right text-[13px] font-medium text-[#326273]/70">{lockedCopy.speed}</span>
+            </div>
+            <div className="grid grid-cols-[1.2fr_1fr_1fr] items-center px-4 py-2.5">
+              <span className="font-medium text-[#326273]/75">Fintech transfer</span>
+              <span className="money text-right font-medium text-[#326273]/75">${baselineCostUsd(baseline.fintech, sendAmountUsd).toFixed(2)}</span>
+              <span className="text-right text-[13px] font-medium text-[#326273]/60">{baseline.fintech.delivery}</span>
+            </div>
+            <div className="grid grid-cols-[1.2fr_1fr_1fr] items-center px-4 py-2.5">
+              <span className="font-medium text-[#326273]/75">Bank wire</span>
+              <span className="money text-right font-medium text-[#326273]/75">${baselineCostUsd(baseline.bankWire, sendAmountUsd).toFixed(2)}</span>
+              <span className="text-right text-[13px] font-medium text-[#326273]/60">{baseline.bankWire.delivery}</span>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 border-t border-[#326273]/10 bg-[#F6F0ED]/50 px-4 py-2 text-[11px] font-medium text-[#326273]/55">
+            <SourceBadge state="modeled" />
+            Illustrative, mid-market baseline · reviewed {baseline.lastReviewed}
+          </div>
+        </div>
+      ) : null}
 
       <button type="button" disabled={holdBusy || isQuoteRefreshing || state.rateHold?.state === 'ACTIVE'} onClick={() => void holdRate()} className="group flex min-h-12 w-full items-center justify-between gap-3 rounded-xl border border-[#5C9EAD]/35 bg-white px-4 py-3 text-left font-semibold text-[#0C3E48] shadow-[0_10px_24px_rgba(12,62,72,0.06)] transition-all hover:-translate-y-0.5 hover:border-[#5C9EAD]/80 hover:bg-[#EAF7F8] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#5C9EAD]/20 disabled:cursor-not-allowed disabled:border-[#326273]/10 disabled:bg-[#F6F0ED] disabled:text-[#326273]/50 disabled:shadow-none disabled:hover:translate-y-0">
         <span className="flex items-center gap-3"><Clock3 className="size-4 text-[var(--info)]" aria-hidden="true" />{state.rateHold?.state === 'ACTIVE' ? 'Rate hold active' : 'Hold this rate 48h'}</span>
@@ -350,6 +454,16 @@ export default function StepQuote({
           {isQuoteRefreshing ? 'Updating quote...' : creatingSession || isSending ? 'Preparing...' : 'Send'}
         </button>
       </div>
+
+      {/* Maker-checker note — reads the REAL threshold from operating settings. */}
+      {approvalPolicy ? (
+        <div className="flex items-center gap-2 text-[13px] font-medium text-[#326273]/65">
+          <ShieldCheck className="size-4 shrink-0 text-[var(--info)]" aria-hidden="true" />
+          {approvalPolicy.dual && sendAmountUsd > approvalPolicy.thresholdUsd
+            ? <span>Over the <span className="money">${approvalPolicy.thresholdUsd.toLocaleString()}</span> approval threshold — a second approver signs before settlement.</span>
+            : <span>Under the <span className="money">${approvalPolicy.thresholdUsd.toLocaleString()}</span> approval threshold — one approver signs before settlement.</span>}
+        </div>
+      ) : null}
 
       {isSending && !depositOpen ? (
         <div className="flex flex-col gap-3 rounded-2xl border border-[#5C9EAD]/25 bg-[#5C9EAD]/10 p-4">
@@ -430,13 +544,14 @@ export default function StepQuote({
   );
 }
 
-function Row({ label, value, bold, mono }: { label: string; value: ReactNode; bold?: boolean; mono?: boolean }) {
-  return (
-    <div className="flex justify-between gap-4">
-      <span className="text-[#326273]/60">{label}</span>
-      <span className={`${bold ? 'text-base font-semibold' : 'font-medium'} ${mono ? 'break-all font-mono text-[13px]' : ''} text-right text-[#326273]`}>{value}</span>
-    </div>
-  );
+/** Human remaining-time for the rate-lock chip, from the REAL hold expiry. */
+function formatLockRemaining(remainingMs: number) {
+  if (remainingMs <= 0) return null;
+  const totalMinutes = Math.floor(remainingMs / 60_000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours > 0) return `${hours}h ${minutes}m left`;
+  return `${Math.max(1, minutes)}m left`;
 }
 
 function selectionLabel(selection: TransferState['funding']['selection']) {
