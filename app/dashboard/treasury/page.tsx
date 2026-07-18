@@ -163,11 +163,24 @@ export default function TreasuryPage() {
 
   useEffect(() => {
     let active = true;
-    fetch('/api/treasury')
-      .then((r) => (r.ok ? (r.json() as Promise<TreasurySnapshot>) : null))
-      .then((d) => { if (active && d) applySnapshot(d); })
-      .catch(() => {});
-    return () => { active = false; };
+    const load = () => {
+      fetch('/api/treasury')
+        .then((r) => (r.ok ? (r.json() as Promise<TreasurySnapshot>) : null))
+        .then((d) => { if (active && d) applySnapshot(d); })
+        .catch(() => {});
+    };
+    load();
+    // Refetch when the tab regains focus so a dev-server restart (env flags
+    // like TREASURY_EXECUTION_ENABLED load at boot) reflects without a manual
+    // reload — the "buttons stuck on Execution disabled" trap.
+    const onFocus = () => load();
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+    return () => {
+      active = false;
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
+    };
   }, []);
 
   const dailyYield  = balance * (rate.apy / 100) / 365;
@@ -380,7 +393,10 @@ export default function TreasuryPage() {
                     'inline-flex flex-1 items-center justify-center gap-1.5 rounded-md py-2 text-[13px] font-semibold transition-all disabled:cursor-not-allowed disabled:opacity-50',
                     tab === t
                       ? (t === 'toTreasury' ? 'bg-[#C99A2E] text-white shadow' : 'bg-[#5C9EAD] text-white shadow')
-                      : 'text-[#326273]/45 hover:text-[#326273]',
+                      // bg-transparent is load-bearing: the global button
+                      // normalizer paints any bg-less flex-1 button teal,
+                      // which made BOTH toggle tabs look pressed.
+                      : 'bg-transparent text-[#326273]/45 hover:text-[#326273]',
                   )}
                 >
                   <Icon size={12} />{lbl}
