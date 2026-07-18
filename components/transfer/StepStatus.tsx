@@ -5,10 +5,26 @@ import { Banknote, CheckCircle2, Globe2, Loader2, Network, XCircle } from 'lucid
 
 import type { TransferState } from '@/app/dashboard/transfer/page';
 
+/** Destination country names for the "Sent to …" stage (human language). */
+const COUNTRY_NAMES: Record<string, string> = {
+  PH: 'the Philippines', MY: 'Malaysia', ID: 'Indonesia', SG: 'Singapore',
+  VN: 'Vietnam', TH: 'Thailand', EU: 'the Eurozone', GB: 'the United Kingdom',
+};
+
+/** Real stage timestamp from the lifecycle audit trail (W9.5 — never faked). */
+function stageTimestamp(history: Array<{ state: string; at: string }>, states: string[]): string | null {
+  const hit = history.find((entry) => states.includes(entry.state));
+  if (!hit) return null;
+  const date = new Date(hit.at);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
 export default function StepStatus({ state, set, next }: { state: TransferState; set: (patch: Partial<TransferState>) => void; next: () => void }) {
   const [chainState, setChainState] = useState<'AUTHORIZED' | 'QUEUED' | 'SETTLING' | 'SETTLED' | 'SWEEPING' | 'DISBURSED' | 'CREDITED' | 'FAILED'>('AUTHORIZED');
   const [heldDurationMs, setHeldDurationMs] = useState<number | null>(null);
   const [failureReason, setFailureReason] = useState<string | null>(null);
+  const [statusHistory, setStatusHistory] = useState<Array<{ state: string; at: string }>>([]);
 
   useEffect(() => {
     if (!state.transferIntentId) return;
@@ -36,11 +52,13 @@ export default function StepStatus({ state, set, next }: { state: TransferState;
           failureReason: string | null;
           failedAtState: string | null;
           sweepJob: { heldDurationMs?: number } | null;
+          statusHistory?: Array<{ state: string; at: string }>;
         };
 
         if (cancelled) return;
 
         setChainState(result.state);
+        setStatusHistory(result.statusHistory ?? []);
 
         if (result.state === 'DISBURSED' || result.state === 'CREDITED') {
           setHeldDurationMs(result.sweepJob?.heldDurationMs ?? null);
@@ -90,30 +108,37 @@ export default function StepStatus({ state, set, next }: { state: TransferState;
     if (chainState === 'QUEUED') return 1;
     return 0;
   }, [chainState, status]);
+  // W9.5 — four human stages; each carries the REAL timestamp of its
+  // lifecycle transition from the audit trail (null until it happens).
+  const destination = COUNTRY_NAMES[state.recipient.country] ?? state.recipient.country;
   const stages = [
     {
-      label: state.funding.selection.type === 'held' ? 'Balance debited' : state.funding.selection.type === 'fiat' ? 'Provider funds received' : 'Coin source cleared',
+      label: 'Payment approved',
       detail: state.funding.selection.type === 'held'
         ? `Splash balance debited $${state.amount.value || '0.00'}`
         : state.funding.selection.type === 'fiat'
           ? `${state.funding.selection.provider} deposit confirmed $${state.amount.value || '0.00'}`
           : `${state.funding.selection.asset} passed KYT and normalized to native USDC`,
       icon: Banknote,
+      at: stageTimestamp(statusHistory, ['AUTHORIZED', 'DEPOSIT_CONFIRMED']),
     },
     {
-      label: 'Sui settlement',
-      detail: 'Routing USD settlement through Sui finality',
+      label: 'Funds converted',
+      detail: `USD converted at the quoted rate for ${state.amount.targetCurrency}`,
       icon: Network,
+      at: stageTimestamp(statusHistory, ['EXCHANGED', 'QUEUED', 'SETTLING']),
     },
     {
-      label: state.deliveryTier === 'SWEEP_ACCOUNT' ? 'Auto-sweeping to bank' : state.deliveryTier === 'STORED_BALANCE' ? 'Crediting Splash balance' : `Connecting to ${state.recipient.country}`,
-      detail: state.deliveryTier === 'SWEEP_ACCOUNT' ? `PDAX converts and pays ${state.amount.targetCurrency}` : state.deliveryTier === 'STORED_BALANCE' ? 'Crediting reusable Splash balance' : `Preparing ${state.amount.targetCurrency} payout on the local partner rail`,
+      label: `Sent to ${destination}`,
+      detail: state.deliveryTier === 'SWEEP_ACCOUNT' ? `Local partner converts and pays ${state.amount.targetCurrency}` : state.deliveryTier === 'STORED_BALANCE' ? 'Crediting reusable Splash balance' : `${state.amount.targetCurrency} payout moving on the local partner rail`,
       icon: Globe2,
+      at: stageTimestamp(statusHistory, ['SETTLED', 'SWEEPING']),
     },
     {
-      label: 'Recipient confirmed',
-      detail: 'Recipient money received and receipt is being prepared',
+      label: 'Delivered',
+      detail: 'Supplier money received and the receipt is being prepared',
       icon: CheckCircle2,
+      at: stageTimestamp(statusHistory, ['DISBURSED', 'CREDITED']),
     },
   ];
 
@@ -143,18 +168,22 @@ export default function StepStatus({ state, set, next }: { state: TransferState;
           const Icon = stage.icon;
           const complete = activeIndex > index;
           const active = activeIndex === index && status !== 'failed';
+          const deliveredNow = index === 3 && activeIndex === 3 && status === 'success';
 
           return (
-            <div key={stage.label} className={`grid grid-cols-[auto_1fr_auto] items-center gap-4 rounded-2xl border p-4 transition-all ${complete ? 'border-[var(--ok)] bg-[var(--ok-bg)]' : active ? 'border-[var(--info)] bg-[var(--info-bg)] shadow-lg shadow-[#326273]/10' : status === 'failed' ? 'border-[var(--error)] bg-[var(--error-bg)]' : 'border-[#326273]/10 bg-[#F6F0ED]'}`}>
-              <div className={`flex h-11 w-11 items-center justify-center rounded-2xl ${complete ? 'bg-[var(--ok)] text-white' : active ? 'bg-[var(--info)] text-white' : 'bg-white text-[#326273]/50'}`}>
-                {complete ? <CheckCircle2 className="h-5 w-5" /> : active ? <Loader2 className="h-5 w-5 animate-spin" /> : <Icon className="h-5 w-5" />}
+            <div key={stage.label} className={`grid grid-cols-[auto_1fr_auto] items-center gap-4 rounded-2xl border p-4 transition-all ${deliveredNow ? 'motion-safe:animate-[dash-rise_.6s_var(--ease-decel)] border-[var(--ok)] bg-[var(--ok-bg)]' : complete ? 'border-[var(--ok)] bg-[var(--ok-bg)]' : active ? 'border-[var(--info)] bg-[var(--info-bg)] shadow-lg shadow-[#326273]/10' : status === 'failed' ? 'border-[var(--error)] bg-[var(--error-bg)]' : 'border-[#326273]/10 bg-[#F6F0ED]'}`}>
+              <div className={`flex h-11 w-11 items-center justify-center rounded-2xl ${complete || deliveredNow ? 'bg-[var(--ok)] text-white' : active ? 'bg-[var(--info)] text-white' : 'bg-white text-[#326273]/50'}`}>
+                {complete || deliveredNow ? <CheckCircle2 className="h-5 w-5" /> : active ? <Loader2 className="h-5 w-5 animate-spin" /> : <Icon className="h-5 w-5" />}
               </div>
               <div>
                 <div className="font-semibold text-[#326273]">{stage.label}</div>
                 <div className="mt-1 text-[13px] text-[#326273]/60">{stage.detail}</div>
               </div>
-              <div className={`rounded-full px-3 py-1 text-[13px] font-semibold ${complete ? 'bg-[var(--ok-bg)] text-[var(--ok)]' : active ? 'bg-[var(--info-bg)] text-[var(--info)]' : 'bg-white text-[#326273]/45'}`}>
-                {complete ? 'Done' : active ? 'Live' : 'Waiting'}
+              <div className="flex flex-col items-end gap-1">
+                <div className={`rounded-full px-3 py-1 text-[13px] font-semibold ${complete || deliveredNow ? 'bg-[var(--ok-bg)] text-[var(--ok)]' : active ? 'bg-[var(--info-bg)] text-[var(--info)]' : 'bg-white text-[#326273]/45'}`}>
+                  {complete || deliveredNow ? 'Done' : active ? 'Live' : 'Waiting'}
+                </div>
+                {stage.at ? <div className="money text-[13px] font-medium text-[#326273]/55">{stage.at}</div> : null}
               </div>
             </div>
           );
@@ -162,7 +191,7 @@ export default function StepStatus({ state, set, next }: { state: TransferState;
       </div>
 
       {failureReason && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+        <div className="rounded-2xl border border-[var(--error)] bg-[var(--error-bg)] p-4 text-sm text-[var(--error)]">
           <div className="mb-1 font-semibold">Error detail</div>
           <div className="font-mono text-[13px] leading-5 break-all">{failureReason}</div>
         </div>
