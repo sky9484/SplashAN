@@ -24,6 +24,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { cn } from '../../../lib/utils';
+import MoneyPathPanel from '@/components/compliance/MoneyPathPanel';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -822,6 +823,9 @@ export default function TreasuryPage() {
           </div>
         </aside>
       </div>
+
+      {/* W9.4 — where your money sits: partner-of-record path, config-driven */}
+      <MoneyPathPanel />
     </div>
   );
 }

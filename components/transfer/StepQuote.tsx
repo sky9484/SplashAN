@@ -9,6 +9,7 @@ import type { TransferState } from '@/app/dashboard/transfer/page';
 import FundingSelector from '@/components/funding/FundingSelector';
 import HoverPopup from '@/components/HoverPopup';
 import { SourceBadge } from '@/components/SourceBadge';
+import MoneyPathPanel from '@/components/compliance/MoneyPathPanel';
 import { baselineCostUsd, getComparisonBaseline } from '@/lib/fx/comparison-baselines';
 import { lockedCopy } from '@/content/claims';
 
@@ -439,6 +440,10 @@ export default function StepQuote({
               : 'USDC deposits use a deposit address and QR. KYT clears before credit, and only native Sui USDC reaches settlement.'}</span>
         </div>
       </div>
+
+      {/* W9.4 — where the money sits on this payment's path (config-driven). */}
+      <MoneyPathPanel compact />
+
 
       <label className="flex items-start gap-3 text-sm text-[#326273]/80">
         <input type="checkbox" checked={agree} onChange={(event) => setAgree(event.target.checked)} className="mt-1 size-4 cursor-pointer rounded border-[#326273]/30 bg-white accent-[#5C9EAD]" />
