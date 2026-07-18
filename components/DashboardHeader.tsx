@@ -97,13 +97,13 @@ export default function DashboardHeader({ collapsed, session, onLogout }: Dashbo
             <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#1F4452]">
               {avatar
                 ? <Image src={avatar} alt="Profile" width={28} height={28} unoptimized className="h-full w-full object-cover" />
-                : <span className="text-[11px] font-bold text-white">{initials}</span>
+                : <span className="text-[13px] font-semibold text-white">{initials}</span>
               }
             </div>
             {/* Name */}
             <div className="hidden text-left sm:block">
-              <div className="text-xs font-semibold leading-none text-[#326273]">{session.name}</div>
-              <div className="mt-0.5 text-[10px] capitalize leading-none text-[#326273]/40">{session.role.replace('_', ' ')}</div>
+              <div className="text-[13px] font-medium leading-none text-[#326273]">{session.name}</div>
+              <div className="mt-0.5 text-[13px] capitalize leading-none text-[#326273]/40">{session.role.replace('_', ' ')}</div>
             </div>
             <ChevronDown
               size={13}
@@ -118,12 +118,12 @@ export default function DashboardHeader({ collapsed, session, onLogout }: Dashbo
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#1F4452]">
                   {avatar
                     ? <Image src={avatar} alt="Profile" width={36} height={36} unoptimized className="h-full w-full object-cover" />
-                    : <span className="text-sm font-bold text-white">{initials}</span>
+                    : <span className="text-sm font-semibold text-white">{initials}</span>
                   }
                 </div>
                 <div className="min-w-0">
-                  <div className="text-sm font-semibold text-[#326273]">{session.organization}</div>
-                  <div className="truncate text-[10px] text-[#326273]/40">
+                  <div className="text-sm font-medium text-[#326273]">{session.organization}</div>
+                  <div className="truncate text-[13px] text-[#326273]/40">
                     {session.email}
                   </div>
                 </div>
@@ -134,7 +134,7 @@ export default function DashboardHeader({ collapsed, session, onLogout }: Dashbo
                 <Link
                   href="/dashboard/profile"
                   onClick={() => setProfileOpen(false)}
-                  className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-xs text-[#326273]/65 transition-colors hover:bg-[#F6F0ED] hover:text-[#326273]"
+                  className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-[13px] text-[#326273]/65 transition-colors hover:bg-[#F6F0ED] hover:text-[#326273]"
                   role="menuitem"
                 >
                   <UserRound size={13} />
@@ -143,7 +143,7 @@ export default function DashboardHeader({ collapsed, session, onLogout }: Dashbo
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-xs text-[#326273]/65 transition-colors hover:bg-[#F6F0ED] hover:text-[#326273]"
+                  className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-[13px] text-[#326273]/65 transition-colors hover:bg-[#F6F0ED] hover:text-[#326273]"
                   role="menuitem"
                 >
                   <Camera size={13} />
@@ -152,7 +152,7 @@ export default function DashboardHeader({ collapsed, session, onLogout }: Dashbo
                 <Link
                   href="/dashboard/settings"
                   onClick={() => setProfileOpen(false)}
-                  className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-xs text-[#326273]/65 transition-colors hover:bg-[#F6F0ED] hover:text-[#326273]"
+                  className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-[13px] text-[#326273]/65 transition-colors hover:bg-[#F6F0ED] hover:text-[#326273]"
                   role="menuitem"
                 >
                   <Settings size={13} />
@@ -164,7 +164,7 @@ export default function DashboardHeader({ collapsed, session, onLogout }: Dashbo
                 <button
                   type="button"
                   onClick={onLogout}
-                  className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-xs text-[#E39774] transition-colors hover:bg-orange-50"
+                  className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-[13px] text-[#E39774] transition-colors hover:bg-orange-50"
                   role="menuitem"
                 >
                   <LogOut size={13} />

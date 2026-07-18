@@ -116,7 +116,11 @@ test('ActionCard component names release-gate sections and warning accent', asyn
   ]) {
     assert.equal(source.includes(label), true, `${label} should render in ActionCard`);
   }
-  assert.match(source, /#E39774/);
+  // W9.0 coral rule: risk/warning states use semantic tokens; coral is brand
+  // accent only and must NOT appear in ActionCard's state styling.
+  assert.match(source, /var\(--warn\)/);
+  assert.match(source, /var\(--error\)/);
+  assert.doesNotMatch(source, /#E39774/);
 });
 
 test('landing keeps restored isometric shell with upgraded truth copy', async () => {

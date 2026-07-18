@@ -34,11 +34,13 @@ function bpsToPct(bps: number) {
 
 // Treasury projection lives in the right column (single source on this page);
 // deeper treasury detail is the Treasury page's job.
+// Coral accent = 0xWal identity only (W9.0 coral rule); every other stat
+// uses semantic/info tones from styles/tokens.css.
 const TOP_STATS = [
   { label: '0xWal operating scan', value: null, icon: Bot, accent: 'text-[#E39774]', bg: 'bg-[#E39774]/10', id: '0xwal' },
-  { label: 'Volume (30d)', value: '$39,120', delta: '+12.4%', icon: ArrowUpRight, accent: 'text-[#326273]', bg: 'bg-[#326273]/10', id: 'volume' },
-  { label: 'Corridor Coverage', value: '1 live-model', delta: '8 implemented in code', icon: Globe, accent: 'text-[#5C9EAD]', bg: 'bg-[#5C9EAD]/10', id: 'corridors' },
-  { label: 'Settlement SLA', value: '400ms', delta: 'On target', icon: Zap, accent: 'text-[#E39774]', bg: 'bg-[#E39774]/10', id: 'sla' },
+  { label: 'Volume (30d)', value: '$39,120', delta: '+12.4%', icon: ArrowUpRight, accent: 'text-[var(--info)]', bg: 'bg-[var(--info-bg)]', id: 'volume' },
+  { label: 'Corridor Coverage', value: '1 live-model', delta: '8 implemented in code', icon: Globe, accent: 'text-[var(--info)]', bg: 'bg-[#5C9EAD]/10', id: 'corridors' },
+  { label: 'Settlement SLA', value: '400ms', delta: 'On target', icon: Zap, accent: 'text-[var(--ok)]', bg: 'bg-[var(--ok-bg)]', id: 'sla' },
 ] as const;
 
 // Corridor display rows — fee comes from lib/fx/corridors.ts (single source of
@@ -55,10 +57,11 @@ const INITIAL_CORRIDORS = [
   { pair: 'USD → GBP', flag: '🇬🇧', rate: 0.789,  volume: '$0.2M', sla: '7.2m', success: 97.1, currency: 'GBP', dec: 3, fee: bpsToPct(getCorridorFeeBps('GBP')) },
 ];
 
+// Pipeline dots are STATE, not decoration — semantic tokens (W9.0).
 const PIPELINE = [
-  { label: 'Authorized',   count: 8,  amount: '$4,540', dot: 'bg-[#E39774]' },
-  { label: 'On the way',   count: 5,  amount: '$2,960', dot: 'bg-[#5C9EAD]' },
-  { label: 'Settled today',count: 19, amount: '$14,640', dot: 'bg-emerald-500' },
+  { label: 'Authorized',   count: 8,  amount: '$4,540', dot: 'bg-[var(--pending)]' },
+  { label: 'On the way',   count: 5,  amount: '$2,960', dot: 'bg-[var(--info)]' },
+  { label: 'Settled today',count: 19, amount: '$14,640', dot: 'bg-[var(--ok)]' },
 ];
 
 type TxStatus = 'settled' | 'pending' | 'failed';
@@ -94,19 +97,20 @@ function fmt(n: number) {
 }
 
 function TxPill({ status }: { status: TxStatus }) {
+  // Transaction states = semantic tokens (W9.0), never palette one-offs.
   const styles = {
-    settled: 'bg-emerald-50 text-emerald-700',
-    pending:  'bg-amber-50  text-amber-700',
-    failed:   'bg-red-50    text-red-600',
+    settled: 'bg-[var(--ok-bg)] text-[var(--ok)]',
+    pending: 'bg-[var(--warn-bg)] text-[var(--warn)]',
+    failed: 'bg-[var(--error-bg)] text-[var(--error)]',
   };
   const dots = {
-    settled: 'bg-emerald-500',
-    pending:  'bg-amber-500',
-    failed:   'bg-red-500',
+    settled: 'bg-[var(--ok)]',
+    pending: 'bg-[var(--warn)]',
+    failed: 'bg-[var(--error)]',
   };
   const labels = { settled: 'Settled', pending: 'Pending', failed: 'Failed' };
   return (
-    <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold', styles[status])}>
+    <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[13px] font-medium', styles[status])}>
       <span className={cn('h-1.5 w-1.5 rounded-full', dots[status])} />
       {labels[status]}
     </span>
@@ -184,10 +188,10 @@ export default function DashboardOverview() {
           <div key={item.label} className="dash-block dash-block-interactive p-4">
             <div className="flex items-center justify-between gap-3">
               <span className="dash-kicker">0{index + 1} · {item.status}</span>
-              <span className={cn('h-2 w-2 rounded-full', index === 0 ? 'bg-emerald-500' : 'bg-[#E39774]')} />
+              <span className={cn('h-2 w-2 rounded-full', index === 0 ? 'bg-[var(--ok)]' : 'bg-[var(--pending)]')} />
             </div>
-            <strong className="mt-2 block text-lg font-extrabold text-[#0c3e48]">{item.label}</strong>
-            <small className="mt-1 block text-[11px] font-semibold text-[#326273]/55">{item.copy}</small>
+            <strong className="mt-2 block text-lg font-semibold text-[#0c3e48]">{item.label}</strong>
+            <small className="mt-1 block text-[13px] font-medium text-[#326273]/55">{item.copy}</small>
           </div>
         ))}
       </section>
@@ -199,15 +203,15 @@ export default function DashboardOverview() {
             return (
               <Link key={label} href="/dashboard/0xwal" className="dash-block dash-block-interactive p-4">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#326273]/55">{label}</span>
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#326273]/55">{label}</span>
                   <div className={cn('rounded-lg p-1.5', bg)}>
                     <Icon size={14} className={accent} />
                   </div>
                 </div>
-                <div className="mt-2 text-sm font-extrabold leading-5 text-[#0c3e48]">
+                <div className="mt-2 text-sm font-semibold leading-5 text-[#0c3e48]">
                   {walSummary.detected} invoices detected · {walSummary.batchable} batchable · {walSummary.needsApproval} needs approval
                 </div>
-                <div className="mt-1 text-[11px] font-semibold text-[#E39774]">Open 0xWal →</div>
+                <div className="mt-1 text-[13px] font-medium text-[#E39774]">Open 0xWal →</div>
               </Link>
             );
           }
@@ -217,7 +221,7 @@ export default function DashboardOverview() {
               label={label}
               value={value ?? '—'}
               delta={(TOP_STATS.find((s) => s.id === id) as { delta?: string })?.delta ?? ''}
-              deltaClassName="text-emerald-600"
+              deltaClassName="text-[var(--ok)]"
               icon={Icon}
               iconClassName={accent}
               iconWrapClassName={bg}
@@ -238,8 +242,8 @@ export default function DashboardOverview() {
           {/* Settlement pipeline */}
           <div className="dash-surface p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-sm font-bold text-[#1F4452]">Settlement Pipeline</h2>
-              <span className="rounded-full bg-[#326273]/8 px-2.5 py-1 text-[11px] font-semibold text-[#326273]/60">
+              <h2 className="text-sm font-semibold text-[#1F4452]">Settlement Pipeline</h2>
+              <span className="rounded-full bg-[#326273]/8 px-2.5 py-1 text-[13px] font-medium text-[#326273]/60">
                 Next window: 16:30 MYT · 13 transfers · $7,510
               </span>
             </div>
@@ -248,10 +252,10 @@ export default function DashboardOverview() {
                 <div key={item.label} className="rounded-xl bg-[#F6F0ED] p-3">
                   <div className="flex items-center gap-1.5">
                     <span className={cn('h-2 w-2 rounded-full', item.dot)} />
-                    <span className="text-[11px] text-[#326273]/60">{item.label}</span>
+                    <span className="text-[13px] text-[#326273]/60">{item.label}</span>
                   </div>
-                  <div className="mt-2 text-2xl font-extrabold text-[#1F4452]">{item.count}</div>
-                  <div className="mt-0.5 text-xs font-semibold text-[#5C9EAD]">{item.amount}</div>
+                  <div className="money mt-2 text-2xl font-medium text-[#1F4452]">{item.count}</div>
+                  <div className="money mt-0.5 text-[13px] font-medium text-[var(--info)]">{item.amount}</div>
                 </div>
               ))}
             </div>
@@ -260,21 +264,21 @@ export default function DashboardOverview() {
           {/* Live corridors table */}
           <div className="dash-surface overflow-hidden">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#326273]/8 px-4 py-3">
-              <h2 className="text-sm font-bold text-[#1F4452]">Corridor Readiness</h2>
-              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[#326273]/50">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
+              <h2 className="text-sm font-semibold text-[#1F4452]">Corridor Readiness</h2>
+              <div className="flex items-center gap-1.5 text-[13px] font-medium text-[#326273]/50">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--ok)]" />
                 1 live-model · 8 implemented in code
               </div>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-xs">
+              <table className="w-full text-[13px]">
                 <thead>
                   <tr className="border-b border-[#326273]/8 bg-[#F6F0ED]/60">
-                    <th className="px-4 py-2 text-left font-semibold text-[#326273]/50">Corridor</th>
-                    <th className="px-4 py-2 text-right font-semibold text-[#326273]/50">Reference rate</th>
-                    <th className="hidden px-4 py-2 text-right font-semibold text-[#326273]/50 sm:table-cell">Model volume</th>
-                    <th className="hidden px-4 py-2 text-right font-semibold text-[#326273]/50 md:table-cell">Splash fee</th>
-                    <th className="px-4 py-2 text-right font-semibold text-[#326273]/50">Test success</th>
+                    <th className="px-4 py-2 text-left font-medium text-[#326273]/50">Corridor</th>
+                    <th className="px-4 py-2 text-right font-medium text-[#326273]/50">Reference rate</th>
+                    <th className="hidden px-4 py-2 text-right font-medium text-[#326273]/50 sm:table-cell">Model volume</th>
+                    <th className="hidden px-4 py-2 text-right font-medium text-[#326273]/50 md:table-cell">Splash fee</th>
+                    <th className="px-4 py-2 text-right font-medium text-[#326273]/50">Test success</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -289,34 +293,34 @@ export default function DashboardOverview() {
                       <td className="px-4 py-2.5">
                         <div className="flex items-center gap-2">
                           <span className="text-sm leading-none">{c.flag}</span>
-                          <span className="font-semibold text-[#1F4452]">{c.pair}</span>
+                          <span className="font-medium text-[#1F4452]">{c.pair}</span>
                           <span className={cn(
-                            'hidden rounded-full px-1.5 py-0.5 text-[10px] font-bold sm:inline',
-                            i === 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-[#5C9EAD]/10 text-[#326273]',
+                            'hidden rounded-full px-1.5 py-0.5 text-[13px] font-semibold sm:inline',
+                            i === 0 ? 'bg-[var(--ok-bg)] text-[var(--ok)]' : 'bg-[#5C9EAD]/10 text-[#326273]',
                           )}>
                             {i === 0 ? 'Live-model' : 'In code'}
                           </span>
                         </div>
                       </td>
-                      <td className="px-4 py-2.5 text-right font-mono font-bold text-[#1F4452]">
+                      <td className="money px-4 py-2.5 font-medium text-[#1F4452]">
                         {c.rate.toLocaleString(undefined, {
                           maximumFractionDigits: c.dec,
                           minimumFractionDigits: c.dec,
                         })}
                       </td>
-                      <td className="hidden px-4 py-2.5 text-right text-[#326273]/55 sm:table-cell">{c.volume}</td>
+                      <td className="money hidden px-4 py-2.5 font-medium text-[#326273]/55 sm:table-cell">{c.volume}</td>
                       <td className="hidden px-4 py-2.5 text-right md:table-cell">
-                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">{c.fee}</span>
+                        <span className="money rounded-full bg-[var(--ok-bg)] px-2 py-0.5 text-[13px] font-medium text-[var(--ok)]">{c.fee}</span>
                       </td>
                       <td className="px-4 py-2.5 text-right">
                         <span
                           className={cn(
-                            'font-semibold',
+                            'money font-medium',
                             c.success >= 99
-                              ? 'text-emerald-600'
+                              ? 'text-[var(--ok)]'
                               : c.success >= 98
-                              ? 'text-[#5C9EAD]'
-                              : 'text-amber-600'
+                              ? 'text-[var(--info)]'
+                              : 'text-[var(--warn)]'
                           )}
                         >
                           {c.success.toFixed(1)}%
@@ -332,24 +336,24 @@ export default function DashboardOverview() {
           {/* Recent transactions table */}
           <div className="dash-surface overflow-hidden">
             <div className="flex items-center justify-between border-b border-[#326273]/8 px-4 py-3">
-              <h2 className="text-sm font-bold text-[#1F4452]">Recent Transactions</h2>
+              <h2 className="text-sm font-semibold text-[#1F4452]">Recent Transactions</h2>
               <Link
                 href="/dashboard/history"
-                className="text-[11px] font-semibold text-[#5C9EAD] transition-colors hover:text-[#326273]"
+                className="text-[13px] font-medium text-[var(--info)] transition-colors hover:text-[#326273]"
               >
                 View all →
               </Link>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-xs">
+              <table className="w-full text-[13px]">
                 <thead>
                   <tr className="border-b border-[#326273]/8 bg-[#F6F0ED]/60">
-                    <th className="px-4 py-2 text-left font-semibold text-[#326273]/50">Description</th>
-                    <th className="hidden px-4 py-2 text-left font-semibold text-[#326273]/50 sm:table-cell">Corridor</th>
-                    <th className="px-4 py-2 text-right font-semibold text-[#326273]/50">USD</th>
-                    <th className="hidden px-4 py-2 text-right font-semibold text-[#326273]/50 md:table-cell">Local</th>
-                    <th className="px-4 py-2 text-right font-semibold text-[#326273]/50">Status</th>
-                    <th className="hidden px-4 py-2 text-right font-semibold text-[#326273]/50 sm:table-cell">Time</th>
+                    <th className="px-4 py-2 text-left font-medium text-[#326273]/50">Description</th>
+                    <th className="hidden px-4 py-2 text-left font-medium text-[#326273]/50 sm:table-cell">Corridor</th>
+                    <th className="px-4 py-2 text-right font-medium text-[#326273]/50">USD</th>
+                    <th className="hidden px-4 py-2 text-right font-medium text-[#326273]/50 md:table-cell">Local</th>
+                    <th className="px-4 py-2 text-right font-medium text-[#326273]/50">Status</th>
+                    <th className="hidden px-4 py-2 text-right font-medium text-[#326273]/50 sm:table-cell">Time</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -362,12 +366,12 @@ export default function DashboardOverview() {
                       )}
                     >
                       <td className="px-4 py-2.5">
-                        <div className="font-semibold text-[#1F4452]">{a.desc}</div>
-                        <div className="mt-0.5 text-[10px] text-[#326273]/35">{a.id}</div>
+                        <div className="font-medium text-[#1F4452]">{a.desc}</div>
+                        <div className="mt-0.5 text-[13px] text-[#326273]/35">{a.id}</div>
                       </td>
                       <td className="hidden px-4 py-2.5 text-[#326273]/55 sm:table-cell">{a.corridor}</td>
-                      <td className="px-4 py-2.5 text-right font-semibold text-[#1F4452]">{a.usd}</td>
-                      <td className="hidden px-4 py-2.5 text-right text-[#326273]/55 md:table-cell">{a.local}</td>
+                      <td className="money px-4 py-2.5 font-medium text-[#1F4452]">{a.usd}</td>
+                      <td className="money hidden px-4 py-2.5 text-[#326273]/55 md:table-cell">{a.local}</td>
                       <td className="px-4 py-2.5 text-right">
                         <TxPill status={a.status} />
                       </td>
@@ -387,56 +391,56 @@ export default function DashboardOverview() {
           <div className="dash-block dash-block-accent dash-block-interactive p-4">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2.5">
-                <div className="rounded-lg bg-emerald-100 p-2">
-                  <TrendingUp size={16} className="text-emerald-600" />
+                <div className="rounded-lg bg-[var(--ok-bg)] p-2">
+                  <TrendingUp size={16} className="text-[var(--ok)]" />
                 </div>
                 <div>
-                  <h2 className="text-sm font-bold text-[#1F4452]">Treasury Projection</h2>
-                  <p className="text-[11px] text-[#326273]/50">Ondo USDY · simulation only</p>
+                  <h2 className="text-sm font-semibold text-[#1F4452]">Treasury Projection</h2>
+                  <p className="text-[13px] text-[#326273]/50">Ondo USDY · simulation only</p>
                 </div>
               </div>
-              <span className="rounded-full bg-[#D9A441]/15 px-2 py-0.5 text-[10px] font-bold text-[#9a6f15]">
+              <span className="rounded-full bg-[#D9A441]/15 px-2 py-0.5 text-[13px] font-semibold text-[#9a6f15]">
                 {treasuryRateLabel}
               </span>
             </div>
 
             <div className="mt-3">
               <p className="text-[11px] uppercase tracking-wide text-[#326273]/45">Modeled allocation</p>
-              <p className="mt-0.5 text-2xl font-extrabold text-[#1F4452]">${fmt(treasuryPrincipal)}</p>
-              <p className="mt-1 flex items-center gap-1 text-[11px] font-semibold text-emerald-600">
+              <p className="money mt-0.5 text-2xl font-medium text-[#1F4452]">${fmt(treasuryPrincipal)}</p>
+              <p className="money mt-1 flex items-center gap-1 text-[13px] font-medium text-[var(--ok)]">
                 <TrendingUp size={11} />
                 +${yieldEarned.toFixed(2)} modeled this month
               </p>
             </div>
 
-            <div className="mt-3 space-y-1 rounded-lg bg-white/70 p-3 text-[11px]">
+            <div className="mt-3 space-y-1 rounded-lg bg-white/70 p-3 text-[13px]">
               <div className="flex items-center justify-between">
                 <span className="text-[#326273]/55">Modeled daily yield</span>
-                <span className="font-semibold text-emerald-600">+$3.22</span>
+                <span className="money font-medium text-[var(--ok)]">+$3.22</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-[#326273]/55">Status</span>
-                <span className="flex items-center gap-1 font-semibold text-emerald-600">
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
+                <span className="flex items-center gap-1 font-medium text-[var(--ok)]">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--ok)]" />
                   Approval gated
                 </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-[#326273]/55">Protocol</span>
-                <span className="font-semibold text-[#326273]">Ondo USDY · T-bill</span>
+                <span className="font-medium text-[#326273]">Ondo USDY · T-bill</span>
               </div>
             </div>
 
             <div className="mt-3 flex gap-2">
               <Link
                 href="/dashboard/treasury"
-                className="flex-1 rounded-lg bg-emerald-600 py-1.5 text-center text-xs font-bold text-white transition-colors hover:bg-emerald-700"
+                className="flex-1 rounded-lg bg-[var(--ok)] py-1.5 text-center text-[13px] font-semibold text-white transition-colors hover:opacity-90"
               >
                 View projection
               </Link>
               <Link
                 href="/dashboard/treasury"
-                className="flex-1 rounded-lg border border-emerald-200 py-1.5 text-center text-xs font-bold text-emerald-700 transition-colors hover:bg-emerald-50"
+                className="flex-1 rounded-lg border border-[var(--ok)] py-1.5 text-center text-[13px] font-semibold text-[var(--ok)] transition-colors hover:bg-[var(--ok-bg)]"
               >
                 Review controls
               </Link>
@@ -446,16 +450,16 @@ export default function DashboardOverview() {
           {/* Compliance posture */}
           <div className="dash-block p-4">
             <div className="flex items-center gap-2">
-              <ShieldCheck size={16} className="text-[#5C9EAD]" />
-              <h2 className="text-sm font-bold text-[#1F4452]">Compliance</h2>
+              <ShieldCheck size={16} className="text-[var(--info)]" />
+              <h2 className="text-sm font-semibold text-[#1F4452]">Compliance</h2>
             </div>
             <div className="mt-3 space-y-2">
               {COMPLIANCE.map((item) => (
                 <HoverPopup key={item.label} title={item.label} content={item.value}>
                   <div className="flex cursor-pointer items-center justify-between rounded-lg bg-[#F6F0ED] px-3 py-2 transition-colors hover:bg-[#ede8e4]">
                     <div>
-                      <div className="text-xs font-semibold text-[#1F4452]">{item.label}</div>
-                      <div className="text-[11px] text-[#326273]/55">{item.value}</div>
+                      <div className="text-[13px] font-medium text-[#1F4452]">{item.label}</div>
+                      <div className="text-[13px] text-[#326273]/55">{item.value}</div>
                     </div>
                     <StatusBadge status={item.status} />
                   </div>
@@ -467,30 +471,30 @@ export default function DashboardOverview() {
           {/* Pending actions */}
           <div className="dash-block p-4">
             <div className="flex items-center gap-2">
-              <AlertTriangle size={16} className="text-[#E39774]" />
-              <h2 className="text-sm font-bold text-[#1F4452]">Pending Actions</h2>
+              <AlertTriangle size={16} className="text-[var(--warn)]" />
+              <h2 className="text-sm font-semibold text-[#1F4452]">Pending Actions</h2>
             </div>
             <div className="mt-3 space-y-2">
-              <div className="flex items-center justify-between rounded-lg bg-amber-50 px-3 py-2.5">
+              <div className="flex items-center justify-between rounded-lg bg-[var(--warn-bg)] px-3 py-2.5">
                 <div>
-                  <div className="text-xs font-semibold text-amber-800">Batch TOTP authorization</div>
-                  <div className="text-[11px] text-amber-600/70">12 transfers · $6,670</div>
+                  <div className="text-[13px] font-medium text-[var(--warn)]">Batch TOTP authorization</div>
+                  <div className="text-[13px] text-[var(--warn)]/80">12 transfers · $6,670</div>
                 </div>
                 <Link
                   href="/dashboard/batch"
-                  className="shrink-0 rounded-md bg-amber-500 px-2.5 py-1 text-[11px] font-bold text-white transition-colors hover:bg-amber-600"
+                  className="shrink-0 rounded-md bg-[var(--warn-bg)]0 px-2.5 py-1 text-[13px] font-semibold text-white transition-colors hover:opacity-90"
                 >
                   Authorize
                 </Link>
               </div>
               <div className="flex items-center justify-between rounded-lg bg-[#F6F0ED] px-3 py-2.5">
                 <div>
-                  <div className="text-xs font-semibold text-[#1F4452]">KYB document review</div>
-                  <div className="text-[11px] text-[#326273]/55">Sumsub · in progress</div>
+                  <div className="text-[13px] font-medium text-[#1F4452]">KYB document review</div>
+                  <div className="text-[13px] text-[#326273]/55">Sumsub · in progress</div>
                 </div>
                 <Link
                   href="/dashboard/settings"
-                  className="shrink-0 rounded-md bg-[#5C9EAD] px-2.5 py-1 text-[11px] font-bold text-white transition-colors hover:bg-[#4a8a99]"
+                  className="shrink-0 rounded-md bg-[#5C9EAD] px-2.5 py-1 text-[13px] font-semibold text-white transition-colors hover:bg-[#4a8a99]"
                 >
                   Review
                 </Link>
@@ -501,22 +505,22 @@ export default function DashboardOverview() {
           {/* Invoice upload (Walrus) */}
           <div className="dash-block dash-block-interactive p-4">
             <div className="flex items-center gap-2">
-              <FileText size={16} className="text-[#5C9EAD]" />
-              <h2 className="text-sm font-bold text-[#1F4452]">Upload Invoice</h2>
+              <FileText size={16} className="text-[var(--info)]" />
+              <h2 className="text-sm font-semibold text-[#1F4452]">Upload Invoice</h2>
             </div>
             <Link
               href="/dashboard/invoices"
               className="mt-3 flex flex-col items-center rounded-lg border-2 border-dashed border-[#326273]/15 bg-[#F6F0ED] p-4 text-center transition-colors hover:border-[#5C9EAD]/40 hover:bg-[#5C9EAD]/5"
             >
               <Upload size={22} className="text-[#326273]/25" />
-              <p className="mt-2 text-xs font-semibold text-[#326273]/50">Go to Invoice Vault</p>
-              <p className="mt-1 text-[10px] text-[#326273]/35">
+              <p className="mt-2 text-[13px] font-medium text-[#326273]/50">Go to Invoice Vault</p>
+              <p className="mt-1 text-[13px] text-[#326273]/35">
                 Access-controlled · stored on Walrus · 7-yr retention
               </p>
             </Link>
             <Link
               href="/dashboard/invoices"
-              className="mt-2 block text-center text-[11px] font-semibold text-[#5C9EAD] transition-colors hover:text-[#326273]"
+              className="mt-2 block text-center text-[13px] font-medium text-[var(--info)] transition-colors hover:text-[#326273]"
             >
               View invoice vault →
             </Link>

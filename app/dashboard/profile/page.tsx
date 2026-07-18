@@ -163,7 +163,7 @@ export default function ProfilePage() {
       />
 
       {message && (
-        <div className={`rounded-xl border px-4 py-3 text-sm font-semibold ${
+        <div className={`rounded-xl border px-4 py-3 text-sm font-medium ${
           message.kind === 'ok'
             ? 'border-[#5C9EAD]/30 bg-[#5C9EAD]/10 text-[#326273]'
             : 'border-[#E39774]/30 bg-[#E39774]/10 text-[#9b4e32]'
@@ -176,34 +176,34 @@ export default function ProfilePage() {
       {pending && (
         <section className="overflow-hidden rounded-2xl border border-[#E39774]/40 bg-white shadow-[6px_7px_0_rgba(12,62,72,0.08)]">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-dashed border-[#326273]/20 bg-[#E39774]/10 px-5 py-3">
-            <div className="flex items-center gap-2 text-sm font-black text-[#9b4e32]">
+            <div className="flex items-center gap-2 text-sm font-bold text-[#9b4e32]">
               <Clock3 className="h-4 w-4" />
               Waiting for admin approval
             </div>
-            <div className="text-xs font-semibold text-[#326273]/55">
+            <div className="text-[13px] font-medium text-[#326273]/55">
               Submitted {new Date(pending.submittedAt).toLocaleString()}
             </div>
           </div>
           <div className="grid gap-2 p-5">
             {Object.entries(pending.changes).map(([field, next]) => (
               <div key={field} className="grid items-center gap-2 rounded-xl bg-[#F6F0ED] px-4 py-3 text-sm sm:grid-cols-[140px_1fr_auto_1fr]">
-                <span className="text-xs font-black uppercase tracking-[0.1em] text-[#326273]/55">{FIELD_LABELS[field] ?? field}</span>
-                <span className="font-semibold text-[#326273]/60 line-through decoration-[#E39774]/60">
+                <span className="text-xs font-semibold uppercase tracking-[0.1em] text-[#326273]/55">{FIELD_LABELS[field] ?? field}</span>
+                <span className="font-medium text-[#326273]/60 line-through decoration-[#E39774]/60">
                   {fieldValue(field, (pending.before as Record<string, unknown>)[field])}
                 </span>
-                <span aria-hidden="true" className="hidden text-[#5C9EAD] sm:block">→</span>
-                <span className="font-black text-[#326273]">{fieldValue(field, next)}</span>
+                <span aria-hidden="true" className="hidden text-[var(--info)] sm:block">→</span>
+                <span className="font-bold text-[#326273]">{fieldValue(field, next)}</span>
               </div>
             ))}
             {pending.note && (
-              <p className="px-1 pt-1 text-xs text-[#326273]/60">Note to reviewer: “{pending.note}”</p>
+              <p className="px-1 pt-1 text-[13px] text-[#326273]/60">Note to reviewer: “{pending.note}”</p>
             )}
             <div className="pt-2">
               <button
                 type="button"
                 onClick={cancelPending}
                 disabled={busy}
-                className="inline-flex items-center gap-2 rounded-lg border border-[#326273]/15 bg-white px-4 py-2 text-xs font-bold text-[#326273] transition-colors hover:bg-[#F6F0ED] disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-lg border border-[#326273]/15 bg-white px-4 py-2 text-[13px] font-semibold text-[#326273] transition-colors hover:bg-[#F6F0ED] disabled:opacity-50"
               >
                 <Undo2 className="h-3.5 w-3.5" />
                 Withdraw request
@@ -217,17 +217,17 @@ export default function ProfilePage() {
         {/* ── Profile of record ─────────────────────────────── */}
         <div className="dash-surface h-fit p-6">
           <div className="flex items-center gap-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#1F4452] text-lg font-black text-white">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#1F4452] text-lg font-bold text-white">
               {profile.displayName.split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase()).join('') || 'S'}
             </div>
             <div className="min-w-0">
-              <div className="truncate text-lg font-black text-[#326273]">{profile.displayName}</div>
-              <div className="truncate text-xs font-semibold text-[#326273]/55">{profile.organization}</div>
+              <div className="truncate text-lg font-bold text-[#326273]">{profile.displayName}</div>
+              <div className="truncate text-[13px] font-medium text-[#326273]/55">{profile.organization}</div>
             </div>
           </div>
 
-          <div className="mt-5 inline-flex items-center gap-2 rounded-lg bg-[#5C9EAD]/12 px-3 py-2 text-xs font-black text-[#326273]">
-            <ShieldCheck className="h-4 w-4 text-[#5C9EAD]" />
+          <div className="mt-5 inline-flex items-center gap-2 rounded-lg bg-[#5C9EAD]/12 px-3 py-2 text-[13px] font-bold text-[#326273]">
+            <ShieldCheck className="h-4 w-4 text-[var(--info)]" />
             {tierName(profile.tier)}
           </div>
 
@@ -238,8 +238,8 @@ export default function ProfilePage() {
             <RecordRow icon={Building2} label="Timezone" value={profile.timezone || 'Not set'} />
           </dl>
 
-          <p className="mt-5 border-t border-[#326273]/10 pt-4 text-[11px] leading-5 text-[#326273]/50">
-            <BadgeCheck className="mr-1 inline h-3.5 w-3.5 text-[#5C9EAD]" />
+          <p className="mt-5 border-t border-[#326273]/10 pt-4 text-[13px] leading-5 text-[#326273]/50">
+            <BadgeCheck className="mr-1 inline h-3.5 w-3.5 text-[var(--info)]" />
             This is your profile of record — the version our admin team has approved.
             {profile.updatedAt && new Date(profile.updatedAt).getTime() > 0
               ? ` Last approved change ${new Date(profile.updatedAt).toLocaleDateString()}.`
@@ -253,10 +253,10 @@ export default function ProfilePage() {
           onSubmit={(event) => { event.preventDefault(); void submitForReview(); }}
         >
           <div className="flex items-center gap-3">
-            <UserRound className="text-[#5C9EAD]" />
+            <UserRound className="text-[var(--info)]" />
             <div>
-              <h2 className="text-xl font-black text-[#326273]">Edit details</h2>
-              <p className="text-xs text-[#326273]/55">
+              <h2 className="text-xl font-bold text-[#326273]">Edit details</h2>
+              <p className="text-[13px] text-[#326273]/55">
                 {locked
                   ? 'Editing is paused while your current request is in review.'
                   : 'Change what you need, then save it for review.'}
@@ -269,11 +269,11 @@ export default function ProfilePage() {
             <TextField label="Organization" value={merged.organization} onChange={(v) => edit('organization', v)} />
             <TextField label="Phone" value={merged.phone} placeholder="+60 12 345 6789" onChange={(v) => edit('phone', v)} />
             <label className="block">
-              <span className="text-xs font-black uppercase tracking-[0.1em] text-[#326273]/55">Country</span>
+              <span className="text-xs font-semibold uppercase tracking-[0.1em] text-[#326273]/55">Country</span>
               <select
                 value={merged.country}
                 onChange={(event) => edit('country', event.target.value)}
-                className="mt-1 w-full rounded-lg border border-[#326273]/15 bg-[#F6F0ED] px-3 py-2.5 text-sm font-semibold text-[#326273] focus:border-[#5C9EAD] focus:outline-none"
+                className="mt-1 w-full rounded-lg border border-[#326273]/15 bg-[#F6F0ED] px-3 py-2.5 text-sm font-medium text-[#326273] focus:border-[#5C9EAD] focus:outline-none"
               >
                 {COUNTRIES.map(([code, name]) => <option key={code} value={code}>{name}</option>)}
               </select>
@@ -283,8 +283,8 @@ export default function ProfilePage() {
 
           {/* Tier request */}
           <div className="mt-6">
-            <div className="text-xs font-black uppercase tracking-[0.1em] text-[#326273]/55">Account tier</div>
-            <p className="mt-1 text-xs text-[#326273]/50">Request a different tier — upgrades apply only after compliance approves.</p>
+            <div className="text-xs font-semibold uppercase tracking-[0.1em] text-[#326273]/55">Account tier</div>
+            <p className="mt-1 text-[13px] text-[#326273]/50">Request a different tier — upgrades apply only after compliance approves.</p>
             <div className="mt-3 grid gap-2 lg:grid-cols-3">
               {TIERS.map((tier) => {
                 const selected = merged.tier === tier.id;
@@ -302,10 +302,10 @@ export default function ProfilePage() {
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-black text-[#326273]">{tier.name}</span>
-                      {current && <span className="rounded-full bg-[#326273]/10 px-2 py-0.5 text-[10px] font-black text-[#326273]/60">Current</span>}
+                      <span className="text-sm font-bold text-[#326273]">{tier.name}</span>
+                      {current && <span className="rounded-full bg-[#326273]/10 px-2 py-0.5 text-[13px] font-bold text-[#326273]/60">Current</span>}
                     </div>
-                    <p className="mt-1.5 text-[11px] leading-4 text-[#326273]/60">{tier.blurb}</p>
+                    <p className="mt-1.5 text-[13px] leading-4 text-[#326273]/60">{tier.blurb}</p>
                   </button>
                 );
               })}
@@ -315,7 +315,7 @@ export default function ProfilePage() {
           {/* Note + submit */}
           <div className="mt-6 space-y-3">
             <label className="block">
-              <span className="text-xs font-black uppercase tracking-[0.1em] text-[#326273]/55">Note to reviewer (optional)</span>
+              <span className="text-xs font-semibold uppercase tracking-[0.1em] text-[#326273]/55">Note to reviewer (optional)</span>
               <textarea
                 value={note}
                 disabled={locked || busy}
@@ -330,7 +330,7 @@ export default function ProfilePage() {
               <button
                 type="submit"
                 disabled={locked || busy || dirtyFields.length === 0}
-                className="inline-flex items-center gap-2 rounded-lg bg-[#326273] px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#264e5b] disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-lg bg-[#326273] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#264e5b] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                 Save for review
@@ -340,11 +340,11 @@ export default function ProfilePage() {
                   <button
                     type="button"
                     onClick={() => { setDraft({}); setMessage(null); }}
-                    className="text-xs font-bold text-[#326273]/55 underline-offset-2 hover:underline"
+                    className="text-[13px] font-semibold text-[#326273]/55 underline-offset-2 hover:underline"
                   >
                     Discard changes
                   </button>
-                  <span className="text-xs font-semibold text-[#326273]/45">
+                  <span className="text-[13px] font-medium text-[#326273]/45">
                     {dirtyFields.length} field{dirtyFields.length > 1 ? 's' : ''} will be sent for approval
                   </span>
                 </>
@@ -357,12 +357,12 @@ export default function ProfilePage() {
       {/* ── Past requests ───────────────────────────────────── */}
       {history.length > 0 && (
         <section className="dash-surface p-6">
-          <h2 className="text-sm font-black uppercase tracking-[0.1em] text-[#326273]/55">Review history</h2>
+          <h2 className="text-sm font-semibold uppercase tracking-[0.1em] text-[#326273]/55">Review history</h2>
           <div className="mt-3 space-y-2">
             {history.map((request) => (
-              <div key={request.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl bg-[#F6F0ED] px-4 py-3 text-xs">
+              <div key={request.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl bg-[#F6F0ED] px-4 py-3 text-[13px]">
                 <StateBadge state={request.state} />
-                <span className="font-semibold text-[#326273]">
+                <span className="font-medium text-[#326273]">
                   {Object.keys(request.changes).map((f) => FIELD_LABELS[f] ?? f).join(', ')}
                 </span>
                 <span className="text-[#326273]/45">
@@ -384,10 +384,10 @@ export default function ProfilePage() {
 function RecordRow({ icon: Icon, label, value }: { icon: typeof Mail; label: string; value: string }) {
   return (
     <div className="flex items-start gap-3">
-      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-[#5C9EAD]" />
+      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-[var(--info)]" />
       <div className="min-w-0">
-        <dt className="text-[10px] font-black uppercase tracking-[0.12em] text-[#326273]/45">{label}</dt>
-        <dd className="truncate text-sm font-semibold text-[#326273]">{value}</dd>
+        <dt className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#326273]/45">{label}</dt>
+        <dd className="truncate text-sm font-medium text-[#326273]">{value}</dd>
       </div>
     </div>
   );
@@ -402,12 +402,12 @@ function TextField({ label, value, onChange, placeholder, className = '' }: {
 }) {
   return (
     <label className={`block ${className}`}>
-      <span className="text-xs font-black uppercase tracking-[0.1em] text-[#326273]/55">{label}</span>
+      <span className="text-xs font-semibold uppercase tracking-[0.1em] text-[#326273]/55">{label}</span>
       <input
         value={value}
         placeholder={placeholder}
         onChange={(event) => onChange(event.target.value)}
-        className="mt-1 w-full rounded-lg border border-[#326273]/15 bg-[#F6F0ED] px-3 py-2.5 text-sm font-semibold text-[#326273] placeholder-[#326273]/30 focus:border-[#5C9EAD] focus:outline-none"
+        className="mt-1 w-full rounded-lg border border-[#326273]/15 bg-[#F6F0ED] px-3 py-2.5 text-sm font-medium text-[#326273] placeholder-[#326273]/30 focus:border-[#5C9EAD] focus:outline-none"
       />
     </label>
   );
@@ -428,7 +428,7 @@ function StateBadge({ state }: { state: ChangeRequest['state'] }) {
   };
   const Icon = icons[state];
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-black ${styles[state]}`}>
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-bold ${styles[state]}`}>
       <Icon className="h-3 w-3" />
       {state.charAt(0) + state.slice(1).toLowerCase()}
     </span>

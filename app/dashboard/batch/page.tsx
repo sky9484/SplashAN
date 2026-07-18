@@ -101,10 +101,11 @@ function strongestResult(checks: ComplianceCheck[]): ComplianceResult {
   return "PASS";
 }
 
+// Screening results are STATES — semantic tokens only (W9.0 coral rule).
 function badgeClass(result: ComplianceResult) {
-  if (result === "PASS") return "border-[#5C9EAD]/30 bg-[#5C9EAD]/10 text-[#5C9EAD]";
-  if (result === "REVIEW") return "border-[#E39774]/30 bg-[#E39774]/10 text-[#E39774]";
-  return "border-red-500/30 bg-red-500/10 text-red-600";
+  if (result === "PASS") return "border-[var(--ok)] bg-[var(--ok-bg)] text-[var(--ok)]";
+  if (result === "REVIEW") return "border-[var(--warn)] bg-[var(--warn-bg)] text-[var(--warn)]";
+  return "border-[var(--error)] bg-[var(--error-bg)] text-[var(--error)]";
 }
 
 function rowStatus(result: ComplianceResult): BatchRow["status"] {
@@ -313,7 +314,7 @@ export default function BatchPage() {
           </>
         }
         actions={
-          <div className="rounded-xl border border-[#326273]/10 bg-white px-3 py-2 text-xs font-semibold text-[#326273]">
+          <div className="rounded-xl border border-[#326273]/10 bg-white px-3 py-2 text-[13px] font-medium text-[#326273]">
             Tier 1 limits · RM 20k / transfer
           </div>
         }
@@ -323,23 +324,23 @@ export default function BatchPage() {
 
       <section className="grid gap-4 dash-reveal-stagger md:grid-cols-4">
         <HoverPopup title="Rows cleared" content="Beneficiaries that passed all AML, KYT, corridor, and purpose-code checks. These rows will be included in the batch authorization.">
-          <SummaryCard icon={ShieldCheck} label="Rows cleared" value={String(acceptedRows.length)} tone="text-[#5C9EAD]" />
+          <SummaryCard icon={ShieldCheck} label="Rows cleared" value={String(acceptedRows.length)} tone="text-[var(--info)]" />
         </HoverPopup>
         <HoverPopup title="Manual review" content="Rows requiring manual attention. Usually missing purpose codes or above Tier 1 limits. These will not be included until resolved.">
-          <SummaryCard icon={AlertTriangle} label="Manual review" value={String(reviewRows.length)} tone="text-[#E39774]" />
+          <SummaryCard icon={AlertTriangle} label="Manual review" value={String(reviewRows.length)} tone="text-[var(--warn)]" />
         </HoverPopup>
         <HoverPopup title="Blocked" content="Rows that failed compliance checks. Common reasons: sanctions/PEP hits, unsupported corridors, or invalid amounts.">
           <SummaryCard icon={XCircle} label="Blocked" value={String(blockedRows.length)} tone="text-red-600" />
         </HoverPopup>
         <HoverPopup title="Cleared amount" content="Total USD value of cleared rows. This is the amount that will be authorized and queued for settlement.">
-          <SummaryCard icon={CheckCircle2} label="Cleared amount" value={`$${acceptedTotal.toFixed(2)}`} tone="text-[#5C9EAD]" />
+          <SummaryCard icon={CheckCircle2} label="Cleared amount" value={`$${acceptedTotal.toFixed(2)}`} tone="text-[var(--info)]" />
         </HoverPopup>
       </section>
 
       <label className="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-[#5C9EAD]/40 bg-white/50 p-8 text-center transition-colors hover:border-[#5C9EAD] hover:bg-[#5C9EAD]/5 md:p-10">
-        <Upload className="text-[#5C9EAD]" />
-        <span className="font-semibold text-[#326273]">{rows.length ? `${rows.length} rows loaded — upload another CSV to replace` : "Click to upload CSV"}</span>
-        <span className="text-xs text-[#326273]/50">Supported corridors: MY, PH, ID, SG, VN, TH, EU, GB · Amounts in USD</span>
+        <Upload className="text-[var(--info)]" />
+        <span className="font-medium text-[#326273]">{rows.length ? `${rows.length} rows loaded — upload another CSV to replace` : "Click to upload CSV"}</span>
+        <span className="text-[13px] text-[#326273]/50">Supported corridors: MY, PH, ID, SG, VN, TH, EU, GB · Amounts in USD</span>
         <input type="file" accept=".csv" className="hidden" onChange={(event) => event.target.files?.[0] && onFile(event.target.files[0])} />
       </label>
 
@@ -347,37 +348,37 @@ export default function BatchPage() {
         <div className="dash-surface overflow-hidden">
           <div className="flex flex-col gap-3 border-b border-[#326273]/10 p-5 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-lg font-bold text-[#326273]">CSV format example</h2>
-              <p className="mt-1 text-xs text-[#326273]/60">
-                Columns are <code className="font-mono text-[11px]">name,address,country,purpose,amount</code>. Amounts in USD, country is ISO-2.
+              <h2 className="text-lg font-semibold text-[#326273]">CSV format example</h2>
+              <p className="mt-1 text-[13px] text-[#326273]/60">
+                Columns are <code className="font-mono text-[13px]">name,address,country,purpose,amount</code>. Amounts in USD, country is ISO-2.
               </p>
             </div>
             <button
               type="button"
               onClick={downloadSampleCsv}
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#5C9EAD] px-3 py-2 text-xs font-bold text-white hover:bg-[#264e5b]"
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#5C9EAD] px-3 py-2 text-[13px] font-semibold text-white hover:bg-[#264e5b]"
             >
               <Download className="h-3.5 w-3.5" />
               Download sample
             </button>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-xs">
+            <table className="w-full min-w-[640px] text-[13px]">
               <thead className="bg-[#326273]/5">
                 <tr className="text-left text-[#326273]/65">
-                  <th className="p-3 font-bold uppercase tracking-wide">name</th>
-                  <th className="p-3 font-bold uppercase tracking-wide">address</th>
-                  <th className="p-3 font-bold uppercase tracking-wide">country</th>
-                  <th className="p-3 font-bold uppercase tracking-wide">purpose</th>
-                  <th className="p-3 text-right font-bold uppercase tracking-wide">amount</th>
+                  <th className="p-3 font-semibold uppercase tracking-wide">name</th>
+                  <th className="p-3 font-semibold uppercase tracking-wide">address</th>
+                  <th className="p-3 font-semibold uppercase tracking-wide">country</th>
+                  <th className="p-3 font-semibold uppercase tracking-wide">purpose</th>
+                  <th className="p-3 text-right font-semibold uppercase tracking-wide">amount</th>
                 </tr>
               </thead>
               <tbody>
                 {sampleCsvRows.map((row) => (
                   <tr key={row.address} className="border-t border-[#326273]/5">
                     <td className="p-3 font-medium text-[#326273]">{row.name}</td>
-                    <td className="p-3 font-mono text-[11px] text-[#326273]/70">{row.address}</td>
-                    <td className="p-3 font-semibold text-[#326273]">{row.country}</td>
+                    <td className="p-3 font-mono text-[13px] text-[#326273]/70">{row.address}</td>
+                    <td className="p-3 font-medium text-[#326273]">{row.country}</td>
                     <td className="p-3 text-[#326273]/70">{row.purpose}</td>
                     <td className="p-3 text-right font-mono text-[#326273]">$ {row.amount}</td>
                   </tr>
@@ -386,26 +387,26 @@ export default function BatchPage() {
             </table>
           </div>
           <div className="border-t border-[#326273]/10 bg-[#F6F0ED]/60 p-4">
-            <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#326273]/55">Raw CSV</div>
-            <pre className="mt-2 overflow-x-auto rounded-lg bg-[#1F4452] p-3 font-mono text-[11px] leading-5 text-[#F6F0ED]">{`${csvHeader}
+            <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#326273]/55">Raw CSV</div>
+            <pre className="mt-2 overflow-x-auto rounded-lg bg-[#1F4452] p-3 font-mono text-[13px] leading-5 text-[#F6F0ED]">{`${csvHeader}
 ${sampleCsvRows.map((row) => `${row.name},${row.address},${row.country},${row.purpose},${row.amount}`).join("\n")}`}</pre>
           </div>
         </div>
 
         <div className="dash-surface p-5">
           <div className="mb-4">
-            <h2 className="text-lg font-bold text-[#326273]">Why batch payout wins</h2>
-            <p className="mt-1 text-xs text-[#326273]/60">Concrete reasons treasury teams move payroll and vendor runs through Splash batches.</p>
+            <h2 className="text-lg font-semibold text-[#326273]">Why batch payout wins</h2>
+            <p className="mt-1 text-[13px] text-[#326273]/60">Concrete reasons treasury teams move payroll and vendor runs through Splash batches.</p>
           </div>
           <div className="space-y-3">
             {batchBenefits.map(({ icon: Icon, title, body }) => (
               <div key={title} className="flex items-start gap-3 rounded-xl bg-[#F6F0ED] p-3 transition-colors hover:bg-[#5C9EAD]/10">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-[#5C9EAD]">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-[var(--info)]">
                   <Icon className="h-4 w-4" />
                 </div>
                 <div className="min-w-0">
-                  <div className="text-sm font-bold text-[#326273]">{title}</div>
-                  <p className="mt-0.5 text-[11px] leading-5 text-[#326273]/65">{body}</p>
+                  <div className="text-sm font-semibold text-[#326273]">{title}</div>
+                  <p className="mt-0.5 text-[13px] leading-5 text-[#326273]/65">{body}</p>
                 </div>
               </div>
             ))}
@@ -418,7 +419,7 @@ ${sampleCsvRows.map((row) => `${row.name},${row.address},${row.country},${row.pu
           <section className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
             <div className="dash-surface overflow-hidden">
               <div className="border-b border-[#326273]/10 p-5">
-                <h2 className="text-xl font-bold text-[#326273]">Preflight results</h2>
+                <h2 className="text-xl font-semibold text-[#326273]">Preflight results</h2>
                 <p className="mt-1 text-sm text-[#326273]/60">Only rows marked cleared are included in this authorization request.</p>
               </div>
               <div className="overflow-x-auto">
@@ -440,13 +441,13 @@ ${sampleCsvRows.map((row) => `${row.name},${row.address},${row.country},${row.pu
                         <tr key={`${row.address}-${row.amount}-${row.name}`} className="border-t border-[#326273]/5">
                           <td className="p-3">
                             <div className="font-medium text-[#326273]">{row.name || "Unnamed beneficiary"}</div>
-                            <div className="mt-1 font-mono text-xs text-[#326273]/50">{row.address || "Missing reference"}</div>
+                            <div className="mt-1 font-mono text-[13px] text-[#326273]/50">{row.address || "Missing reference"}</div>
                           </td>
-                          <td className="font-semibold text-[#326273]">USD → {row.country || "—"}</td>
+                          <td className="font-medium text-[#326273]">USD → {row.country || "—"}</td>
                           <td className="text-[#326273]/70">{row.purpose || "Needs purpose code"}</td>
                           <td className="text-right font-mono text-[#326273]">$ {Number.parseFloat(row.amount || "0").toFixed(2)}</td>
                           <td>
-                            <div className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold ${badgeClass(result)}`}>{result}</div>
+                            <div className={`inline-flex rounded-full border px-3 py-1 text-[13px] font-semibold ${badgeClass(result)}`}>{result}</div>
                           </td>
                         </tr>
                       );
@@ -458,7 +459,7 @@ ${sampleCsvRows.map((row) => `${row.name},${row.address},${row.country},${row.pu
 
             <div className="space-y-4">
               <div className="dash-surface p-5">
-                <h2 className="text-xl font-bold text-[#326273]">Authorization summary</h2>
+                <h2 className="text-xl font-semibold text-[#326273]">Authorization summary</h2>
                 <div className="mt-4 space-y-3 text-sm">
                   <Row label="Uploaded total" value={`$${total.toFixed(2)}`} />
                   <Row label="Cleared total" value={`$${acceptedTotal.toFixed(2)}`} />
@@ -480,7 +481,7 @@ ${sampleCsvRows.map((row) => `${row.name},${row.address},${row.country},${row.pu
                     className="w-32 rounded-lg border border-[#326273]/20 bg-[#F6F0ED] px-3 py-3 text-center font-mono tracking-[0.25em] text-[#326273] focus:border-[#5C9EAD] focus:outline-none"
                     placeholder="000000"
                   />
-                  <button type="submit" disabled={busy || acceptedRows.length === 0 || totp.length !== 6} className="flex-1 rounded-lg bg-[#E39774] px-6 py-3 font-bold text-white hover:bg-[#cd825f] disabled:opacity-50">
+                  <button type="submit" disabled={busy || acceptedRows.length === 0 || totp.length !== 6} className="flex-1 rounded-lg bg-[#E39774] px-6 py-3 font-semibold text-white hover:bg-[#cd825f] disabled:opacity-50">
                     {busy ? <span className="inline-flex items-center gap-2"><Loader2 className="animate-spin" size={16} /> Queueing…</span> : "Authorize cleared rows"}
                   </button>
                 </form>
@@ -488,7 +489,7 @@ ${sampleCsvRows.map((row) => `${row.name},${row.address},${row.country},${row.pu
               </div>
 
               <div className="dash-surface p-5">
-                <h2 className="text-xl font-bold text-[#326273]">AML / KYT controls</h2>
+                <h2 className="text-xl font-semibold text-[#326273]">AML / KYT controls</h2>
                 <div className="mt-4 space-y-3">
                   <Control label="Sanctions / PEP" detail="Screens every beneficiary before authorization." />
                   <Control label="KYT amount threshold" detail="Flags transfers above Tier 1 review limits." />
@@ -500,11 +501,11 @@ ${sampleCsvRows.map((row) => `${row.name},${row.address},${row.country},${row.pu
           </section>
 
           {(reviewRows.length > 0 || blockedRows.length > 0) && (
-            <section className="rounded-2xl border border-[#E39774]/30 bg-[#E39774]/10 p-5">
+            <section className="rounded-2xl border border-[var(--warn)] bg-[var(--warn-bg)] p-5">
               <div className="flex gap-3">
-                <FileWarning className="mt-0.5 text-[#E39774]" />
+                <FileWarning className="mt-0.5 text-[var(--warn)]" />
                 <div>
-                  <h2 className="font-bold text-[#326273]">Exceptions require review</h2>
+                  <h2 className="font-semibold text-[#326273]">Exceptions require review</h2>
                   <p className="mt-1 text-sm text-[#326273]/70">Rows marked REVIEW need a purpose-code, limit, or KYT review. Rows marked BLOCK are excluded until compliance clears the beneficiary or corridor.</p>
                 </div>
               </div>
@@ -526,17 +527,17 @@ function BatchStatusPanel({ status }: { status: BatchStatus }) {
   return (
     <div className="mt-4 rounded-xl border border-[#326273]/10 bg-[#F6F0ED] p-4 space-y-3">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-bold uppercase tracking-wide text-[#326273]/60">Batch status</span>
+        <span className="text-xs font-semibold uppercase tracking-wide text-[#326273]/60">Batch status</span>
         {isDone ? (
-          <span className="inline-flex items-center gap-1 rounded-full bg-[#5C9EAD]/10 px-2.5 py-0.5 text-xs font-bold text-[#5C9EAD]">
+          <span className="inline-flex items-center gap-1 rounded-full bg-[#5C9EAD]/10 px-2.5 py-0.5 text-[13px] font-semibold text-[var(--info)]">
             <CheckCircle2 size={11} /> SETTLED
           </span>
         ) : isFailed ? (
-          <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-bold text-red-600">
+          <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-[13px] font-semibold text-red-600">
             <XCircle size={11} /> {status.state}
           </span>
         ) : (
-          <span className="inline-flex items-center gap-1 rounded-full bg-[#326273]/10 px-2.5 py-0.5 text-xs font-bold text-[#326273]/70">
+          <span className="inline-flex items-center gap-1 rounded-full bg-[#326273]/10 px-2.5 py-0.5 text-[13px] font-semibold text-[#326273]/70">
             <Loader2 size={11} className="animate-spin" /> {status.state}
           </span>
         )}
@@ -549,8 +550,8 @@ function BatchStatusPanel({ status }: { status: BatchStatus }) {
             const active = i === currentStep;
             return (
               <div key={step} className="flex shrink-0 items-center gap-1">
-                <div className={`flex h-5 items-center justify-center rounded-full px-2 text-[10px] font-bold transition-colors
-                    ${done ? 'bg-[#5C9EAD] text-white' : active ? 'border-2 border-[#5C9EAD] bg-white text-[#5C9EAD]' : 'bg-[#326273]/10 text-[#326273]/40'}`}>
+                <div className={`flex h-5 items-center justify-center rounded-full px-2 text-[13px] font-semibold transition-colors
+                    ${done ? 'bg-[#5C9EAD] text-white' : active ? 'border-2 border-[#5C9EAD] bg-white text-[var(--info)]' : 'bg-[#326273]/10 text-[#326273]/40'}`}>
                   {done ? '✓' : step}
                 </div>
                 {i < BATCH_STEPS.length - 1 && (
@@ -562,19 +563,19 @@ function BatchStatusPanel({ status }: { status: BatchStatus }) {
         </div>
       )}
 
-      <div className="font-mono text-[11px] text-[#326273]/50 break-all">ID: {status.id}</div>
+      <div className="font-mono text-[13px] text-[#326273]/50 break-all">ID: {status.id}</div>
 
       {status.digest && (() => {
         const isSimulated = status.demo === true || status.digest.startsWith("SIM_");
         return (
           <div className="flex flex-wrap items-center gap-2">
-            <div className="min-w-0 flex-1 break-all rounded-lg bg-white px-3 py-1.5 font-mono text-[11px] text-[#326273]/60">
+            <div className="min-w-0 flex-1 break-all rounded-lg bg-white px-3 py-1.5 font-mono text-[13px] text-[#326273]/60">
               {status.digest}
             </div>
             {isSimulated ? (
               <span className="inline-flex items-center gap-2">
                 <StatusBadge status="demo" />
-                <span className="text-[11px] font-semibold text-[#9a6f15]">Simulated batch — no on-chain transaction</span>
+                <span className="text-[13px] font-medium text-[#9a6f15]">Simulated batch — no on-chain transaction</span>
               </span>
             ) : (
               <ExplorerLinks digest={status.digest} />
@@ -583,7 +584,7 @@ function BatchStatusPanel({ status }: { status: BatchStatus }) {
         );
       })()}
 
-      <div className="flex items-center gap-3 text-[11px] text-[#326273]/50">
+      <div className="flex items-center gap-3 text-[13px] text-[#326273]/50">
         <Clock size={11} />
         <span>{status.acceptedRows} rows · $ {status.totalAmount}</span>
         {!isDone && !isFailed && <Loader2 size={11} className="animate-spin ml-auto" />}
@@ -609,7 +610,7 @@ function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between gap-4">
       <span className="text-[#326273]/60">{label}</span>
-      <span className="font-semibold text-[#326273]">{value}</span>
+      <span className="font-medium text-[#326273]">{value}</span>
     </div>
   );
 }
@@ -618,11 +619,11 @@ function Control({ label, detail }: { label: string; detail: string }) {
   return (
     <HoverPopup title={label} content={detail}>
       <div className="cursor-pointer rounded-xl bg-[#F6F0ED] p-4 transition-all hover:shadow-md hover:shadow-[#5C9EAD]/10">
-        <div className="flex items-center gap-2 font-semibold text-[#326273]">
-          <CheckCircle2 className="text-[#5C9EAD]" size={16} />
+        <div className="flex items-center gap-2 font-medium text-[#326273]">
+          <CheckCircle2 className="text-[var(--info)]" size={16} />
           {label}
         </div>
-        <div className="mt-1 text-xs text-[#326273]/60">{detail}</div>
+        <div className="mt-1 text-[13px] text-[#326273]/60">{detail}</div>
       </div>
     </HoverPopup>
   );
