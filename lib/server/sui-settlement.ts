@@ -489,15 +489,26 @@ export async function confirmComposedPaymentOnSui(input: {
   const tx = new Transaction();
   tx.setGasBudget(process.env.SUI_COMPOSED_GAS_BUDGET ?? '30000000');
   const [paymentCoin] = tx.splitCoins(tx.gas, [paymentMist]);
-  // The deployed payment_intent::confirm_payment_intent settles the payment
-  // directly and returns nothing — there is no SettleReceipt hot-potato and no
-  // audit_anchor::anchor on the live package. The on-chain audit anchor comes
-  // from the AdminCap-gated audit_anchor::anchor_audit_hash call below.
-  tx.moveCall({
+  // 2026-07-19 package (0xec3b06…): confirm_payment_intent returns the
+  // SettleReceipt hot-potato again — it MUST be consumed in the same PTB by
+  // audit_anchor::anchor or the transaction aborts (unused value without drop).
+  const [settleReceipt] = tx.moveCall({
     target: `${packageId}::payment_intent::confirm_payment_intent`,
     arguments: [
       tx.object(input.intentId),
       paymentCoin,
+      tx.object('0x6'),
+    ],
+  });
+  // Consume the receipt: emits SettlementAnchored binding the settlement to
+  // the evidence ciphertext hash + Walrus blob (both guaranteed non-empty by
+  // the composed-payment caller).
+  tx.moveCall({
+    target: `${packageId}::audit_anchor::anchor`,
+    arguments: [
+      settleReceipt,
+      tx.pure.vector('u8', Array.from(Buffer.from(input.auditHash, 'utf8'))),
+      tx.pure.vector('u8', Array.from(Buffer.from(input.backingBlobId, 'utf8'))),
       tx.object('0x6'),
     ],
   });
@@ -532,10 +543,12 @@ export async function confirmComposedPaymentOnSui(input: {
   const paid = eventBySuffix(events, '::payment_intent::IntentConfirmed');
   const allocated = eventBySuffix(events, '::smart_treasury::TreasuryDeposited');
   const anchored = eventBySuffix(events, '::audit_anchor::AuditAnchored');
+  // Receipt-consuming proof (new package): audit_anchor::anchor must fire.
+  const settlementAnchored = eventBySuffix(events, '::audit_anchor::SettlementAnchored');
   const auditAnchorObjectId =
     typeof anchored?.data.anchor_object === 'string' ? anchored.data.anchor_object : null;
 
-  if (!paid || !anchored || (treasuryAmountMist > 0 && !allocated)) {
+  if (!paid || !anchored || !settlementAnchored || (treasuryAmountMist > 0 && !allocated)) {
     throw new Error(`Composed transaction succeeded but required proof events were missing. Digest: ${result.digest}`);
   }
 
@@ -995,9 +1008,16 @@ export async function recordBatchSettlementOnSui(input: {
   const SPLASH_TREASURY_ID = configIdOrThrow('treasuryId', 'SPLASH_TREASURY_ID');
   const SPLASH_PEG_STATE_ID = configIdOrThrow('pegStateId', 'SPLASH_PEG_STATE_ID');
   const SPLASH_BUSINESS_ACCOUNT_ID = configIdOrThrow('businessAccountId', 'SPLASH_BUSINESS_ACCOUNT_ID');
-  // The deployed batch path is settle_sui_batch: it pays recipients straight
-  // from the SUI-denominated SettlementPool (SPLASH_TREASURY_ID) and needs no
-  // DeepBook pool, compliance-config object, or quote-type argument.
+  // 2026-07-19 package (0xec3b06…): settle_sui_batch pays recipients from the
+  // SUI SettlementPool but now ALSO requires the ComplianceConfig object, a
+  // DeepBook Pool<SUI, QuoteAsset> reference for the liquidity guard, and the
+  // QuoteAsset type argument.
+  const SPLASH_COMPLIANCE_CONFIG_ID = configIdOrThrow('complianceConfigId', 'SPLASH_COMPLIANCE_CONFIG_ID');
+  const DEEPBOOK_POOL_ID = configIdOrThrow('deepbookPoolId', 'DEEPBOOK_POOL_ID');
+  if (!cfg.deepbookQuoteType) {
+    throw new Error('DEEPBOOK_QUOTE_TYPE is not configured — settle_sui_batch<QuoteAsset> needs the DeepBook quote type. Set it in admin → Contract config (or .env.local), or run batches in simulate mode.');
+  }
+  const DEEPBOOK_QUOTE_TYPE = cfg.deepbookQuoteType;
   const SPLASH_TEST_RECIPIENT_ADDRESS = cfg.testRecipientAddress;
   const feeBps = resolveFeeBps({ feeBps: input.feeBps, targetCurrency: input.targetCurrency });
 
@@ -1039,11 +1059,14 @@ export async function recordBatchSettlementOnSui(input: {
     });
     tx.moveCall({
       target: `${SPLASH_PACKAGE_ID}::settlement::settle_sui_batch`,
+      typeArguments: [DEEPBOOK_QUOTE_TYPE],
       arguments: [
         tx.object(SPLASH_ADMIN_CAP_ID),
         tx.object(SPLASH_TREASURY_ID),
         tx.object(SPLASH_BUSINESS_ACCOUNT_ID),
         tx.object(SPLASH_PEG_STATE_ID),
+        tx.object(SPLASH_COMPLIANCE_CONFIG_ID),
+        tx.object(DEEPBOOK_POOL_ID),
         paymentVector,
         tx.pure.u64(feeBps),
         tx.object('0x6'),
@@ -1087,12 +1110,16 @@ export async function recordBatchSettlementOnSui(input: {
     '--assign',
     'payments',
     // AdminCap gates pooled liquidity; the pool pays recipients in SUI directly.
+    // New package: ComplianceConfig + DeepBook pool + <QuoteAsset> are required.
     '--move-call',
     `${SPLASH_PACKAGE_ID}::settlement::settle_sui_batch`,
+    `<${DEEPBOOK_QUOTE_TYPE}>`,
     `@${SPLASH_ADMIN_CAP_ID}`,
     `@${SPLASH_TREASURY_ID}`,
     `@${SPLASH_BUSINESS_ACCOUNT_ID}`,
     `@${SPLASH_PEG_STATE_ID}`,
+    `@${SPLASH_COMPLIANCE_CONFIG_ID}`,
+    `@${DEEPBOOK_POOL_ID}`,
     'payments',
     feeBps.toString(),
     '@0x6',

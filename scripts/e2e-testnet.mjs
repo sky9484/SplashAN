@@ -106,12 +106,21 @@ async function testComposedConfirm(intentId) {
   const tx = new Transaction();
   tx.setGasBudget('30000000');
   const [paymentCoin] = tx.splitCoins(tx.gas, [paymentMist]);
-  // Deployed confirm_payment_intent settles directly and returns nothing —
-  // there is no SettleReceipt hot-potato and no audit_anchor::anchor on the
-  // live package. Audit is anchored via the AdminCap-gated anchor_audit_hash.
-  tx.moveCall({
+  // 2026-07-19 package (0xec3b06…): confirm_payment_intent returns the
+  // SettleReceipt hot-potato — it must be consumed by audit_anchor::anchor in
+  // the same PTB or the transaction aborts.
+  const [settleReceipt] = tx.moveCall({
     target: `${PACKAGE}::payment_intent::confirm_payment_intent`,
     arguments: [tx.object(intentId), paymentCoin, tx.object(CLOCK)],
+  });
+  tx.moveCall({
+    target: `${PACKAGE}::audit_anchor::anchor`,
+    arguments: [
+      settleReceipt,
+      tx.pure.vector('u8', Array.from(Buffer.from(auditHash, 'utf8'))),
+      tx.pure.vector('u8', Array.from(Buffer.from(blobId, 'utf8'))),
+      tx.object(CLOCK),
+    ],
   });
   if (SMART_TREASURY) {
     const [treasuryCoin] = tx.splitCoins(tx.gas, [treasuryMist]);
@@ -137,9 +146,10 @@ async function testComposedConfirm(intentId) {
   const paid = eventBySuffix(events, '::payment_intent::IntentConfirmed') ?? eventBySuffix(events, '::payment_intent::IntentSettled');
   const allocated = eventBySuffix(events, '::smart_treasury::TreasuryDeposited') ?? eventBySuffix(events, '::smart_treasury::Deposited');
   const anchored = eventBySuffix(events, '::audit_anchor::AuditAnchored');
+  const settlementAnchored = eventBySuffix(events, '::audit_anchor::SettlementAnchored');
   return {
     digest,
-    proofEvents: { paid: !!paid, treasuryAllocated: !!allocated, anchored: !!anchored },
+    proofEvents: { paid: !!paid, treasuryAllocated: !!allocated, anchored: !!anchored, settlementAnchored: !!settlementAnchored },
   };
 }
 
@@ -162,13 +172,18 @@ async function testBatch() {
     }),
   );
   const paymentVec = tx.makeMoveVec({ type: `${PACKAGE}::settlement::Payment`, elements: payments });
+  // 2026-07-19 package: settle_sui_batch<QuoteAsset> now requires the
+  // ComplianceConfig and a DeepBook Pool<SUI, QuoteAsset> for the liquidity guard.
   tx.moveCall({
     target: `${PACKAGE}::settlement::settle_sui_batch`,
+    typeArguments: [env('DEEPBOOK_QUOTE_TYPE')],
     arguments: [
       tx.object(ADMIN_CAP),
       tx.object(env('SPLASH_TREASURY_ID')), // SettlementPool<SUI>
       tx.object(BUSINESS),
       tx.object(PEG_STATE),
+      tx.object(env('SPLASH_COMPLIANCE_CONFIG_ID')),
+      tx.object(env('DEEPBOOK_POOL_ID')),
       paymentVec,
       tx.pure.u64(80), // 0.80% corridor fee
       tx.object(CLOCK),
@@ -204,7 +219,7 @@ async function main() {
     console.log(`  intent=${intentId.slice(0, 18)}…`);
     const confirm = await testComposedConfirm(intentId);
     console.log(`✔ Composed confirm       ${confirm.digest}`);
-    console.log(`  proof events: paid=${confirm.proofEvents.paid} treasury=${confirm.proofEvents.treasuryAllocated} anchored=${confirm.proofEvents.anchored}`);
+    console.log(`  proof events: paid=${confirm.proofEvents.paid} treasury=${confirm.proofEvents.treasuryAllocated} anchored=${confirm.proofEvents.anchored} settlementAnchored=${confirm.proofEvents.settlementAnchored}`);
     results.push({ flow: 'Transfer/Invoice (payment_intent)', ok: true, digest, confirmDigest: confirm.digest, proof: confirm.proofEvents });
     results.push({ flow: 'Treasury deposit (in composed tx)', ok: confirm.proofEvents.treasuryAllocated, digest: confirm.digest });
     results.push({ flow: 'Audit anchor (in composed tx)', ok: confirm.proofEvents.anchored, digest: confirm.digest });
@@ -213,16 +228,21 @@ async function main() {
     console.log(`✗ Composed flow FAILED   ${e.message}`);
   }
 
-  // Batch: use the deployed SUI-native settle_sui_batch (pays from the funded
-  // SettlementPool, no DeepBook/compliance config needed).
-  void deepbookReady;
-  try {
-    const batch = await testBatch();
-    console.log(`✔ Batch payout (sui)     ${batch.digest}  (${batch.rows} recipients)`);
-    results.push({ flow: 'Batch payout (settle_sui_batch)', ok: true, digest: batch.digest });
-  } catch (e) {
-    results.push({ flow: 'Batch payout (settle_sui_batch)', ok: false, error: e.message });
-    console.log(`✗ Batch payout FAILED    ${e.message}`);
+  // Batch: the new settle_sui_batch<QuoteAsset> needs DeepBook + compliance
+  // config, and the SettlementPool must hold funds — skip cleanly when unset.
+  if (!deepbookReady) {
+    const missing = ['DEEPBOOK_POOL_ID', 'DEEPBOOK_QUOTE_TYPE', 'SPLASH_COMPLIANCE_CONFIG_ID'].filter((k) => !env(k));
+    results.push({ flow: 'Batch payout (settle_sui_batch)', ok: 'SKIP', missing });
+    console.log(`- Batch payout SKIPPED   needs ${missing.join(', ')}`);
+  } else {
+    try {
+      const batch = await testBatch();
+      console.log(`✔ Batch payout (sui)     ${batch.digest}  (${batch.rows} recipients)`);
+      results.push({ flow: 'Batch payout (settle_sui_batch)', ok: true, digest: batch.digest });
+    } catch (e) {
+      results.push({ flow: 'Batch payout (settle_sui_batch)', ok: false, error: e.message });
+      console.log(`✗ Batch payout FAILED    ${e.message}`);
+    }
   }
 
   console.log(`\n── summary ──`);
