@@ -13,6 +13,7 @@
 import { NextResponse } from 'next/server';
 
 import { requireCustomerRequest } from '@/lib/server/customer-auth';
+import { assertCleanBody, ProvenanceViolationError, provenanceViolationResponse } from '@/lib/auth/provenance-guard';
 import { readJsonBody } from '@/lib/server/http';
 import {
   cancelTreasuryWithdrawal,
@@ -70,6 +71,12 @@ export async function POST(request: Request) {
     );
   }
   const body = await readJsonBody(request);
+  try {
+    assertCleanBody(body, 'treasury');
+  } catch (error) {
+    if (error instanceof ProvenanceViolationError) return provenanceViolationResponse(error);
+    throw error;
+  }
   const ledger = getLedger();
 
   // Cancel a still-pending withdrawal — returns reserved funds to Treasury.

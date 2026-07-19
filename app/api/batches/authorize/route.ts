@@ -1,5 +1,6 @@
 import { after, NextResponse } from 'next/server';
 
+import { assertCleanBody, ProvenanceViolationError, provenanceViolationResponse } from '@/lib/auth/provenance-guard';
 import { requireCustomerRequest } from '@/lib/server/customer-auth';
 import { readJsonBody } from '@/lib/server/http';
 import { createBatch, updateBatch } from '@/lib/server/operations';
@@ -18,6 +19,12 @@ export async function POST(request: Request) {
   if (auth.response) return auth.response;
 
   const body = await readJsonBody(request);
+  try {
+    assertCleanBody(body, 'batches/authorize');
+  } catch (error) {
+    if (error instanceof ProvenanceViolationError) return provenanceViolationResponse(error);
+    throw error;
+  }
   const rows = Array.isArray(body.rows) ? (body.rows as BatchRow[]) : [];
   const totp = String(body.totp ?? '');
   const targetCurrency = typeof body.targetCurrency === 'string' ? body.targetCurrency : 'PHP';

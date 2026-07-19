@@ -50,6 +50,13 @@ export default function ActionCard({ proposal, readOnly = false }: ActionCardPro
                 Untrusted data
               </span>
             )}
+            {/* WS2 truth chip — evidence built on DEMO/MODELED sources says so. */}
+            {model.containsDemoData && (
+              <span className="inline-flex items-center gap-1 rounded-md border border-[var(--warn)] bg-[var(--warn-bg)] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--warn)]">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                Contains demo data
+              </span>
+            )}
           </div>
           <h2 className="mt-3 text-xl font-bold tracking-normal text-[#1F4452]">
             {proposal.explain.recommendation}
@@ -120,11 +127,20 @@ export default function ActionCard({ proposal, readOnly = false }: ActionCardPro
           {model.evidenceRows.map((item) => (
             <span
               key={`${item.source}-${item.ref}`}
-              className={item.tone === 'untrusted'
-                ? 'rounded-md border border-[var(--warn)] bg-[var(--warn-bg)] px-2.5 py-1 text-[13px] font-bold text-[var(--warn)]'
-                : 'rounded-md border border-[var(--ok)] bg-[var(--ok-bg)] px-2.5 py-1 text-[13px] font-bold text-[var(--ok)]'}
+              className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[13px] font-bold ${item.tone === 'untrusted'
+                ? 'border-[var(--warn)] bg-[var(--warn-bg)] text-[var(--warn)]'
+                : 'border-[var(--ok)] bg-[var(--ok-bg)] text-[var(--ok)]'}`}
             >
               {item.source} - {item.trustLabel}
+              {/* WS2 provenance chip: LIVE keeps default styling; anything else
+                  is clearly marked with the existing caution accent. */}
+              <span
+                className={item.statusTone === 'live'
+                  ? 'rounded border border-[var(--ok)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--ok)]'
+                  : 'rounded border border-[var(--warn)] bg-[var(--warn-bg)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--warn)]'}
+              >
+                {item.statusLabel}
+              </span>
             </span>
           ))}
         </div>

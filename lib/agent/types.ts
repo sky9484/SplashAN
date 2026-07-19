@@ -26,7 +26,15 @@ export type ProposalStatus =
 
 export type RiskBand = 'LOW' | 'MEDIUM' | 'HIGH';
 
+/** Track A WS2 — runtime data provenance label carried by every evidence item. */
+export type DataStatus = 'LIVE' | 'STALE' | 'MODELED' | 'DEMO';
+
+/** ALL_LIVE only when every evidence item is status LIVE. */
+export type EvidenceQuality = 'ALL_LIVE' | 'CONTAINS_DEMO_DATA';
+
 export interface EvidenceItem {
+  /** Provenance status of the underlying datum (absent = legacy/unlabeled). */
+  status?: DataStatus;
   source:
     | 'BALANCE'
     | 'PYTH_RATE'
@@ -60,6 +68,8 @@ export interface ProposalExplain {
   risk: RiskBand;
   requiredApprovers: number;
   reasoningTraceRef: string;
+  /** Track A WS2 — set at proposal creation from the evidence statuses. */
+  evidenceQuality?: EvidenceQuality;
 }
 
 export interface SimulationResult {
@@ -93,6 +103,11 @@ export interface UnsignedProposal {
   createdBy: 'OXWAL' | string;
   createdAt: string;
   expiresAt: string;
+  /** Track A §1.4 — canon version; bumped on any canon-field mutation, which
+   *  voids all prior approvals. Absent on legacy rows = 1. */
+  version?: number;
+  /** Server-computed canonical approval hash (lib/proposals/canonical-hash). */
+  approvalHash?: string;
   approvals: { userId: string; role: UserRole; signedAt: string }[];
   settlement?: { digest: string; walrusBlobId: string; auditEventId: string };
 }

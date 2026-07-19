@@ -145,10 +145,11 @@ export default function OxwalDeskPage() {
       const response = await fetch(`/api/proposals/${encodeURIComponent(proposal.id)}/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        // The server derives who is approving from the session; the client
+        // sends only its signature ref and the hash of what it reviewed.
         body: JSON.stringify({
           signatureRef: `sig_chat_${proposal.id}`,
-          signedBy: 'operator-1',
-          actorRole: 'APPROVER',
+          approvalHash: proposal.approvalHash,
         }),
       });
       if (response.ok) {
@@ -223,10 +224,10 @@ export default function OxwalDeskPage() {
       const response = await fetch('/api/oxwal', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        // Track A §1.1: identity and org are server-derived from the session;
+        // sending authority-shaped fields is a provenance violation (400).
         body: JSON.stringify({
           message: prompt,
-          orgId: 'demo-business',
-          actorId: 'operator-1',
           history,
         }),
       });

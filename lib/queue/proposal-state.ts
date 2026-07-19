@@ -1,4 +1,5 @@
-import type { ProposalStatus, SimulationResult, UnsignedProposal, UserRole } from '@/lib/agent/types';
+import type { FinancialImpact, ProposalStatus, SimulationResult, UnsignedProposal, UserRole } from '@/lib/agent/types';
+import { proposalApprovalHash } from '../proposals/canonical-hash.ts';
 import { recordProposalTransition } from '../observability/proposals.ts';
 
 export class ProposalStateError extends Error {
@@ -76,6 +77,55 @@ function rejectIfUnsignedOutboundSubmission(proposal: UnsignedProposal, event: P
   }
 }
 
+/** Track A §1.4 — anchor the canon: version defaults to 1 and the approval
+ *  hash is (re)computed server-side. Called on create and hydrate. */
+export function withApprovalCanon(proposal: UnsignedProposal): UnsignedProposal {
+  const versioned = { ...proposal, version: proposal.version ?? 1 };
+  return { ...versioned, approvalHash: proposalApprovalHash(versioned) };
+}
+
+/** Approval-time integrity: the stored hash must equal a fresh recompute of
+ *  the stored row. A mismatch means a canon field was mutated without going
+ *  through reviseProposalCanon — approvals must not attach to it. */
+function assertCanonIntact(proposal: UnsignedProposal, eventType: ProposalTransitionEvent['type']) {
+  if (!proposal.approvalHash) return; // legacy row — canon anchored on next write
+  const recomputed = proposalApprovalHash(proposal);
+  if (recomputed !== proposal.approvalHash) {
+    throw new ProposalStateError(
+      `${eventType} rejected: approval hash mismatch — the proposal changed since it was hashed; re-approval is required`,
+    );
+  }
+}
+
+export type CanonRevision = {
+  financialImpact?: Partial<FinancialImpact>;
+  expiresAt?: string;
+  corridor?: string;
+};
+
+/** Track A §1.4 — the ONLY legal way to mutate a canon field (e.g. a quote or
+ *  route refresh): bumps the version, recomputes the hash, and voids ALL
+ *  prior approvals. Approvals never survive a mutation. */
+export function reviseProposalCanon(proposal: UnsignedProposal, revision: CanonRevision): UnsignedProposal {
+  const revised: UnsignedProposal = {
+    ...proposal,
+    corridor: revision.corridor ?? proposal.corridor,
+    expiresAt: revision.expiresAt ?? proposal.expiresAt,
+    explain: {
+      ...proposal.explain,
+      financialImpact: { ...proposal.explain.financialImpact, ...revision.financialImpact },
+    },
+    version: (proposal.version ?? 1) + 1,
+    approvals: [],
+    // Collected approvals are void; the proposal re-enters the flow before
+    // the approval gate (policy re-evaluates on the next submission).
+    status: proposal.status === 'PENDING_APPROVAL' || proposal.status === 'APPROVED' || proposal.status === 'POLICY_EVALUATED'
+      ? 'SIMULATED'
+      : proposal.status,
+  };
+  return { ...revised, approvalHash: proposalApprovalHash(revised) };
+}
+
 function actorForEvent(event: ProposalTransitionEvent) {
   if (event.type === 'APPROVE') return event.approval.userId;
   if (event.type === 'SIGN') return event.signedBy;
@@ -117,6 +167,7 @@ function applyProposalTransition(
       return { ...proposal, status: 'APPROVED' };
     case 'APPROVE': {
       assertTransition(proposal.status, ['PENDING_APPROVAL'], event.type);
+      assertCanonIntact(proposal, event.type);
       assertApprovalAllowed(proposal, event.approval);
       return markApprovedIfReady({
         ...proposal,
@@ -125,6 +176,7 @@ function applyProposalTransition(
     }
     case 'SIGN':
       assertTransition(proposal.status, ['APPROVED'], event.type);
+      assertCanonIntact(proposal, event.type);
       if (!event.policyAuthorized) {
         throw new ProposalStateError('policy authorization is required before signing');
       }
@@ -220,8 +272,11 @@ export class InMemoryProposalStore {
   hydrate(proposals: UnsignedProposal[]) {
     for (const proposal of proposals) {
       if (this.proposalsById.has(proposal.id)) continue;
-      this.proposalsById.set(proposal.id, proposal);
-      this.idsByIdempotencyKey.set(proposal.idempotencyKey, proposal.id);
+      // Legacy rows without a stored hash get anchored now; rows WITH a
+      // stored hash keep it verbatim so a drifted row fails assertCanonIntact.
+      const anchored = proposal.approvalHash ? proposal : withApprovalCanon(proposal);
+      this.proposalsById.set(anchored.id, anchored);
+      this.idsByIdempotencyKey.set(anchored.idempotencyKey, anchored.id);
     }
   }
 
@@ -237,10 +292,11 @@ export class InMemoryProposalStore {
       throw new ProposalStateError(`proposal ${proposal.id} already exists`);
     }
 
-    this.proposalsById.set(proposal.id, proposal);
-    this.idsByIdempotencyKey.set(proposal.idempotencyKey, proposal.id);
-    this.recordWrite(proposal);
-    return proposal;
+    const anchored = withApprovalCanon(proposal);
+    this.proposalsById.set(anchored.id, anchored);
+    this.idsByIdempotencyKey.set(anchored.idempotencyKey, anchored.id);
+    this.recordWrite(anchored);
+    return anchored;
   }
 
   get(id: string): UnsignedProposal | null {
@@ -256,6 +312,18 @@ export class InMemoryProposalStore {
     if (!proposal) throw new ProposalStateError(`proposal ${id} was not found`);
 
     const next = transitionProposal(proposal, event);
+    this.proposalsById.set(id, next);
+    this.recordWrite(next);
+    return next;
+  }
+
+  /** Track A §1.4 — canon mutation (quote/route refresh): version bump, hash
+   *  recompute, all prior approvals voided. */
+  revise(id: string, revision: CanonRevision): UnsignedProposal {
+    const proposal = this.proposalsById.get(id);
+    if (!proposal) throw new ProposalStateError(`proposal ${id} was not found`);
+
+    const next = reviseProposalCanon(proposal, revision);
     this.proposalsById.set(id, next);
     this.recordWrite(next);
     return next;

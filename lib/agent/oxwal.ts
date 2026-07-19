@@ -5,8 +5,10 @@ import { estimateNettingSavedUsd, getCorridorFeeBps, getUsdCorridorByCurrency } 
 import { getUsdyNetApyPct } from '../server/usdy.ts';
 import { InMemoryProposalStore } from '../queue/proposal-state.ts';
 import { makeProposalWriter } from '../queue/proposal-persistence.ts';
+import { evidenceQualityOf, makeEnvelope, type Envelope } from './envelope.ts';
 import type {
   ComplianceResult,
+  DataStatus,
   EvidenceItem,
   ProposalKind,
   ProposalStatus,
@@ -103,6 +105,10 @@ export const OXWAL_SYSTEM_PROMPT = [
   'Never invent a rate, balance, counterparty, invoice, liquidity figure, or netting figure.',
   'State confidence honestly. When confidence is below 0.6, recommend human review explicitly.',
   'You do not decide requiredApprovers, tier, or whether something auto-executes. The deterministic policy engine decides that.',
+  'Every read tool result arrives in a truth envelope with a status of LIVE, STALE, MODELED, or DEMO.',
+  'Never describe DEMO or MODELED data as current fact. When you cite it, say it is demo or modeled data.',
+  'When asked about data provenance, state each figure\'s envelope source and status honestly.',
+  'Proposals built on any non-LIVE evidence are flagged CONTAINS_DEMO_DATA and always require human approval.',
 ].join('\n');
 
 export const READ_TOOL_NAMES = [
@@ -578,8 +584,13 @@ function assertNoRawDestination(input: Record<string, unknown>) {
   }
 }
 
-function evidence(source: EvidenceItem['source'], ref: string, trustedFlag: boolean): EvidenceItem {
-  return { source, ref, observedAt: nowIso(), trusted: trustedFlag };
+function evidence(
+  source: EvidenceItem['source'],
+  ref: string,
+  trustedFlag: boolean,
+  status: DataStatus = 'DEMO',
+): EvidenceItem {
+  return { source, ref, observedAt: nowIso(), trusted: trustedFlag, status };
 }
 
 function idempotencyKey(parts: unknown[]) {
@@ -635,6 +646,8 @@ async function createDraftProposal(input: {
         nettingSaved: input.nettingSaved,
       },
       evidence: input.evidence,
+      // WS2 honesty flag: any non-LIVE evidence marks the whole proposal.
+      evidenceQuality: evidenceQualityOf(input.evidence),
       confidence: input.confidence ?? 0.72,
       risk: input.risk ?? 'MEDIUM',
       requiredApprovers: 0,
@@ -886,7 +899,7 @@ export async function proposeTreasuryAllocation(input: unknown): Promise<Unsigne
     amountIn: usdMicro(amountUsd),
     currencyIn: 'USDC',
     yieldDeltaBps: treasuryYieldBps(),
-    evidence: [evidence('TREASURY', orgId, true), evidence('CORRIDOR_LIQUIDITY', corridor, true)],
+    evidence: [evidence('TREASURY', orgId, true), evidence('CORRIDOR_LIQUIDITY', corridor, true, 'MODELED')],
     risk: 'LOW',
     confidence: 0.76,
   });
@@ -928,7 +941,7 @@ export async function proposeNettingSettlement(input: unknown): Promise<Unsigned
     amountOut: usdMicro(amountUsd),
     currencyOut: 'USDC',
     nettingSaved: usdMicro(Math.max(0, amountUsd * 0.08)),
-    evidence: [evidence('NETTING', `${orgId}:${corridor}`, true), ...ids.map((id) => evidence('COUNTERPARTY', id, true))],
+    evidence: [evidence('NETTING', `${orgId}:${corridor}`, true, 'MODELED'), ...ids.map((id) => evidence('COUNTERPARTY', id, true))],
     risk: 'MEDIUM',
     confidence: 0.66,
   });
@@ -983,10 +996,37 @@ export const oxwalTools = {
   proposeBatchPayout,
 };
 
+/** WS2 — honest source labels per read tool. All read data is fixture- or
+ *  model-backed today (DEMO/MODELED); the Track B Postgres sources will flip
+ *  these to "ledger.postgres"/"pyth.hermes" and the statuses to LIVE. */
+const READ_TOOL_SOURCES: Record<ReadToolName, string> = {
+  getBalances: 'fixture.balances',
+  getTreasuryState: 'fixture.treasury',
+  getCorridorLiquidity: 'model.corridor-liquidity',
+  getRate: 'fixture.rates',
+  getCounterparty: 'fixture.counterparties',
+  getInvoice: 'fixture.invoices',
+  getNettingOpportunities: 'model.netting',
+  getComplianceStatus: 'fixture.screening',
+};
+
+export function envelopeForReadTool(name: ReadToolName, result: unknown): Envelope<unknown> {
+  const record = result as { orgId?: unknown; observedAt?: unknown };
+  return makeEnvelope({
+    data: result,
+    source: READ_TOOL_SOURCES[name],
+    orgId: typeof record?.orgId === 'string' ? record.orgId : undefined,
+    observedAt: typeof record?.observedAt === 'string' ? new Date(record.observedAt) : undefined,
+  });
+}
+
 export async function executeOxwalTool(name: string, input: unknown) {
   assertNoExecutionTools();
   if (!(name in oxwalTools)) throw new Error(`unknown 0xWal tool: ${name}`);
-  return oxwalTools[name as OxwalToolName](input);
+  const result = await oxwalTools[name as OxwalToolName](input);
+  // Every read result 0xWal consumes travels inside a truth envelope;
+  // propose tools return the UnsignedProposal itself (state, not evidence).
+  return READ_TOOL_SET.has(name) ? envelopeForReadTool(name as ReadToolName, result) : result;
 }
 
 function toolCategory(name: OxwalToolName): ToolCategory {
@@ -1137,8 +1177,9 @@ async function* runClaudeToolLoop(request: OxwalAgentRequest): AsyncGenerator<Ox
       try {
         const result = await executeOxwalTool(name, toolUse.input);
         if (isUnsignedProposal(result)) yield { type: 'proposal', proposal: result };
-        if (isInvoiceForAgent(result)) {
-          for (const warning of result.warnings) yield { type: 'warning', warning };
+        const payload = (result as Envelope<unknown>)?.data ?? result;
+        if (isInvoiceForAgent(payload)) {
+          for (const warning of payload.warnings) yield { type: 'warning', warning };
         }
         results.push({
           type: 'tool_result',
@@ -1226,7 +1267,7 @@ const SPLASH_ANSWERS: Array<{ test: RegExp; reply: string; skipIf?: RegExp }> = 
   {
     // Balances
     test: /\b(balance|balances|how much (do|have) (i|we)|available funds|float)\b/,
-    reply: 'Your Available (instant) and Smart Treasury balances live on the Overview and Treasury pages. From here I can read balances into a proposal — say "allocate idle treasury" or start a transfer and I will pull the numbers with evidence attached.',
+    reply: 'Your Available (instant) and Smart Treasury balances live on the Overview and Treasury pages. From here I can read balances into a proposal — say "allocate idle treasury" or start a transfer and I will pull the numbers with evidence attached. Heads up: desk balance figures are demo data today, and every evidence item carries its LIVE or DEMO label.',
   },
   {
     // Compliance / KYB / AML / limits

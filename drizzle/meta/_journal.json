@@ -15,6 +15,13 @@
       "when": 1784399223120,
       "tag": "0001_dapper_the_watchers",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1784432703467,
+      "tag": "0002_track_a_authority",
+      "breakpoints": true
     }
   ]
 }

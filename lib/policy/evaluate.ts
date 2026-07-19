@@ -130,6 +130,10 @@ export function evaluatePolicy(ctx: PolicyContext): PolicyDecision {
     return { outcome: 'BLOCK', reason: 'compliance hold' };
   }
 
+  // WS2 belt-and-braces: evidence that is not ALL_LIVE can never auto-execute,
+  // whatever the autonomy tier — a human sees DEMO/MODELED data before money moves.
+  const forceHumanApproval = proposal.explain.evidenceQuality === 'CONTAINS_DEMO_DATA';
+
   const amount = amountUsdMicro(proposal);
 
   if (OUTBOUND_KINDS.has(proposal.kind)) {
@@ -163,12 +167,14 @@ export function evaluatePolicy(ctx: PolicyContext): PolicyDecision {
       policy.whitelistedAutoKinds.includes(proposal.kind)
       && proposal.tier === 'TIER_2_SCOPED_AUTO'
     ) {
+      if (forceHumanApproval) return { outcome: 'REQUIRE_APPROVAL', approvers: 1 };
       return { outcome: 'AUTO_EXECUTE' };
     }
   }
 
   if (proposal.kind === 'INTERNAL_TRANSFER') {
     if (amount <= policy.tier1ThresholdUsd && actorCanAutoInternal(actor)) {
+      if (forceHumanApproval) return { outcome: 'REQUIRE_APPROVAL', approvers: 1 };
       return { outcome: 'AUTO_EXECUTE' };
     }
     return { outcome: 'REQUIRE_APPROVAL', approvers: approvalCountForAmount(amount, policy) };

@@ -143,6 +143,19 @@ export const intentTransitions = pgTable('intent_transitions', {
   ...timestamps,
 }, (table) => [index('transitions_intent_idx').on(table.intentId)]);
 
+/** Track A — server-owned policy record. Thresholds are BIGINT USD micro
+ *  units; the client can never supply any of these. */
+export const orgPolicies = pgTable('org_policies', {
+  orgId: text('org_id').primaryKey().references(() => organizations.id),
+  tier1ThresholdUsdMicro: bigint('tier1_threshold_usd_micro', { mode: 'bigint' }).notNull(),
+  dualApprovalThresholdUsdMicro: bigint('dual_approval_threshold_usd_micro', { mode: 'bigint' }).notNull(),
+  whitelistedAutoKinds: jsonb('whitelisted_auto_kinds').notNull(),
+  operatingMinimumByCorridor: jsonb('operating_minimum_by_corridor').notNull(),
+  perCorridorState: jsonb('per_corridor_state').notNull(),
+  globalState: text('global_state').notNull().default('ARMED'),
+  ...timestamps,
+});
+
 export const proposals = pgTable('proposals', {
   id: text('id').primaryKey(),
   orgId: text('org_id').notNull().references(() => organizations.id),
@@ -159,6 +172,10 @@ export const proposals = pgTable('proposals', {
   simulation: jsonb('simulation'),
   settlement: jsonb('settlement'),
   requiredApprovers: bigint('required_approvers', { mode: 'number' }).notNull().default(1),
+  /** Track A §1.4 — canon versioning: any mutation to a canon field bumps the
+   *  version, recomputes approval_hash, and voids all prior approvals. */
+  version: bigint('version', { mode: 'number' }).notNull().default(1),
+  approvalHash: text('approval_hash'),
   expiresAt: timestamp('expires_at', { withTimezone: true }),
   ...timestamps,
 }, (table) => [

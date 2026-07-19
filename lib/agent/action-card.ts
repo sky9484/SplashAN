@@ -1,4 +1,4 @@
-import type { EvidenceItem, ProposalKind, ProposalStatus, RiskBand, SimulationResult, UserRole } from './types';
+import type { DataStatus, EvidenceItem, EvidenceQuality, ProposalKind, ProposalStatus, RiskBand, SimulationResult, UserRole } from './types';
 
 type AmountLike = bigint | number | string | undefined;
 
@@ -24,6 +24,8 @@ export type ActionCardProposal = {
   createdBy: 'OXWAL' | string;
   createdAt: string;
   expiresAt: string;
+  version?: number;
+  approvalHash?: string;
   approvals: { userId: string; role: UserRole; signedAt: string }[];
   simulation?: SimulationResult;
   explain: {
@@ -34,6 +36,7 @@ export type ActionCardProposal = {
     risk: RiskBand;
     requiredApprovers: number;
     reasoningTraceRef: string;
+    evidenceQuality?: EvidenceQuality;
   };
 };
 
@@ -47,6 +50,9 @@ export type ActionCardEvidence = EvidenceItem & {
   label: string;
   trustLabel: 'Trusted' | 'Untrusted';
   tone: 'trusted' | 'untrusted';
+  /** WS2 truth chip: LIVE renders default; STALE/MODELED/DEMO use caution. */
+  statusLabel: DataStatus;
+  statusTone: 'live' | 'caution';
 };
 
 export type ActionCardModel = {
@@ -58,6 +64,8 @@ export type ActionCardModel = {
   approverText: string;
   primaryActionLabel: 'Sign & approve' | 'Send for approval';
   hasUntrustedEvidence: boolean;
+  /** WS2 — true when any evidence item is not LIVE (judge-facing honesty). */
+  containsDemoData: boolean;
 };
 
 function parseAmount(value: AmountLike): number | null {
@@ -91,12 +99,17 @@ export function buildActionCardModel(proposal: ActionCardProposal): ActionCardMo
   const requiredApprovers = Math.max(0, proposal.explain.requiredApprovers);
   const approvalsCollected = new Set(proposal.approvals.map((approval) => approval.userId)).size;
   const confidencePercent = Math.max(0, Math.min(100, Math.round(proposal.explain.confidence * 100)));
-  const evidenceRows = proposal.explain.evidence.map((item) => ({
-    ...item,
-    label: `${item.source}:${item.ref}`,
-    trustLabel: item.trusted ? 'Trusted' as const : 'Untrusted' as const,
-    tone: item.trusted ? 'trusted' as const : 'untrusted' as const,
-  }));
+  const evidenceRows = proposal.explain.evidence.map((item) => {
+    const statusLabel: DataStatus = item.status ?? 'DEMO';
+    return {
+      ...item,
+      label: `${item.source}:${item.ref}`,
+      trustLabel: item.trusted ? 'Trusted' as const : 'Untrusted' as const,
+      tone: item.trusted ? 'trusted' as const : 'untrusted' as const,
+      statusLabel,
+      statusTone: statusLabel === 'LIVE' ? 'live' as const : 'caution' as const,
+    };
+  });
 
   const pendingApprovals = Math.max(0, requiredApprovers - approvalsCollected);
   const primaryActionLabel = pendingApprovals > 0
@@ -137,5 +150,8 @@ export function buildActionCardModel(proposal: ActionCardProposal): ActionCardMo
     approverText: `${approvalsCollected}/${requiredApprovers}`,
     primaryActionLabel,
     hasUntrustedEvidence: evidenceRows.some((item) => !item.trusted),
+    containsDemoData: proposal.explain.evidenceQuality
+      ? proposal.explain.evidenceQuality === 'CONTAINS_DEMO_DATA'
+      : evidenceRows.some((item) => item.statusLabel !== 'LIVE'),
   };
 }

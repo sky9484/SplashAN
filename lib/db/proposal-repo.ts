@@ -57,7 +57,7 @@ export async function ensureOrganization(db: DrizzleDb, orgId: string): Promise<
  *  atomically. Called after every store mutation. */
 export async function upsertProposal(db: DrizzleDb, proposal: UnsignedProposal): Promise<void> {
   await ensureOrganization(db, proposal.orgId);
-  await db.transaction(async (tx: any) => {
+  await db.transaction(async (tx) => {
     const row = {
       id: proposal.id,
       orgId: proposal.orgId,
@@ -72,6 +72,8 @@ export async function upsertProposal(db: DrizzleDb, proposal: UnsignedProposal):
       simulation: proposal.simulation ? encodeJsonWithBigints(proposal.simulation) : null,
       settlement: proposal.settlement ? encodeJsonWithBigints(proposal.settlement) : null,
       requiredApprovers: proposal.explain.requiredApprovers,
+      version: proposal.version ?? 1,
+      approvalHash: proposal.approvalHash ?? null,
       expiresAt: proposal.expiresAt ? new Date(proposal.expiresAt) : null,
       updatedAt: new Date(),
     };
@@ -103,6 +105,8 @@ function rowToProposal(row: typeof proposals.$inferSelect, approvalRows: (typeof
     corridor: row.corridor ?? undefined,
     unsignedTxBytes: row.unsignedTxBytes ?? undefined,
     createdBy: row.createdBy,
+    version: row.version ?? 1,
+    approvalHash: row.approvalHash ?? undefined,
     createdAt: row.createdAt.toISOString(),
     expiresAt: row.expiresAt ? row.expiresAt.toISOString() : undefined,
     approvals: approvalRows.map((approval) => ({

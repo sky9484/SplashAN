@@ -102,8 +102,10 @@ test('happy path drafts, simulates, approves, signs, and submits with human auth
   });
   assert.equal(approved.status, 'APPROVED');
 
+  // §1.4: expiresAt is a canon field — overriding it out-of-band would trip
+  // the approval-hash guard. The proposal's own (unexpired) quote is used.
   const submitted = markProposalSubmitted({
-    proposal: { ...approved, expiresAt: future },
+    proposal: approved,
     actor: 'APPROVER',
     policy: policy(),
     simulation: approved.simulation,

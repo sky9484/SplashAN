@@ -1,75 +1,27 @@
 import { z } from 'zod';
 
-import type { ComplianceResult, OrgPolicy, ProposalKind, UserRole } from '@/lib/agent/types';
 import { getOxwalProposalStore } from '@/lib/agent/oxwal';
+import { resolveAuthorityForSession } from '@/lib/auth/authority';
+import { assertCleanBody, ProvenanceViolationError, provenanceViolationResponse } from '@/lib/auth/provenance-guard';
+import { resolveComplianceForProposal } from '@/lib/compliance/proposal-screening';
+import { proposalApprovalHash } from '@/lib/proposals/canonical-hash';
 import { ensureProposalStoreHydrated } from '@/lib/queue/proposal-persistence';
 import { requireCustomerRequest } from '@/lib/server/customer-auth';
 import { readJsonBody } from '@/lib/server/http';
 import { authorizeProposalSubmission } from '@/lib/safety/submit-guard';
 
-const userRoles: UserRole[] = ['OWNER', 'FINANCE_ADMIN', 'MAKER', 'APPROVER', 'VIEWER', 'AUDITOR', 'DEVELOPER'];
-
+/**
+ * Track A §1.1 — the client may send ONLY its decision and signature binding.
+ * Identity, role, policy, and compliance are derived server-side
+ * (lib/auth/authority.ts); authority-shaped body fields are rejected with 400
+ * by the provenance guard before parsing.
+ */
 const submitSchema = z.object({
   signatureRef: z.string().trim().min(1),
-  signedBy: z.string().trim().min(1),
-  actorRole: z.enum(userRoles).default('APPROVER'),
-  policy: z.object({
-    tier1ThresholdUsd: z.union([z.string(), z.number()]).optional(),
-    dualApprovalThresholdUsd: z.union([z.string(), z.number()]).optional(),
-    whitelistedAutoKinds: z.array(z.string()).optional(),
-    operatingMinimumByCorridor: z.record(z.string(), z.union([z.string(), z.number()])).optional(),
-    perCorridorState: z.record(z.string(), z.enum(['ARMED', 'PAUSED'])).optional(),
-    globalState: z.enum(['ARMED', 'PAUSED']).optional(),
-  }).optional(),
-  compliance: z.object({
-    kytPassed: z.boolean(),
-    kybStatus: z.enum(['VERIFIED', 'PENDING', 'FAILED']),
-    sanctionsClear: z.boolean(),
-    flags: z.array(z.string()),
-  }).optional(),
+  decision: z.enum(['APPROVE', 'REJECT']).default('APPROVE'),
+  /** Optional binding commitment: the canonical hash the approver reviewed. */
+  approvalHash: z.string().trim().optional(),
 });
-
-function bigintFrom(value: string | number | undefined, fallback: bigint) {
-  if (value === undefined) return fallback;
-  try {
-    return BigInt(value);
-  } catch {
-    return fallback;
-  }
-}
-
-function policyFromBody(orgId: string, bodyPolicy: z.infer<typeof submitSchema>['policy']): OrgPolicy {
-  const operatingMinimumByCorridor = Object.fromEntries(
-    Object.entries(bodyPolicy?.operatingMinimumByCorridor ?? {}).map(([corridor, amount]) => [corridor, bigintFrom(amount, BigInt(0))]),
-  );
-  return {
-    orgId,
-    tier1ThresholdUsd: bigintFrom(bodyPolicy?.tier1ThresholdUsd, BigInt(5_000_000)),
-    dualApprovalThresholdUsd: bigintFrom(bodyPolicy?.dualApprovalThresholdUsd, BigInt(50_000_000)),
-    whitelistedAutoKinds: (bodyPolicy?.whitelistedAutoKinds ?? ['TREASURY_ALLOCATE'])
-      .filter((kind): kind is ProposalKind => [
-        'PAYMENT',
-        'INTERNAL_TRANSFER',
-        'FX_CONVERT',
-        'TREASURY_ALLOCATE',
-        'TREASURY_REDEEM',
-        'BATCH_PAYOUT',
-        'NETTING_SETTLE',
-      ].includes(kind)),
-    operatingMinimumByCorridor,
-    perCorridorState: bodyPolicy?.perCorridorState ?? {},
-    globalState: bodyPolicy?.globalState ?? 'ARMED',
-  };
-}
-
-function complianceFromBody(compliance?: ComplianceResult): ComplianceResult {
-  return compliance ?? {
-    kytPassed: true,
-    kybStatus: 'VERIFIED',
-    sanctionsClear: true,
-    flags: [],
-  };
-}
 
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data, (_key, value) => (typeof value === 'bigint' ? value.toString() : value)), {
@@ -83,25 +35,61 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (auth.response) return auth.response;
 
   const { id } = await params;
-  const parsed = submitSchema.safeParse(await readJsonBody(request));
+  const body = await readJsonBody(request);
+  try {
+    assertCleanBody(body, `proposals/${id}/submit`);
+  } catch (error) {
+    if (error instanceof ProvenanceViolationError) return provenanceViolationResponse(error);
+    throw error;
+  }
+  const parsed = submitSchema.safeParse(body);
   if (!parsed.success) return json({ error: 'Invalid proposal submission' }, 400);
+
+  // Server-derived authority: session identity → DB membership → org policy.
+  const ctx = await resolveAuthorityForSession(auth.session);
 
   const store = getOxwalProposalStore();
   // W1: after a cold start, open proposals live in Postgres until first touch.
   await ensureProposalStoreHydrated(store);
   const proposal = store.get(id);
-  if (!proposal) return json({ error: 'Proposal not found' }, 404);
+  // Tenancy: a proposal outside the caller's org does not exist for them.
+  if (!proposal || proposal.orgId !== ctx.orgId) return json({ error: 'Proposal not found' }, 404);
   if (!proposal.simulation) return json({ error: 'Proposal must be simulated before submission' }, 409);
 
+  // §1.4 approval binding — recompute the canonical hash from the stored row.
+  const currentHash = proposalApprovalHash(proposal);
+  if (proposal.approvalHash && proposal.approvalHash !== currentHash) {
+    console.error(`[approval-hash] stored hash mismatch on ${id} — possible unversioned canon mutation`);
+    return json({ error: 'Approval hash mismatch — the proposal changed and must be re-reviewed', code: 'APPROVAL_HASH_MISMATCH' }, 409);
+  }
+  if (parsed.data.approvalHash && parsed.data.approvalHash !== currentHash) {
+    return json({ error: 'Approval hash mismatch — the proposal changed since you reviewed it; re-approval is required', code: 'APPROVAL_HASH_MISMATCH' }, 409);
+  }
+
+  if (parsed.data.decision === 'REJECT') {
+    const rejected = store.transition(id, { type: 'REJECT', reason: `rejected by ${ctx.userId}` });
+    await store.flush();
+    return json({ proposal: rejected });
+  }
+
+  // §1.5 maker-checker: the state machine enforces maker≠checker against the
+  // DB-derived ctx.userId, never a request claim.
+  if (proposal.createdBy !== 'OXWAL' && proposal.createdBy === ctx.userId) {
+    return json({ error: 'Maker cannot approve their own proposal' }, 403);
+  }
+
   try {
+    // §1.4 TOCTOU — policy, quote expiry, and compliance are re-evaluated NOW
+    // (approval/submit time), not just at proposal time. Compliance comes
+    // from persisted screening records; a missing record BLOCKS.
     const policyDecision = authorizeProposalSubmission({
       proposal,
-      actor: parsed.data.actorRole,
-      policy: policyFromBody(proposal.orgId, parsed.data.policy),
+      actor: ctx.role,
+      policy: ctx.policy,
       simulation: proposal.simulation,
-      compliance: complianceFromBody(parsed.data.compliance),
+      compliance: resolveComplianceForProposal(proposal),
       signatureRef: parsed.data.signatureRef,
-      signedBy: parsed.data.signedBy,
+      signedBy: ctx.userId,
     });
 
     // Walk the maker-checker chain from wherever the proposal currently sits.
@@ -122,7 +110,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (current.status === 'PENDING_APPROVAL') {
       current = store.transition(id, {
         type: 'APPROVE',
-        approval: { userId: parsed.data.signedBy, role: parsed.data.actorRole, signedAt },
+        approval: { userId: ctx.userId, role: ctx.role, signedAt },
       });
       if (current.status === 'PENDING_APPROVAL') {
         // Dual-control: this signature is recorded; a distinct co-approver
@@ -140,7 +128,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       : store.transition(id, {
           type: 'SIGN',
           signatureRef: parsed.data.signatureRef,
-          signedBy: parsed.data.signedBy,
+          signedBy: ctx.userId,
           policyAuthorized: true,
           signedAt,
         });

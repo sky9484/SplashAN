@@ -25,6 +25,7 @@ import {
   type FundingSelection,
 } from '@/lib/funding/registry';
 import { requireCustomerRequest } from '@/lib/server/customer-auth';
+import { assertCleanBody, ProvenanceViolationError, provenanceViolationResponse } from '@/lib/auth/provenance-guard';
 import { readJsonBody } from '@/lib/server/http';
 
 export const maxDuration = 60;
@@ -71,7 +72,14 @@ export async function POST(request: Request) {
   const auth = await requireCustomerRequest(request);
   if (auth.response) return auth.response;
 
-  const parsed = authorizeSchema.safeParse(await readJsonBody(request));
+  const rawBody = await readJsonBody(request);
+  try {
+    assertCleanBody(rawBody, 'transfers/authorize');
+  } catch (error) {
+    if (error instanceof ProvenanceViolationError) return provenanceViolationResponse(error);
+    throw error;
+  }
+  const parsed = authorizeSchema.safeParse(rawBody);
   if (!parsed.success) return NextResponse.json({ error: 'Invalid transfer authorization' }, { status: 400 });
   const body = parsed.data;
   const totp = String(body.totp ?? '');
