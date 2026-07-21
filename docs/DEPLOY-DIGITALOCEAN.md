@@ -24,7 +24,7 @@ steady load. Both build from the GitHub repos this project pushes to
    | Variable | Required | Notes |
    |---|---|---|
    | `CUSTOMER_SESSION_SECRET` | **Yes** | ≥32 random chars: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
-   | `CUSTOMER_EMAIL` / `CUSTOMER_PASSWORD` | **Yes** | Production login; the dev fallback (`demo@splash.finance`) is disabled in prod |
+   | `CUSTOMER_EMAIL` / `CUSTOMER_PASSWORD` | **Yes** | Production login; the dev fallback (`splash@demo`) is disabled in prod |
    | `ADMIN_EMAIL` / `ADMIN_PASSWORD` / `ADMIN_SESSION_SECRET` | Yes | Admin console |
    | `ANTHROPIC_API_KEY` (+ `ANTHROPIC_MODEL`) | Recommended | Without it 0xWal runs the local planner (still functional) |
    | `NEXT_PUBLIC_APP_URL` | **Yes** | e.g. `https://v1.splashz.xyz` — used by the request-origin guard |

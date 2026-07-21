@@ -10,8 +10,8 @@ import IsometricAuthShell from '@/components/auth/IsometricAuthShell';
 import SplashLoading from '@/components/SplashLoading';
 
 const DEMO = {
-  email: 'demo@splash.finance',
-  password: 'Demo@12345',
+  email: 'splash@demo',
+  password: 'splash@123',
 };
 
 export default function LoginPage() {

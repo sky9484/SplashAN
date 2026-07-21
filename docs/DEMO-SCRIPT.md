@@ -1,7 +1,7 @@
 # Splash live demo run sheet
 
 Covers, in order: **1) Transfer · 2) Batch payout · 3) 0xWal · 4) Invoice loop · 5) Treasury.**
-Login: `demo@splash.finance` / `Demo@12345`.
+Login: `splash@demo` / `splash@123`.
 Branch: `w9/type-color-discipline` (the polished surfaces — PR #3).
 
 ---
