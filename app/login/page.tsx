@@ -3,16 +3,11 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
-import { ArrowRight, Eye, EyeOff, Lock, Mail, Sparkles } from 'lucide-react';
+import { ArrowRight, Eye, EyeOff, Lock, Mail } from 'lucide-react';
 import { toast } from 'sonner';
 
 import IsometricAuthShell from '@/components/auth/IsometricAuthShell';
 import SplashLoading from '@/components/SplashLoading';
-
-const DEMO = {
-  email: 'splash@demo',
-  password: 'splash@123',
-};
 
 export default function LoginPage() {
   const router = useRouter();
@@ -55,12 +50,6 @@ export default function LoginPage() {
     } finally {
       setIsSubmitting(false);
     }
-  }
-
-  function fillDemo() {
-    setEmail(DEMO.email);
-    setPassword(DEMO.password);
-    toast.success('Demo account filled. Sign in when ready.');
   }
 
   if (authorizing) return <SplashLoading label="Securing your session" />;
@@ -132,18 +121,6 @@ export default function LoginPage() {
           {!isSubmitting ? <ArrowRight aria-hidden="true" /> : null}
         </button>
       </form>
-
-      <section className="iso-demo-card" aria-label="Demo account">
-        <div className="iso-demo-heading">
-          <span><Sparkles aria-hidden="true" /> Demo account</span>
-          <button type="button" onClick={fillDemo}>Auto fill</button>
-        </div>
-        <p>Explore the complete dashboard with ready-made settlement activity.</p>
-        <div className="iso-demo-values">
-          <span><small>Email</small><code>{DEMO.email}</code></span>
-          <span><small>Password</small><code>{DEMO.password}</code></span>
-        </div>
-      </section>
 
       <p className="iso-auth-switch">
         New to Splash? <Link href="/signup">Create a business account</Link>
