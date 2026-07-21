@@ -349,7 +349,7 @@ export default function FloatingCopilot() {
         >
           <div className="flex items-center gap-2.5">
             <div className="grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-full bg-[radial-gradient(circle_at_50%_35%,#eaf6f1,#cfe8e0)] ring-1 ring-[#efc46f]/40">
-              <Image src="/cinematic/agent-bot-cut.png" alt="" width={512} height={512} className="h-6 w-auto" />
+              <Image src="/cinematic/agent-bot-cut.png" alt="" width={64} height={64} className="h-6 w-auto" />
             </div>
             <div>
               <div className="text-[13px] font-semibold text-white">0xWal</div>
@@ -432,7 +432,7 @@ export default function FloatingCopilot() {
               >
                 {msg.role === 'assistant' && (
                   <div className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center overflow-hidden rounded-full bg-[radial-gradient(circle_at_50%_35%,#eaf6f1,#cfe8e0)] ring-1 ring-[#0d6370]/25">
-                    <Image src="/cinematic/agent-bot-cut.png" alt="" width={512} height={512} className="h-4 w-auto" />
+                    <Image src="/cinematic/agent-bot-cut.png" alt="" width={48} height={48} className="h-4 w-auto" />
                   </div>
                 )}
                 <div
@@ -468,7 +468,7 @@ export default function FloatingCopilot() {
           {thinking && (
             <div className="flex gap-2">
               <div className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center overflow-hidden rounded-full bg-[radial-gradient(circle_at_50%_35%,#eaf6f1,#cfe8e0)] ring-1 ring-[#0d6370]/25">
-                <Image src="/cinematic/agent-bot-cut.png" alt="" width={512} height={512} className="h-4 w-auto" />
+                <Image src="/cinematic/agent-bot-cut.png" alt="" width={48} height={48} className="h-4 w-auto" />
               </div>
               <div className="flex items-center gap-1.5 rounded-xl rounded-tl-sm border border-[#0c3e48]/10 bg-[#f4efe4] px-3 py-2.5">
                 <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#0d6370]/50 [animation-delay:0ms]" />
@@ -517,12 +517,15 @@ export default function FloatingCopilot() {
             'shadow-[0_14px_30px_rgba(8,54,64,0.32)] hover:shadow-[0_20px_40px_rgba(8,54,64,0.4)]'
           )}
         >
-          {/* Robot mascot — floats gently, tips forward on hover */}
+          {/* Robot mascot — floats gently, tips forward on hover.
+              Rendered at 54px, so declare ~2x intrinsic size: asking for the
+              512px source made Next serve a 640px/48KB variant for a 54px
+              avatar, which stalled the image optimizer and left it blank. */}
           <Image
             src="/cinematic/agent-bot-cut.png"
             alt=""
-            width={512}
-            height={512}
+            width={128}
+            height={128}
             priority
             className={cn(
               'h-[54px] w-auto origin-bottom drop-shadow-[0_4px_6px_rgba(8,54,64,0.28)] transition-transform duration-200',

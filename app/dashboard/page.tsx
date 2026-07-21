@@ -660,7 +660,15 @@ function BotAvatar({ size = 24 }: { size?: number }) {
       className="mt-0.5 grid shrink-0 place-items-center overflow-hidden rounded-full bg-[radial-gradient(circle_at_50%_35%,#eaf6f1,#cfe8e0)] ring-1 ring-[#0d6370]/25"
       style={{ height: size, width: size }}
     >
-      <Image src="/cinematic/agent-bot-cut.png" alt="" width={512} height={512} style={{ height: size * 0.66, width: 'auto' }} />
+      {/* Intrinsic size tracks the rendered avatar (~2x for retina). Passing the
+          full 512px source made Next request a 640px variant for a ~16px avatar. */}
+      <Image
+        src="/cinematic/agent-bot-cut.png"
+        alt=""
+        width={Math.round(size * 2)}
+        height={Math.round(size * 2)}
+        style={{ height: size * 0.66, width: 'auto' }}
+      />
     </div>
   );
 }
