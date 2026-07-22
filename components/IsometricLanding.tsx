@@ -988,7 +988,7 @@ export default function IsometricLanding({ isPhone = false }: { isPhone?: boolea
                 <ArrowRight aria-hidden="true" />
               </Link>
               <Link href="/login" className="iso-button iso-button-dark-ghost">Log in</Link>
-              <WaitlistCta />
+              <WaitlistCta tone="dark" />
             </div>
           </div>
 

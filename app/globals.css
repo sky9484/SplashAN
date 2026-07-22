@@ -694,43 +694,72 @@ body {
   margin-top: 28px;
 }
 
-/* Waitlist CTA — expands in place inside a hero-actions row. Tokens/rgba only
-   (check-copy bans new raw hex); type stays >=12px with ink alpha >=.66. */
+/* Waitlist CTA — expands in place inside a hero/CTA actions row. Built from
+   the same isometric material as the auth-shell field + iso-button so it reads
+   as a sibling: offset extrusion, consistent lighting, 52px height to line up
+   with the buttons. Tokens/rgba only (check-copy bans new raw hex); type
+   stays >=12px with ink alpha >=.66. */
 .iso-waitlist-form {
-  display: flex;
+  display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
 }
 
 .iso-waitlist-field {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  border: 1px solid rgba(12, 62, 72, .22);
-  border-radius: 9px;
-  padding: 10px 12px;
-  background: rgba(255, 255, 255, .82);
 }
 
 .iso-waitlist-field svg {
+  position: absolute;
+  z-index: 2;
+  left: 14px;
   width: 15px;
   height: 15px;
   color: var(--iso-teal);
 }
 
 .iso-waitlist-field input {
-  min-width: 210px;
-  border: none;
-  outline: none;
-  background: transparent;
+  width: 240px;
+  min-height: 52px;
+  appearance: none;
+  border: 1px solid rgba(12, 62, 72, .2);
+  border-radius: 9px;
+  padding: 0 16px 0 40px;
   color: var(--iso-ink);
+  outline: none;
+  background: rgba(255, 255, 255, .72);
+  box-shadow: 3px 4px 0 rgba(12, 62, 72, .1);
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 700;
+  transition: border-color .2s ease, box-shadow .2s ease;
 }
 
 .iso-waitlist-field input::placeholder {
-  color: rgba(12, 62, 72, .45);
+  color: rgba(12, 62, 72, .5);
+}
+
+.iso-waitlist-field input:focus {
+  border-color: var(--iso-teal);
+  box-shadow: 3px 4px 0 rgba(12, 62, 72, .16);
+}
+
+/* Dark final-CTA panel: lighten the field material to sit on deep ink. */
+.iso-waitlist-form.is-dark .iso-waitlist-field svg {
+  color: var(--iso-gold);
+}
+
+.iso-waitlist-form.is-dark .iso-waitlist-field input {
+  border-color: rgba(255, 250, 241, .22);
+  color: #fffaf1;
+  background: rgba(255, 250, 241, .06);
+  box-shadow: 3px 4px 0 rgba(0, 0, 0, .22);
+}
+
+.iso-waitlist-form.is-dark .iso-waitlist-field input::placeholder {
+  color: rgba(255, 250, 241, .5);
 }
 
 .iso-waitlist-trap {
@@ -745,15 +774,24 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  min-height: 52px;
   color: var(--iso-ink);
   font-size: 13px;
   font-weight: 800;
 }
 
+.iso-waitlist-done.is-dark {
+  color: #fffaf1;
+}
+
 .iso-waitlist-done svg {
-  width: 16px;
-  height: 16px;
+  width: 17px;
+  height: 17px;
   color: var(--iso-teal);
+}
+
+.iso-waitlist-done.is-dark svg {
+  color: var(--iso-gold);
 }
 
 .iso-waitlist-error {
@@ -761,6 +799,10 @@ body {
   color: rgba(12, 62, 72, .78);
   font-size: 12px;
   font-weight: 700;
+}
+
+.iso-waitlist-form.is-dark .iso-waitlist-error {
+  color: rgba(255, 250, 241, .82);
 }
 
 .mob-waitlist-slot {
