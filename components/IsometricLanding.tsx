@@ -22,6 +22,7 @@ import {
 
 import FloatingToken from '@/components/landing/FloatingToken';
 import SettlementCinematic from '@/components/landing/SettlementCinematic';
+import WaitlistCta from '@/components/landing/WaitlistCta';
 import ControlPlaneExplainer from '@/components/oxwal/ControlPlaneExplainer';
 import RoadmapChip from '@/components/supply/RoadmapChip';
 import { claims, lockedCopy } from '@/content/claims';
@@ -987,6 +988,7 @@ export default function IsometricLanding({ isPhone = false }: { isPhone?: boolea
                 <ArrowRight aria-hidden="true" />
               </Link>
               <Link href="/login" className="iso-button iso-button-dark-ghost">Log in</Link>
+              <WaitlistCta />
             </div>
           </div>
 

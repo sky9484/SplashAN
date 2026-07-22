@@ -694,6 +694,81 @@ body {
   margin-top: 28px;
 }
 
+/* Waitlist CTA — expands in place inside a hero-actions row. Tokens/rgba only
+   (check-copy bans new raw hex); type stays >=12px with ink alpha >=.66. */
+.iso-waitlist-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.iso-waitlist-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(12, 62, 72, .22);
+  border-radius: 9px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, .82);
+}
+
+.iso-waitlist-field svg {
+  width: 15px;
+  height: 15px;
+  color: var(--iso-teal);
+}
+
+.iso-waitlist-field input {
+  min-width: 210px;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--iso-ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.iso-waitlist-field input::placeholder {
+  color: rgba(12, 62, 72, .45);
+}
+
+.iso-waitlist-trap {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.iso-waitlist-done {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--iso-ink);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.iso-waitlist-done svg {
+  width: 16px;
+  height: 16px;
+  color: var(--iso-teal);
+}
+
+.iso-waitlist-error {
+  flex-basis: 100%;
+  color: rgba(12, 62, 72, .78);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.mob-waitlist-slot {
+  display: flex;
+  justify-content: center;
+  margin-top: 12px;
+}
+
 .iso-proof-line {
   display: flex;
   flex-wrap: wrap;

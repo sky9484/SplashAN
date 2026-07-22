@@ -129,9 +129,16 @@ async function getCliReadiness(): Promise<CliReadiness> {
     cachedCliReadiness = { ready: true, address };
   } catch (error) {
     const commandError = error as { message?: string; stdout?: string; stderr?: string };
+    const combined = `${commandError.stdout ?? ''}\n${commandError.stderr ?? ''}\n${commandError.message ?? ''}`;
+    // Sui testnet fullnodes are gRPC-only (JSON-RPC retired; the v1.76.0 line
+    // ships the gRPC RPC Store). CLIs that still speak JSON-RPC get an opaque
+    // 404/"Request rejected" from the node — name the real cause instead.
+    const jsonRpcRetired = /request rejected|404|405|jsonrpc|json-rpc/i.test(combined);
     cachedCliReadiness = {
       ready: false,
-      reason: humanizeSuiError(commandError.stdout ?? commandError.message, commandError.stderr ?? ''),
+      reason: jsonRpcRetired
+        ? 'the local sui CLI predates the fullnode JSON-RPC retirement (testnet is gRPC-only as of the v1.76.0 line) — upgrade the Sui CLI, or set OPERATOR_SUI_PRIVATE_KEY so settlement uses the gRPC SDK path'
+        : humanizeSuiError(commandError.stdout ?? commandError.message, commandError.stderr ?? ''),
     };
   }
   return cachedCliReadiness;
@@ -336,11 +343,22 @@ function describeExecutionError(error: SuiExecutionError | null | undefined): st
   return error.message;
 }
 
+/** Transport-level failures worth one bounded retry. Testnet v1.76.0 nodes
+ *  rebuild their gRPC RPC Store on upgrade and delay HTTP availability while
+ *  reindexing, so a briefly unreachable fullnode is an expected state — not a
+ *  settlement failure. Move aborts / on-chain failures are NEVER retried. */
+function isTransientTransportError(error: unknown): boolean {
+  const message = error instanceof Error ? `${error.message} ${String((error as { cause?: unknown }).cause ?? '')}` : String(error);
+  return /UNAVAILABLE|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|fetch failed|network|socket|502|503|504|Bad Gateway|Service Unavailable|Gateway Timeout/i.test(message);
+}
+
 async function executeSdkTransaction(tx: Transaction) {
   const signer = getOperatorKeypair();
   if (!signer) throw new Error('OPERATOR_SUI_PRIVATE_KEY is required for SDK settlement.');
 
-  const result = await suiClient.signAndExecuteTransaction({
+  // Re-submitting the SAME signed bytes is idempotent on Sui (same digest), so
+  // a bounded retry on transport errors cannot double-settle.
+  const attemptExecute = () => suiClient.signAndExecuteTransaction({
     signer,
     transaction: tx,
     include: {
@@ -348,6 +366,20 @@ async function executeSdkTransaction(tx: Transaction) {
       events: true,
     },
   });
+  const attempts = 3;
+  let result: Awaited<ReturnType<typeof attemptExecute>> | undefined;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      result = await attemptExecute();
+      break;
+    } catch (error) {
+      if (attempt === attempts || !isTransientTransportError(error)) throw error;
+      const delayMs = attempt * 750;
+      console.warn(`[sui-settlement] transient transport error (attempt ${attempt}/${attempts}), retrying in ${delayMs}ms:`, error instanceof Error ? error.message : error);
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+  if (!result) throw new Error('Sui execution did not return a result.');
 
   const executed = result.Transaction ?? result.FailedTransaction;
   if (result.$kind !== 'Transaction' || !executed.status.success) {

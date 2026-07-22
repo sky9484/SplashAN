@@ -55,6 +55,8 @@ yarn-error.log*
 /data/seal-policies.json.tmp.*
 /data/circuit-breakers.json
 /data/circuit-breakers.json.tmp.*
+/data/waitlist.json
+/data/waitlist.json.tmp.*
 
 # vercel
 .vercel

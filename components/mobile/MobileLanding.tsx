@@ -9,6 +9,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 
+import WaitlistCta from '@/components/landing/WaitlistCta';
 import { claims, lockedCopy } from '@/content/claims';
 
 /**
@@ -217,6 +218,9 @@ export default function MobileLanding() {
           Open the payment desk
           <ArrowRight aria-hidden="true" />
         </Link>
+        <div className="mob-waitlist-slot">
+          <WaitlistCta variant="mob" />
+        </div>
       </section>
 
       {/* ── Footer ────────────────────────────────────────── */}
