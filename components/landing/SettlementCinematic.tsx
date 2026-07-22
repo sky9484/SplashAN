@@ -13,6 +13,7 @@ import {
   type MotionValue,
 } from 'framer-motion';
 
+import WaitlistCta from '@/components/landing/WaitlistCta';
 import { lockedCopy } from '@/content/claims';
 
 const HERO_IMG = '/cinematic/hero-district-v5.png';
@@ -222,6 +223,10 @@ function HeroCopy({ animated, onEnterEngine }: { animated: boolean; onEnterEngin
             See the network
           </button>
         ) : null}
+        {/* Pre-launch path: corridors roll out one at a time, so give the
+            not-ready-yet visitor a "notify me" next to the primary CTA.
+            Subordinate ghost styling keeps "Open payment desk" the one primary. */}
+        <WaitlistCta />
       </motion.div>
       <motion.div variants={animated ? rise : undefined} className="iso-proof-line">
         <span><Check aria-hidden="true" /> Compliance-gated</span>
