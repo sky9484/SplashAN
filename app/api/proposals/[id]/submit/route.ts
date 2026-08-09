@@ -7,6 +7,7 @@ import { resolveComplianceForProposal } from '@/lib/compliance/proposal-screenin
 import { proposalApprovalHash } from '@/lib/proposals/canonical-hash';
 import { ensureProposalStoreHydrated } from '@/lib/queue/proposal-persistence';
 import { requireCustomerRequest } from '@/lib/server/customer-auth';
+import { requireActiveOrg } from '@/lib/server/kyb-gate';
 import { readJsonBody } from '@/lib/server/http';
 import { authorizeProposalSubmission } from '@/lib/safety/submit-guard';
 
@@ -46,6 +47,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!parsed.success) return json({ error: 'Invalid proposal submission' }, 400);
 
   // Server-derived authority: session identity → DB membership → org policy.
+  // KYB money gate (wallet spec §3.2). Checked here rather than in a layout
+  // because /queue — the maker-checker board that releases funds — sits outside
+  // app/dashboard and would bypass a layout-only gate entirely.
+  const gate = await requireActiveOrg(auth.session);
+  if (gate.response) return gate.response;
+
   const ctx = await resolveAuthorityForSession(auth.session);
 
   const store = getOxwalProposalStore();

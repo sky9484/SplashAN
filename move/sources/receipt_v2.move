@@ -16,7 +16,7 @@
 ///     auditors can prove a digest was checked.
 module splash_protocol::receipt_v2;
 
-use splash_protocol::business_account::AdminCap;
+use splash_protocol::business_account::AttestationCap;
 use std::string::String;
 use sui::clock::{Self, Clock};
 use sui::event;
@@ -72,15 +72,18 @@ public struct ReceiptVerificationChecked has copy, drop {
 
 // ─── Entry / public functions ──────────────────────────────────────────────
 
-/// AdminCap-gated receipt minting (L-05 fix). The cap holder is the only
-/// party that can record settlement receipts on-chain, preventing forged
-/// receipts from showing up in indexer queries.
+/// AttestationCap-gated receipt minting (L-05 fix; cap split S-06). The cap
+/// holder is the only party that can record settlement receipts on-chain,
+/// preventing forged receipts from showing up in indexer queries.
+///
+/// Minting a receipt records history; it moves no value, so it runs on the hot
+/// operator key's `AttestationCap` rather than the cold-multisig `AdminCap`.
 ///
 /// `audit_anchor_id` is fixed at creation. The post-hoc `link_audit_anchor`
 /// mutator from the scaffold is removed (M-03 fix) — receipts are now truly
 /// immutable.
 public fun create_receipt(
-    _admin: &AdminCap,
+    _cap: &AttestationCap,
     receipt_id: String,
     sender: address,
     recipient: address,

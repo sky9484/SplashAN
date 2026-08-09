@@ -10,7 +10,7 @@
 /// cannot leave the settlement pool on a broken peg.
 module splash_protocol::peg_monitor;
 
-use splash_protocol::business_account::AdminCap;
+use splash_protocol::business_account::{AdminCap, AttestationCap};
 use splash_protocol::compliance_config::{Self, ComplianceConfig};
 use deepbook::pool::Pool;
 use openzeppelin_math::rounding;
@@ -72,14 +72,17 @@ public fun init_peg_state(_admin: &AdminCap, clock: &Clock, ctx: &mut TxContext)
     transfer::share_object(state);
 }
 
-/// Operator pushes a fresh Hermes-derived peg reading. AdminCap-gated.
+/// Operator pushes a fresh Hermes-derived peg reading. AttestationCap-gated
+/// (cap split S-06): a peg reading is an attestation about the outside world,
+/// not a movement of value, so the hot operator key can push it while money
+/// authority stays offline in the cold multisig.
 ///
 /// L-06 fix: assert the new timestamp is strictly newer than the stored
 /// one (allowing equality on the first update from genesis) to guard
 /// against clock regression bugs or replay-style races.
 public fun update_peg(
     state: &mut PegState,
-    _admin: &AdminCap,
+    _cap: &AttestationCap,
     usdc_deviation_ppm: u64,
     usdt_deviation_ppm: u64,
     clock: &Clock,

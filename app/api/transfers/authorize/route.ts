@@ -26,6 +26,7 @@ import {
 } from '@/lib/funding/registry';
 import { requireCustomerRequest } from '@/lib/server/customer-auth';
 import { assertCleanBody, ProvenanceViolationError, provenanceViolationResponse } from '@/lib/auth/provenance-guard';
+import { requireActiveOrg } from '@/lib/server/kyb-gate';
 import { readJsonBody } from '@/lib/server/http';
 
 export const maxDuration = 60;
@@ -79,6 +80,9 @@ export async function POST(request: Request) {
     if (error instanceof ProvenanceViolationError) return provenanceViolationResponse(error);
     throw error;
   }
+  const gate = await requireActiveOrg(auth.session);
+  if (gate.response) return gate.response;
+
   const parsed = authorizeSchema.safeParse(rawBody);
   if (!parsed.success) return NextResponse.json({ error: 'Invalid transfer authorization' }, { status: 400 });
   const body = parsed.data;

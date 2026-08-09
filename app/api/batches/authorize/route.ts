@@ -1,6 +1,7 @@
 import { after, NextResponse } from 'next/server';
 
 import { assertCleanBody, ProvenanceViolationError, provenanceViolationResponse } from '@/lib/auth/provenance-guard';
+import { requireActiveOrg } from '@/lib/server/kyb-gate';
 import { requireCustomerRequest } from '@/lib/server/customer-auth';
 import { readJsonBody } from '@/lib/server/http';
 import { createBatch, updateBatch } from '@/lib/server/operations';
@@ -25,6 +26,9 @@ export async function POST(request: Request) {
     if (error instanceof ProvenanceViolationError) return provenanceViolationResponse(error);
     throw error;
   }
+  const gate = await requireActiveOrg(auth.session);
+  if (gate.response) return gate.response;
+
   const rows = Array.isArray(body.rows) ? (body.rows as BatchRow[]) : [];
   const totp = String(body.totp ?? '');
   const targetCurrency = typeof body.targetCurrency === 'string' ? body.targetCurrency : 'PHP';

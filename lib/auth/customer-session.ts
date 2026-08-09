@@ -1,13 +1,39 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
 
+import { isKilledEntityEmail } from './killed-entities.ts';
+
+/** Workspace role as stored on the DB `users` row (schema.ts `userRole`). */
+export type CustomerWorkspaceRole = 'maker' | 'checker' | 'admin' | 'viewer';
+
+const WORKSPACE_ROLES: readonly CustomerWorkspaceRole[] = ['maker', 'checker', 'admin', 'viewer'];
+
 export type CustomerSession = {
   email: string;
   name: string;
   organization: string;
+  /** Legacy display label. Kept literal so existing UI (DashboardHeader) is
+   *  unchanged; it is NOT an authorization signal. */
   role: 'business_admin';
+  /**
+   * Real workspace role from the DB, carried for DISPLAY ONLY (wallet spec §4.1).
+   *
+   * Never authorize on this. The cookie payload is signed but base64 — readable
+   * by the client — and Invariant #8 requires authority to be derived
+   * server-side. `lib/auth/authority.ts` re-reads the role from the users table
+   * on every money route; this field only lets the UI say "Approver".
+   */
+  userRole?: CustomerWorkspaceRole;
+  /** zkLogin signer address for this human (wallet spec §2.3). Display/lookup
+   *  only — the authority resolver re-derives org and role from the DB. */
+  suiAddress?: string;
+  orgId?: string;
   issuedAt: string;
   expiresAt: string;
 };
+
+export function isCustomerWorkspaceRole(value: unknown): value is CustomerWorkspaceRole {
+  return typeof value === 'string' && (WORKSPACE_ROLES as readonly string[]).includes(value);
+}
 
 type CustomerTokenPayload = CustomerSession & {
   nonce: string;
@@ -51,6 +77,9 @@ export function createCustomerSessionFromIdentity(input: {
   now?: Date;
   ttlSeconds?: number;
   fallbackOrganization?: string;
+  userRole?: CustomerWorkspaceRole;
+  suiAddress?: string;
+  orgId?: string;
 }): CustomerSession {
   const now = input.now ?? new Date();
   const expiresAt = new Date(now.getTime() + (input.ttlSeconds ?? 60 * 60 * 12) * 1000);
@@ -62,6 +91,9 @@ export function createCustomerSessionFromIdentity(input: {
     name: localPart.replace(/[._-]/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase()),
     organization: input.organization?.trim() || input.fallbackOrganization || FALLBACK_CUSTOMER_ORGANIZATION,
     role: 'business_admin',
+    ...(input.userRole ? { userRole: input.userRole } : {}),
+    ...(input.suiAddress ? { suiAddress: input.suiAddress } : {}),
+    ...(input.orgId ? { orgId: input.orgId } : {}),
     issuedAt: now.toISOString(),
     expiresAt: expiresAt.toISOString(),
   };
@@ -101,11 +133,23 @@ export function readCustomerSessionToken(
     if (!payload.email || !payload.name || !payload.organization || payload.role !== 'business_admin') return null;
     if (!payload.exp || payload.exp * 1000 <= nowMs) return null;
 
+    // Wallet spec §2.4 — enforce the killed-entity denylist at every session
+    // mint, not just at signup, so a cookie issued before a domain was killed
+    // stops verifying immediately instead of lingering until it expires.
+    if (isKilledEntityEmail(payload.email)) return null;
+
+    // NOTE: this reconstruction is field-by-field on purpose (never spread the
+    // decoded payload — that would let a forged-but-unsigned field through).
+    // Any new CustomerSession field MUST be copied here or it is silently
+    // dropped even though it survived the signature check.
     return {
       email: payload.email,
       name: payload.name,
       organization: payload.organization,
       role: payload.role,
+      ...(isCustomerWorkspaceRole(payload.userRole) ? { userRole: payload.userRole } : {}),
+      ...(typeof payload.suiAddress === 'string' && payload.suiAddress ? { suiAddress: payload.suiAddress } : {}),
+      ...(typeof payload.orgId === 'string' && payload.orgId ? { orgId: payload.orgId } : {}),
       issuedAt: payload.issuedAt || new Date((payload.iat ?? 0) * 1000).toISOString(),
       expiresAt: payload.expiresAt || new Date(payload.exp * 1000).toISOString(),
     };

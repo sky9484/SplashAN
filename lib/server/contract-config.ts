@@ -5,6 +5,7 @@ export type ContractConfigField =
   | 'packageId'
   | 'treasuryId'
   | 'adminCapId'
+  | 'attestationCapId'
   | 'pegStateId'
   | 'complianceConfigId'
   | 'complianceCapId'
@@ -30,6 +31,7 @@ const FIELD_TO_ENV: Record<ContractConfigField, string> = {
   packageId: 'SPLASH_PACKAGE_ID',
   treasuryId: 'SPLASH_TREASURY_ID',
   adminCapId: 'SPLASH_ADMIN_CAP_ID',
+  attestationCapId: 'SPLASH_ATTESTATION_CAP_ID',
   pegStateId: 'SPLASH_PEG_STATE_ID',
   complianceConfigId: 'SPLASH_COMPLIANCE_CONFIG_ID',
   complianceCapId: 'SPLASH_COMPLIANCE_CAP_ID',
@@ -130,6 +132,7 @@ const ID_FIELDS: ContractConfigField[] = [
   'packageId',
   'treasuryId',
   'adminCapId',
+  'attestationCapId',
   'pegStateId',
   'complianceConfigId',
   'complianceCapId',

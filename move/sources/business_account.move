@@ -6,8 +6,32 @@ use sui::event;
 const E_ALREADY_VERIFIED: u64 = 1;
 const E_EMPTY_SSM_NUMBER: u64 = 2;
 const E_EMPTY_KYB_CID: u64 = 3;
+const E_INVALID_HOLDER: u64 = 4;
 
+/// AdminCap — MONEY AUTHORITY. Gates `verify_business`, `smart_treasury::*`,
+/// `settlement::settle_*` / `withdraw_fees`, `dual_treasury::*`,
+/// `compliance_config::create`, and the minting of `AttestationCap`.
+///
+/// Has `store` so it can be transferred to a cold 2-of-3 Sui multisig address
+/// (see the key-ceremony runbook). Nothing that moves value may ever be gated
+/// by anything weaker than this cap.
 public struct AdminCap has key, store {
+    id: UID,
+}
+
+/// AttestationCap — hot-key authority for routine, NON-FINANCIAL attestations:
+/// `audit_anchor::anchor_audit_hash`, `receipt_v2::create_receipt`,
+/// `peg_monitor::update_peg`.
+///
+/// Segregation of duties: the operator server holds ONLY this cap, so a
+/// compromised server key can write attestations but cannot move a single
+/// coin. That is the whole point of the split — money authority stays offline.
+///
+/// Deliberately `key` ONLY (no `store`): it cannot be `public_transfer`red out
+/// of this module, so every custody change must go through
+/// `mint_attestation_cap` / `destroy_attestation_cap` and leaves an event for
+/// off-chain monitoring.
+public struct AttestationCap has key {
     id: UID,
 }
 
@@ -31,6 +55,17 @@ public struct BusinessVerified has copy, drop {
     business_account_id: address,
     owner: address,
     risk_score: u8,
+}
+
+/// Emitted whenever attestation authority is granted. Security-critical:
+/// off-chain monitoring should alert on any mint it did not initiate.
+public struct AttestationCapMinted has copy, drop {
+    attestation_cap_id: address,
+    holder: address,
+}
+
+public struct AttestationCapDestroyed has copy, drop {
+    attestation_cap_id: address,
 }
 
 fun init(ctx: &mut TxContext) {
@@ -75,6 +110,35 @@ public fun verify_business(_: &AdminCap, account: &mut BusinessAccount, risk_sco
     });
 }
 
+/// Grant attestation authority to the hot operator server. AdminCap-gated, so
+/// only the cold multisig can create it.
+public fun mint_attestation_cap(_: &AdminCap, holder: address, ctx: &mut TxContext) {
+    assert!(holder != @0x0, E_INVALID_HOLDER);
+
+    let cap = AttestationCap { id: object::new(ctx) };
+    event::emit(AttestationCapMinted {
+        attestation_cap_id: object::uid_to_address(&cap.id),
+        holder,
+    });
+    transfer::transfer(cap, holder);
+}
+
+/// Burn an `AttestationCap`. Callable by its holder, which makes routine
+/// rotation self-service: the multisig mints a replacement, the server starts
+/// using it, then the old cap is burned.
+///
+/// Note honestly what this is NOT: it cannot claw back a *stolen* cap, since
+/// the thief simply never calls this. Containment for a stolen attestation cap
+/// is (a) it can move no funds by construction, and (b) off-chain rejection of
+/// anchors/receipts bearing the retired cap id. See the key-ceremony runbook.
+public fun destroy_attestation_cap(cap: AttestationCap) {
+    let AttestationCap { id } = cap;
+    event::emit(AttestationCapDestroyed {
+        attestation_cap_id: object::uid_to_address(&id),
+    });
+    object::delete(id);
+}
+
 public fun owner(account: &BusinessAccount): address {
     account.owner
 }
@@ -98,4 +162,9 @@ public fun risk_score(account: &BusinessAccount): u8 {
 #[test_only]
 public fun admin_cap_for_testing(ctx: &mut TxContext): AdminCap {
     AdminCap { id: object::new(ctx) }
+}
+
+#[test_only]
+public fun attestation_cap_for_testing(ctx: &mut TxContext): AttestationCap {
+    AttestationCap { id: object::new(ctx) }
 }

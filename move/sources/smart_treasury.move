@@ -18,7 +18,7 @@
 ///   * All state changes emit events — no shared objects per call.
 module splash_protocol::smart_treasury;
 
-use splash_protocol::business_account::AdminCap;
+use splash_protocol::business_account::{AdminCap, AttestationCap};
 use std::string::String;
 use sui::balance::{Self, Balance};
 use sui::clock::{Self, Clock};
@@ -204,9 +204,12 @@ public fun redeem<T>(
 /// a separate shared object per call (M-04 fix). Use this when off-chain
 /// accounting wants to tag a particular deposit/withdraw as part of a
 /// rebalance flow.
+/// AttestationCap-gated (cap split S-06): this only emits an accounting event
+/// — `treasury` is an immutable reference and no balance moves — so it belongs
+/// with the hot attestation key, not the cold money-authority AdminCap.
 public fun emit_rebalance<T>(
     treasury: &SmartTreasury<T>,
-    _admin: &AdminCap,
+    _cap: &AttestationCap,
     delta: u64,
     direction: u8,
     clock: &Clock,

@@ -7,6 +7,7 @@ import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
 import { customerRequestOriginAllowed } from '@/lib/auth/customer-request';
+import { isKilledEntityEmail } from '@/lib/auth/killed-entities';
 import {
   CUSTOMER_SESSION_COOKIE,
   FALLBACK_CUSTOMER_EMAIL,
@@ -17,6 +18,7 @@ import {
   readCustomerSessionToken,
   timingSafeStrEqual,
   type CustomerSession,
+  type CustomerWorkspaceRole,
 } from '@/lib/auth/customer-session';
 
 export type { CustomerSession } from '@/lib/auth/customer-session';
@@ -73,6 +75,9 @@ function sessionFromIdentity(input: {
   organization?: string;
   now?: Date;
   ttlSeconds?: number;
+  userRole?: CustomerWorkspaceRole;
+  suiAddress?: string;
+  orgId?: string;
 }): CustomerSession {
   return createCustomerSessionFromIdentity({
     ...input,
@@ -99,6 +104,12 @@ export function validateCustomerCredentials(email: string, password: string): Cu
 
   if (String(email ?? '').trim().toLowerCase() !== expectedEmail) return null;
   if (!timingSafeStrEqual(String(password ?? ''), expectedPassword)) return null;
+
+  // Wallet spec §2.4 — a killed entity must not bind in through the auth layer.
+  if (isKilledEntityEmail(expectedEmail)) {
+    console.error('[customer-auth] Refusing login: killed-entity domain.');
+    return null;
+  }
 
   return sessionFromIdentity({ email: expectedEmail });
 }
@@ -155,10 +166,16 @@ export async function setCustomerSessionCookie(
   }
 
   const maxAge = options.remember ? rememberedSessionTtlSeconds : defaultSessionTtlSeconds;
+  // Rebuild only to refresh issuedAt/expiresAt — every other field must be
+  // threaded through, or it is silently lost on re-issue (which is how a
+  // session quietly reverts to a stale role/address).
   const refreshedSession = sessionFromIdentity({
     email: session.email,
     organization: session.organization,
     ttlSeconds: maxAge,
+    userRole: session.userRole,
+    suiAddress: session.suiAddress,
+    orgId: session.orgId,
   });
   const cookieStore = await cookies();
 

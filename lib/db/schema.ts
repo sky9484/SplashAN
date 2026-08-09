@@ -46,6 +46,18 @@ export const organizations = pgTable('organizations', {
   legalName: text('legal_name'),
   kybStatus: kybStatus('kyb_status').notNull().default('none'),
   kybTier: text('kyb_tier'),
+  /** Wallet spec §3 — the accountable onboarding lifecycle:
+   *  REGISTERED → KYB_SUBMITTED → KYB_PROVIDER_APPROVED → KYB_ADMIN_APPROVED →
+   *  ACTIVE, plus REJECTED / SUSPENDED. Money movement unlocks only at ACTIVE.
+   *
+   *  Text, not a pgEnum, deliberately: lib/compliance/kyb-state.ts is the
+   *  authority on legal transitions (same rationale as proposals.status), and a
+   *  text column means adding a state is a code change, not an ALTER TYPE
+   *  migration. The coarse `kyb_status` enum above is left untouched. */
+  kybLifecycle: text('kyb_lifecycle').notNull().default('REGISTERED'),
+  /** Wallet spec §2.3 — the org's on-chain BusinessAccount object id. Null
+   *  until the AdminCap-gated business_account::verify_business has run. */
+  suiBusinessAccountId: text('sui_business_account_id'),
   ...timestamps,
 });
 
@@ -59,6 +71,37 @@ export const users = pgTable('users', {
 }, (table) => [
   uniqueIndex('users_email_unique').on(table.email),
   index('users_org_idx').on(table.orgId),
+]);
+
+/**
+ * Wallet spec §2.3 — per-human zkLogin signer ↔ record mapping.
+ *
+ * One org has ONE on-chain BusinessAccount but MANY individual signers: a
+ * zkLogin address is derived from (iss, sub, aud, salt), so `ceo@acme.com` and
+ * `controller@acme.com` get different Sui addresses. That is what gives
+ * maker-checker per-human signer attribution.
+ *
+ * `oauth_sub` is a provider user id — treat it as PII: never log it raw.
+ */
+export const walletIdentities = pgTable('wallet_identities', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id),
+  orgId: text('org_id').notNull().references(() => organizations.id),
+  /** Derived from sub/iss/aud/salt — the address that signs this human's intents. */
+  suiAddress: text('sui_address').notNull(),
+  oauthIss: text('oauth_iss').notNull(),
+  oauthSub: text('oauth_sub').notNull(),
+  /** Our OAuth client id for THIS environment — a separate client per env is
+   *  both a Mysten best practice and an IACR 2026/227 mitigation. */
+  oauthAud: text('oauth_aud').notNull(),
+  emailAtLogin: text('email_at_login'),
+  ...timestamps,
+}, (table) => [
+  uniqueIndex('wallet_identities_sui_address_unique').on(table.suiAddress),
+  // One address per identity per app — the cross-app impersonation guard.
+  uniqueIndex('wallet_identities_oauth_subject_unique').on(table.oauthIss, table.oauthSub, table.oauthAud),
+  index('wallet_identities_user_idx').on(table.userId),
+  index('wallet_identities_org_idx').on(table.orgId),
 ]);
 
 /** Suppliers — the relationship-first noun (today's "recipients"). */

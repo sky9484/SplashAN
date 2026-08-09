@@ -6,7 +6,7 @@
 /// against itself (M-02).
 ///
 /// Design:
-///   * Anchors are AdminCap-gated. Off-chain indexers can trust that any
+///   * Anchors are AttestationCap-gated. Off-chain indexers can trust that any
 ///     `AuditAnchor` shared object in the package came from the protocol.
 ///   * Each anchor records the anchorer + business account it relates to
 ///     so tenant-level audit trails are filterable.
@@ -15,7 +15,7 @@
 ///     the verification leaves a trace (instead of being a no-op view).
 module splash_protocol::audit_anchor;
 
-use splash_protocol::business_account::AdminCap;
+use splash_protocol::business_account::AttestationCap;
 use splash_protocol::payment_intent::{Self, SettleReceipt};
 use std::string::String;
 use sui::clock::{Self, Clock};
@@ -77,9 +77,12 @@ public struct SettlementAnchored has copy, drop {
     anchorer: address,
 }
 
-/// Anchor an audit hash. AdminCap-gated (M-01 fix).
+/// Anchor an audit hash. AttestationCap-gated (M-01 fix; cap split S-06).
+///
+/// Writing an anchor is a routine, non-financial attestation, so it runs on the
+/// hot operator key's `AttestationCap` rather than the cold-multisig `AdminCap`.
 public fun anchor_audit_hash(
-    _admin: &AdminCap,
+    _cap: &AttestationCap,
     audit_hash: String,
     anchor_id: String,
     backing_blob: String,

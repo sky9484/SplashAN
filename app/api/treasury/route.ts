@@ -14,6 +14,7 @@ import { NextResponse } from 'next/server';
 
 import { requireCustomerRequest } from '@/lib/server/customer-auth';
 import { assertCleanBody, ProvenanceViolationError, provenanceViolationResponse } from '@/lib/auth/provenance-guard';
+import { requireActiveOrg } from '@/lib/server/kyb-gate';
 import { readJsonBody } from '@/lib/server/http';
 import {
   cancelTreasuryWithdrawal,
@@ -77,6 +78,9 @@ export async function POST(request: Request) {
     if (error instanceof ProvenanceViolationError) return provenanceViolationResponse(error);
     throw error;
   }
+  const gate = await requireActiveOrg(auth.session);
+  if (gate.response) return gate.response;
+
   const ledger = getLedger();
 
   // Cancel a still-pending withdrawal — returns reserved funds to Treasury.
