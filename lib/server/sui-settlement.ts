@@ -206,6 +206,44 @@ function optionalConfigId(field: ContractConfigField): string {
  * The argument position is identical in both ABIs, so this is a pure object-id
  * swap with no PTB restructuring.
  */
+/**
+ * Pre-flight for batch settlement: the shared SettlementPool must already hold
+ * enough SUI, because `settle_sui_batch` splits every recipient's net + fee
+ * straight out of `pool.balance`. An unfunded pool is the single most common
+ * batch failure and otherwise surfaces as an opaque mid-PTB MoveAbort.
+ *
+ * Best-effort: a read failure must not block settlement — the chain remains the
+ * authority, this only turns a knowable failure into a readable one.
+ */
+async function assertSettlementPoolFunded(
+  poolId: string,
+  rows: Array<{ amount?: string }>,
+): Promise<void> {
+  const requiredMicro = rows.reduce(
+    (sum, row) => sum + moneyToMicro(Number.parseFloat(row.amount ?? '0')),
+    0,
+  );
+  if (requiredMicro <= 0) return;
+
+  let balance: bigint;
+  try {
+    const res = await suiClient.core.getObject({ objectId: poolId, include: { json: true } });
+    const json = (res as { object?: { json?: { balance?: string } } }).object?.json;
+    if (!json || json.balance === undefined) return;
+    balance = BigInt(json.balance);
+  } catch {
+    return;
+  }
+
+  if (balance < BigInt(requiredMicro)) {
+    throw new Error(
+      `SettlementPool ${poolId.slice(0, 12)}… holds ${Number(balance) / 1e9} SUI but this batch needs ` +
+      `${requiredMicro / 1e9} SUI. Batch payouts are paid FROM the pool, not from the operator wallet — ` +
+      'fund it first: node --use-system-ca --env-file=.env.local scripts/fund-settlement-pool.mjs <SUI>',
+    );
+  }
+}
+
 function attestationCapObjectId(): string {
   const configured = optionalConfigId('attestationCapId');
   return configured || configIdOrThrow('adminCapId', 'SPLASH_ADMIN_CAP_ID');
@@ -259,7 +297,7 @@ const ABORT_CODES: Record<number, string> = {
   301: 'E_PEG_BROKEN_USDT — USDT deviation > 30 bps. Update peg with valid data.',
   302: 'E_PEG_STALE — Peg price update is older than 60 seconds OR no real update_peg has fired since init. The app refreshes it automatically; verify SPLASH_ADMIN_CAP_ID and SPLASH_PEG_STATE_ID if this appears.',
   303: 'E_TIMESTAMP_REGRESSION — peg_monitor::update_peg called with a Clock timestamp older than the stored one. Indicates a clock bug or replay.',
-  304: 'E_INSUFFICIENT_DEPTH — DeepBook cannot completely fill this settlement amount inside the configured depth window.',
+  304: 'E_INSUFFICIENT_DEPTH — DeepBook cannot fill this settlement amount inside the configured depth window. Common causes, in order: (1) the batch total is BELOW the pool\'s minSize (SUI/DBUSDC testnet minSize = 1 SUI — anything smaller returns a zero quote); (2) the SettlementPool is underfunded (fund it with scripts/fund-settlement-pool.mjs); (3) the book genuinely lacks depth in the [mid*(1-slippage), mid] band. NOTE: the package deployed on testnet still carries the pre-S-07 guard, which requires a PERFECT fill (remaining_base == 0) — unsatisfiable on a lot-quantized book, so batch cannot settle live until the fixed contract is published.',
   305: 'E_SLIPPAGE_EXCEEDED — DeepBook amount-sized execution price exceeds the configured slippage limit.',
   306: 'E_INVALID_MARKET_PRICE — DeepBook returned an invalid zero mid-price.',
   350: 'E_INVALID_CONFIG — Compliance threshold is outside its bounded safety range.',
@@ -1093,6 +1131,11 @@ export async function recordBatchSettlementOnSui(input: {
   const usdtDeviationPpm = process.env.SPLASH_PEG_USDT_DEVIATION_PPM ?? '0';
 
   const gasBudget = process.env.SUI_RECORD_SETTLEMENT_GAS_BUDGET ?? '10000000';
+
+  // Pre-flight: the most common batch failure is an unfunded SettlementPool,
+  // which otherwise surfaces as an opaque MoveAbort mid-PTB. Check it here so
+  // the operator gets an actionable message instead of an abort code.
+  await assertSettlementPoolFunded(SPLASH_TREASURY_ID, input.rows);
 
   const paymentObjects = input.rows.map((row) => {
     const amount = moneyToMicro(Number.parseFloat(row.amount ?? '0'));

@@ -159,9 +159,14 @@ async function testComposedConfirm(intentId) {
 
 // ── Test 4: batch payout via SUI-native settle_sui_batch (no DeepBook) ───────
 async function testBatch() {
+  // The batch TOTAL must clear the DeepBook pool's minSize, or
+  // peg_monitor::assert_deepbook_liquidity aborts 304 E_INSUFFICIENT_DEPTH:
+  // `get_quote_quantity_out_input_fee` leaves the whole amount unfilled
+  // (remaining_base != 0, quote_out == 0) for anything below minSize.
+  // SUI_DBUSDC on testnet has minSize = 1 SUI, so keep the total above it.
   const rows = [
-    { recipient: RECIPIENT, amount: 5_000_000 }, // 0.005 SUI
-    { recipient: RECIPIENT, amount: 4_000_000 }, // 0.004 SUI
+    { recipient: RECIPIENT, amount: 700_000_000 }, // 0.7 SUI
+    { recipient: RECIPIENT, amount: 600_000_000 }, // 0.6 SUI  → 1.3 SUI total
   ];
   const tx = new Transaction();
   tx.setGasBudget('30000000');

@@ -175,3 +175,52 @@ anchor calls now run on the AttestationCap — if they abort, the cap id is wron
 - **Phase-0 honesty:** the operator key carries no customer funds today (settlement is
   demo-denominated). This is key *hygiene* now — but the object model you publish decides
   whether the Phase-1 custody posture is a config change or a rewrite.
+
+---
+
+## 5 · Batch payouts — why they cannot settle until this publish (S-07)
+
+Batch settlement was investigated end-to-end on testnet. Four preconditions must
+hold simultaneously; three now do, one is blocked on the contract:
+
+| Precondition | Status |
+|---|---|
+| `BusinessAccount.is_verified` | ✅ true on `0x23fbe1…` |
+| Fresh peg (bundled `update_peg`) | ✅ passes |
+| **SettlementPool funded** | ✅ fixed — was **0**; `scripts/fund-settlement-pool.mjs` added, pool now holds 2.1 SUI |
+| **DeepBook liquidity guard** | ❌ **unsatisfiable on the deployed contract** |
+
+**Configuration discovered and applied** (`.env.local`):
+`DEEPBOOK_POOL_ID=0x1c19362c…` (SUI/DBUSDC), `DEEPBOOK_QUOTE_TYPE=0xf7152c05…::DBUSDC::DBUSDC`.
+Verified the pool's on-chain type is exactly the `0xfb28c4cb…::pool::Pool<SUI, DBUSDC>`
+the contract expects.
+
+**The blocker is a contract bug, now fixed in source (S-07):**
+
+1. The guard required `remaining_base == 0` — a *perfect* fill. DeepBook books are
+   lot-quantized (SUI/DBUSDC lot = 0.1) and the input-fee quote path deducts the
+   taker fee from the input, so a sub-lot remainder is ALWAYS returned. Measured
+   across 1.1 → 5.0 SUI, the remainder never fell below ~0.093. The assert
+   therefore rejected **100% of batches at any size**.
+2. Slippage was priced against the *requested* quantity instead of the *filled*
+   quantity, charging the unfilled dust as if it executed at zero. On a healthy
+   book this reported **809 bps** where the true cost was **56 bps**.
+
+Both are fixed in `move/sources/peg_monitor.move` and guarded by
+`tests/deepbook-liquidity-guard.test.mjs` (`sui move test` cannot run here — the
+pinned DeepBook dependency's own test files fail to compile).
+
+**Also note:** the batch total must exceed the pool's `minSize` (1 SUI on
+SUI/DBUSDC). Below it DeepBook fills nothing and returns a zero quote, which the
+guard correctly rejects. The e2e batch was 0.009 SUI — 100× too small — and is
+now 1.3 SUI.
+
+**Testnet risk parameters were widened deliberately.** `max_slippage_bps` was
+raised 30 → 150 via `scripts/set-compliance-config.mjs`, because the testnet
+book's spread is ~43 bps and a mainnet-grade 30 bps band captures zero bids.
+**Mainnet must keep the tight value** — the script hard-refuses >50 bps on
+mainnet.
+
+**After this publish**, re-run `scripts/e2e-testnet.mjs`; the batch flow should
+settle for real. If it still aborts 304, re-measure the book — testnet depth
+moves.
