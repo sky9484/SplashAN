@@ -100,6 +100,54 @@ and predates both, so batch payouts stay blocked on-chain until the package is
 republished and `scripts/set-compliance-config.mjs` runs against the new
 `ComplianceConfig`. See `docs/KEY-CEREMONY-RUNBOOK.md` §4.
 
+---
+
+## Adversarial pass — 2026-08-13 (application tier)
+
+**Scope**: 24 agents across two workflows — Move authority, Move arithmetic,
+server authority, off-chain money path, ABI drift, compliance state machines,
+then a second sweep modelling three real incidents: **Step Finance** (Jan 2026,
+~$30-40M — compromised executive *devices*, not a contract bug), **Cetus** (May
+2025, $223M on Sui — `checked_shlw` used the wrong overflow threshold and Move's
+`<<` truncates instead of aborting), and **Hedgey** ($44.7M — unvalidated
+caller-supplied parameters). Every finding was put to an independent refuter;
+what follows survived.
+
+| ID | Sev | Finding | Status |
+|----|-----|---------|--------|
+| A-01 | Critical | The 6-digit payout code on both money routes was validated with `/^\d{6}$/` and nothing else — no secret, no verification, no MFA dependency in the repo. `000000` authorized a payroll run out of the shared `SettlementPool`. `requireTotp` was persisted, rendered, and read by no authorization path. **Fixed**: RFC 6238 on `node:crypto`, pinned against the RFC 4226 published vectors, single-use per step, fail-closed when unenrolled. | Fixed |
+| A-02 | High | `transfers/authorize` took the paying account from `body.businessAccountId`; `GET /api/ledger` with no `accountId` returned every account's entries. Enumerate, then debit. **Fixed**: account derived from the session in all four routes; a foreign id gets 403. | Fixed |
+| A-03 | High | A stablecoin funding session CREDITed the payer's ledger but the route DEBITed only on the `held` branch — one deposit funded two payouts. **Fixed**: payer debited for every source, non-negative assert before settlement. | Fixed |
+| A-04 | High | Every settlement PTB called `update_peg(0,0)` as command #1 and `settle_payment` — which calls `assert_pegged` — as command #2. **The on-chain peg circuit breaker read a perfect peg the same transaction had written one instruction earlier.** It could not fail. **Fixed**: the pushed value is measured; a fabricated `$1.00` from the Pyth mock fallback is never attested; with no live reading the command is omitted so `PegState` goes stale and `assert_pegged` aborts (302). | Fixed |
+| A-05 | High | Admin session tokens were `nonce.hmac(nonce)` — no issue time, no identity, no revocation. A copied cookie verified forever; sign-out cleared only the browser's copy. **Fixed**: signed issue time enforced server-side, subject bound, `revokeAllAdminSessions()`. | Fixed |
+| A-06 | High | `SPLASH_TEST_RECIPIENT_ADDRESS` unconditionally overrides the beneficiary on every live path, per row in a batch — and was writable at runtime via `PUT /api/admin/contracts`, whose entire authorization was "is there a session". A stolen admin cookie redirected every payout, persisted to disk, dashboard unchanged. **Fixed**: env-only (403 from that route), refused on mainnet, logged. | Fixed |
+| A-07 | High | Batch authorization minted a fresh batch per call — a dropped response plus a re-submit paid every recipient twice. **Fixed**: idempotency key. | Fixed |
+| A-08 | Medium | `perTransferLimitUsd` / `dailyLimitUsd` / `approvalThresholdUsd` / `requireDualApproval` were persisted, cross-checked and rendered — and enforced nowhere. **Fixed**: enforced in both routes; daily volume summed from the ledger. | Fixed |
+| A-09 | Medium | `settle_batch` looped an unbounded caller vector (one event + one created Coin per row) under a flat 10,000,000 MIST budget. Above ~1,023 rows Sui's 1,024-event / 1,024-command ceilings make it unexecutable at any budget. **Fixed**: `MAX_BATCH_ROWS = 256` (abort 108), gas scales with row count. | Fixed |
+| A-10 | High | `ComplianceConfig.paused` gates `settle_payment`/`settle_batch`, but the live customer path is `payment_intent::confirm_payment_intent`, which imports neither `compliance_config` nor `peg_monitor` — pausing halted batches while transfers kept executing. **Mitigated off-chain** (both routes check `paused`); the chain-side guard needs the republish. | Mitigated |
+| A-11 | High | **Nothing bounds an `AdminCap` call.** `withdraw_fees`, `smart_treasury::withdraw`, `allocate` (whose `operating_minimum` is a caller-supplied `u64` — pass `0`) and `settle_batch` have no amount cap, velocity limit, cooldown or timelock. One PTB signed with the operator key drains the pool, the fees and the treasury. This is the Step Finance shape exactly. | **Open** |
+| A-12 | High | The S-10 cap split is **not in effect at runtime**: `attestationCapObjectId()` falls back to `adminCapId`, `.env.example` ships `SPLASH_ATTESTATION_CAP_ID=` empty, and `recordBatchSettlementOnSui` passes `SPLASH_ADMIN_CAP_ID` directly. The hot key is still the money authority until the ceremony runs. | **Open** |
+| A-13 | High | Seal enforces no per-tenant policy: one global allowlist object, and the operator key decrypts every blob ever sealed. Seal also falls open to a hardcoded AES key while Walrus publishes for real. `/api/audit/[intentId]` has no ownership check. | **Open** |
+| A-14 | Medium | Batch rows are USD micro-units passed as SUI MIST on a `SettlementPool<SUI>`. $100 becomes 100,000,000 MIST = 0.1 SUI. Recipients are underpaid and the on-chain minimum is effectively disabled on that path. Correct for 6-decimal USDC; wrong for the 9-decimal SUI pool. Needs a product decision on what the SUI pool represents. | **Open** |
+| A-15 | Medium | No beneficiary screening on either payout path — Elliptic is referenced but is a stub, and the compliance engine is wired only to the 0xWal proposal route. Batch pays unscreened, caller-supplied raw Sui addresses. | **Open** |
+| A-16 | Medium | Operator-signed PTBs are never serialized and never `setGasPayment` — concurrent `after()` callbacks sign different transactions over the same owned gas coins. Best case a spurious FAILED transfer; worst case the operator's whole coin set locks for an epoch. | **Open** |
+| A-17 | High | Nothing ever writes `KYB_SUBMITTED` or `KYB_PROVIDER_APPROVED`, so `approveOrgKybOnChain` always throws and `verify_business` is unreachable. `readOrgKybState` also fails open to `ACTIVE` when the org row is missing, returning a success shape with `digest: ''` for a verification that never happened. | **Open** |
+| A-18 | Medium | `/api/kyb/cases/latest` matches on public `businessName` / `registrationNumber` with no org check, returning review notes, risk tier, Sumsub applicant id and every document's filename + SHA-256. | **Open** |
+| A-19 | Medium | `resolveAuthorityForSession` auto-provisions a missing user as `checker` → `APPROVER`, so any email that can mint a session becomes a valid second signature. zkLogin also hardcodes `DEFAULT_ORG_ID` and makes nonce binding optional at the client's discretion. | **Open** |
+
+**What the incidents imply here.** Step Finance died on key custody, not code —
+which makes **A-11 and A-12 the highest-value open items in this repo**: the cap
+split is written but not in effect, and even once it is, no value-moving Move
+function has a ceiling, so a single compromised hot key still drains everything
+in one transaction. Cetus died on a guard whose constant was wrong; the
+equivalent check here passed — `DEEPBOOK_PRICE_SCALING = 1e9` matches DeepBook's
+own `FLOAT_SCALING`, verified against the pinned dependency source, and the fee
+math already routes through OpenZeppelin's checked `u64::mul_div`. The
+denomination defect that did surface (**A-14**) is a units error at the
+application boundary, not in the contract arithmetic.
+
+---
+
 **Numbering note.** `S-06`/`S-07` are the 2026-07-13 advisories above
 (`AdminCap` abilities; `settle_batch` event attribution). The cap split and the
 DeepBook guard fix are `S-10`/`S-11` — module doc-comments use those IDs.
