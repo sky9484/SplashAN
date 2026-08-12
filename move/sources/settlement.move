@@ -25,6 +25,8 @@ const E_INVALID_AMOUNT: u64 = 105;
 const E_NOT_ACCOUNT_OWNER: u64 = 106;
 /// Gross settlement below the configured minimum (ComplianceConfig).
 const E_BELOW_MINIMUM: u64 = 107;
+/// Batch exceeds MAX_BATCH_ROWS.
+const E_BATCH_TOO_LARGE: u64 = 108;
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 const BPS_DENOMINATOR: u64 = 10_000;
@@ -34,6 +36,14 @@ const BPS_DENOMINATOR: u64 = 10_000;
 /// prevents an attacker (or misconfigured off-chain quote) from siphoning
 /// user funds via an absurd fee.
 const MAX_FEE_BPS: u64 = 200;
+/// Hard ceiling on rows per batch. Each row emits one `PaymentExecuted` event
+/// AND creates one `Coin` object, and Sui caps a transaction at 1,024 emitted
+/// events and 1,024 programmable-transaction commands. Without this bound a
+/// large payroll is not merely expensive — above ~1,023 rows it is
+/// unexecutable at any gas budget, and the caller only finds out from an
+/// unnamed system error. 256 leaves ~4x headroom and gives the failure a name.
+/// Must match `MAX_BATCH_ROWS` in `lib/policy/batch-limits.ts`.
+const MAX_BATCH_ROWS: u64 = 256;
 
 public struct SettlementPool<phantom T> has key {
     id: UID,
@@ -168,6 +178,7 @@ public fun settle_batch<T, QuoteAsset>(
     assert!(fee_bps <= MAX_FEE_BPS, E_FEE_EXCEEDED);
     peg_monitor::assert_pegged(peg_state, compliance_config, clock);
     assert!(vector::length(&payments) > 0, E_EMPTY_BATCH);
+    assert!(vector::length(&payments) <= MAX_BATCH_ROWS, E_BATCH_TOO_LARGE);
 
     let mut total_amount = 0;
     let mut index = 0;

@@ -10,6 +10,7 @@ import {
 import { requireCustomerRequest } from '@/lib/server/customer-auth';
 import { getLedgerBalance } from '@/lib/server/operations';
 import { readLastUsedFundingSource } from '@/lib/server/funding-sessions';
+import { isForeignAccountId, resolveSessionAccount } from '@/lib/server/session-account';
 
 export async function GET(request: Request) {
   const auth = await requireCustomerRequest(request);
@@ -18,9 +19,13 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const amountUsd = Number.parseFloat(url.searchParams.get('amountUsd') ?? '0');
   const amountDueMicro = Number.isFinite(amountUsd) && amountUsd > 0 ? Math.round(amountUsd * 1_000_000) : 0;
-  const businessAccountId = url.searchParams.get('businessAccountId')
-    ?? process.env.SPLASH_BUSINESS_ACCOUNT_ID
-    ?? 'dashboard-primary';
+  // Derived from the session, not the query string — this response discloses a
+  // spendable balance, so a client-named account is a balance oracle for any
+  // org whose account id you can guess.
+  const { accountId: businessAccountId } = await resolveSessionAccount(auth.session);
+  if (isForeignAccountId(url.searchParams.get('businessAccountId'), businessAccountId)) {
+    return NextResponse.json({ error: 'businessAccountId does not belong to this organization' }, { status: 403 });
+  }
   const registry = getEnabledFundingOptions();
   const heldBalanceMicro = getLedgerBalance(businessAccountId);
   const sources = buildFundingSources({ registry, heldBalanceMicro, amountDueMicro });

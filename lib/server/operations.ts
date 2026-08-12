@@ -91,6 +91,11 @@ export type BatchRecord = {
   packageId: string | null;
   explorer: { suiVisionTxUrl: string | null; suiScanTxUrl: string | null };
   demo?: boolean;
+  /** Owning account — batches are per-org and must not be readable across orgs. */
+  accountId?: string;
+  /** Replay key. A repeat authorization with the same key returns this record
+   *  instead of paying every recipient a second time. */
+  idempotencyKey?: string;
   createdAt: string;
 };
 
@@ -386,7 +391,14 @@ export function listTransfers(): TransferIntentRecord[] {
   return [...operations.transfers.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
-export function createBatch(input: { rowCount: number; acceptedRows: number; blockedRows: number; totalAmount: string }) {
+export function createBatch(input: {
+  rowCount: number;
+  acceptedRows: number;
+  blockedRows: number;
+  totalAmount: string;
+  accountId?: string;
+  idempotencyKey?: string;
+}) {
   const record: BatchRecord = {
     id: createId('batch'),
     state: 'QUEUED',
@@ -397,10 +409,28 @@ export function createBatch(input: { rowCount: number; acceptedRows: number; blo
     digest: null,
     packageId: null,
     explorer: explorerLinks(null),
+    accountId: input.accountId,
+    idempotencyKey: input.idempotencyKey,
     createdAt: new Date().toISOString(),
   };
   operations.batches.set(record.id, record);
   return record;
+}
+
+/**
+ * Find a batch already created for this (account, idempotency key) pair.
+ *
+ * A batch pays every recipient out of the SHARED SettlementPool, so a replayed
+ * authorization — a dropped response, a double-click, a proxy retry — pays
+ * everyone twice. Returning the existing record makes the second call a no-op
+ * rather than a second payroll run.
+ */
+export function findBatchByIdempotencyKey(accountId: string, idempotencyKey: string): BatchRecord | null {
+  if (!idempotencyKey) return null;
+  for (const record of operations.batches.values()) {
+    if (record.idempotencyKey === idempotencyKey && (record.accountId ?? '') === accountId) return record;
+  }
+  return null;
 }
 
 export function readBatch(batchId: string) {

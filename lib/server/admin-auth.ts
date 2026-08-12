@@ -1,6 +1,6 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
-import { existsSync, readFileSync, writeFileSync } from 'fs';
-import { join } from 'path';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { dirname, join } from 'path';
 import { cookies } from 'next/headers';
 
 export type AdminSession = {
@@ -93,24 +93,100 @@ function timingSafeStrEqual(a: string, b: string): boolean {
 }
 
 /**
- * Mint a stateless, per-session token: `${nonce}.${hmac(secret, nonce)}`.
- * The random nonce makes every issued cookie unique, and the HMAC means the
- * value cannot be forged without the secret. Verification is stateless — no
- * server-side session store required.
+ * Admin session token: `v2.${nonce}.${email}.${issuedAt}.${epoch}.${hmac}`.
+ *
+ * Audit finding (high): the previous token was `${nonce}.${hmac(nonce)}` — it
+ * carried no issue time, no identity and no revocation handle. The 8-hour
+ * `maxAge` on the cookie is a CLIENT-side hint; a copied token verified forever
+ * because nothing server-side ever aged it out, and `clearAdminSessionCookie`
+ * only deletes the browser's copy. A stolen admin cookie was permanent,
+ * unattributable access — and this is the console that can rewrite contract
+ * config and settlement risk parameters.
+ *
+ * Now: the issue time is inside the signed payload and enforced on every read,
+ * the subject is bound so the token names who it was minted for, and a
+ * revocation epoch lets "sign out everywhere" invalidate live tokens.
  */
-function signToken(secret: string): string {
-  const nonce = randomBytes(18).toString('hex');
-  const mac = createHmac('sha256', secret).update(`admin:${nonce}`).digest('hex');
-  return `${nonce}.${mac}`;
+const TOKEN_VERSION = 'v2';
+const SESSION_TTL_SECONDS = 60 * 60 * 8;
+
+function tokenPayload(nonce: string, email: string, issuedAt: number, epoch: number): string {
+  return `admin:${TOKEN_VERSION}:${nonce}:${email}:${issuedAt}:${epoch}`;
 }
 
-function verifyToken(token: string, secret: string): boolean {
-  const dot = token.indexOf('.');
-  if (dot <= 0 || dot === token.length - 1) return false;
-  const nonce = token.slice(0, dot);
-  const mac = token.slice(dot + 1);
-  const expected = createHmac('sha256', secret).update(`admin:${nonce}`).digest('hex');
-  return timingSafeStrEqual(mac, expected);
+function signToken(secret: string, email: string, nowSeconds = Math.floor(Date.now() / 1000)): string {
+  const nonce = randomBytes(18).toString('hex');
+  const epoch = readRevocationEpoch();
+  const payload = tokenPayload(nonce, email, nowSeconds, epoch);
+  const mac = createHmac('sha256', secret).update(payload).digest('hex');
+  return [TOKEN_VERSION, nonce, Buffer.from(email).toString('base64url'), String(nowSeconds), String(epoch), mac].join('.');
+}
+
+type VerifiedToken = { email: string; issuedAt: number };
+
+function verifyToken(token: string, secret: string, nowSeconds = Math.floor(Date.now() / 1000)): VerifiedToken | null {
+  const parts = token.split('.');
+  if (parts.length !== 6) return null;
+  const [version, nonce, emailB64, issuedAtRaw, epochRaw, mac] = parts;
+  if (version !== TOKEN_VERSION) return null;
+
+  const issuedAt = Number.parseInt(issuedAtRaw, 10);
+  const epoch = Number.parseInt(epochRaw, 10);
+  if (!Number.isSafeInteger(issuedAt) || !Number.isSafeInteger(epoch)) return null;
+
+  let email: string;
+  try {
+    email = Buffer.from(emailB64, 'base64url').toString('utf8');
+  } catch {
+    return null;
+  }
+  if (!email) return null;
+
+  const expected = createHmac('sha256', secret).update(tokenPayload(nonce, email, issuedAt, epoch)).digest('hex');
+  if (!timingSafeStrEqual(mac, expected)) return null;
+
+  // Expiry is enforced HERE, server-side. A token whose cookie maxAge the
+  // client ignored (or that was copied out of the jar) still dies on schedule.
+  if (nowSeconds - issuedAt > SESSION_TTL_SECONDS) return null;
+  // Reject a clock-skewed token minted "in the future" by more than a minute.
+  if (issuedAt - nowSeconds > 60) return null;
+  // Revocation: bumping the epoch invalidates every token minted before it.
+  if (epoch < readRevocationEpoch()) return null;
+
+  return { email, issuedAt };
+}
+
+// ── Revocation epoch ────────────────────────────────────────────────────────
+// Persisted so it survives a restart, and so every module instance Next bundles
+// separately agrees — the same reason the dev secret lives in a file.
+
+const REVOCATION_FILE = join(process.env.SPLASH_DATA_DIR ?? join(process.cwd(), 'data'), 'admin-session-epoch');
+
+function readRevocationEpoch(): number {
+  try {
+    const raw = Number.parseInt(readFileSync(REVOCATION_FILE, 'utf8').trim(), 10);
+    return Number.isSafeInteger(raw) && raw >= 0 ? raw : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Invalidate every live admin session. This is the containment lever the Step
+ * Finance incident calls for: when a device is suspected compromised you need
+ * to kill issued credentials, not just ask the browser to forget one.
+ */
+export function revokeAllAdminSessions(): number {
+  const next = readRevocationEpoch() + 1;
+  try {
+    mkdirSync(dirname(REVOCATION_FILE), { recursive: true });
+    writeFileSync(REVOCATION_FILE, String(next), { mode: 0o600 });
+    console.warn(`[admin-auth] all admin sessions revoked (epoch ${next})`);
+  } catch (error) {
+    // Surface rather than silently pretend the revocation landed.
+    throw new Error(`Could not persist the admin session revocation epoch: ${error instanceof Error ? error.message : error}`);
+  }
+  return next;
 }
 
 function configuredSession(): AdminSession {
@@ -159,12 +235,18 @@ export async function getAdminSession() {
 
   const cookieStore = await cookies();
   const value = cookieStore.get(ADMIN_SESSION_COOKIE)?.value;
+  if (!value) return null;
 
-  if (!value || !verifyToken(value, secret)) {
-    return null;
-  }
+  const verified = verifyToken(value, secret);
+  if (!verified) return null;
 
-  return configuredSession();
+  // The token names the subject it was minted for. If ADMIN_EMAIL has since
+  // changed, tokens for the old identity stop working rather than silently
+  // continuing to authorize as whoever is configured now.
+  const session = configuredSession();
+  if (verified.email.toLowerCase() !== session.email.toLowerCase()) return null;
+
+  return session;
 }
 
 export async function setAdminSessionCookie(options: { secure?: boolean } = {}) {
@@ -175,9 +257,11 @@ export async function setAdminSessionCookie(options: { secure?: boolean } = {}) 
 
   const cookieStore = await cookies();
 
-  cookieStore.set(ADMIN_SESSION_COOKIE, signToken(secret), {
+  cookieStore.set(ADMIN_SESSION_COOKIE, signToken(secret, configuredSession().email), {
     httpOnly: true,
-    maxAge: 60 * 60 * 8,
+    // Mirrors the TTL now enforced inside the token; the cookie hint alone was
+    // never a control.
+    maxAge: SESSION_TTL_SECONDS,
     path: '/',
     sameSite: 'lax',
     secure: options.secure ?? isProduction,

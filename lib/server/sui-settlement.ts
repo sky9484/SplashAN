@@ -12,12 +12,14 @@ import {
   FALLBACK_FEE_BPS,
   getCorridorFeeBps,
 } from '@/lib/fx/corridors';
+import { batchGasBudgetMist, checkBatchSize } from '@/lib/policy/batch-limits';
 import {
   checkPoolAllowed,
   parsePoolWhitelist,
   type PoolWhitelistVerdict,
 } from '@/lib/policy/deepbook-whitelist';
 import { getContractConfig, type ContractConfigField } from '@/lib/server/contract-config';
+import { resolvePegAttestation } from '@/lib/server/peg-attestation';
 import { suiClient } from '@/lib/sui';
 
 const execFileAsync = promisify(execFile);
@@ -356,6 +358,42 @@ const ABORT_CODES: Record<number, string> = {
   803: 'E_RECEIPT_INVALID_RECIPIENT — receipt_v2::create_receipt called with recipient = 0x0.',
 };
 
+/** The modules ABORT_CODES actually describes. Anything else is a dependency. */
+const OUR_MODULES = new Set([
+  'settlement',
+  'business_account',
+  'peg_monitor',
+  'compliance_config',
+  'payment_intent',
+  'audit_anchor',
+  'dual_treasury',
+  'smart_treasury',
+  'receipt_v2',
+]);
+
+/**
+ * Aborts raised by our DEPENDENCIES, keyed by the module they come from.
+ *
+ * These matter because settlement calls into DeepBook on the hot path, and
+ * DeepBook's own codes are small integers (1-21) that overlap nothing of ours
+ * today — but nothing stops a future dependency from aborting with, say, 100,
+ * which our table would confidently mislabel as `E_NOT_VERIFIED`. So the code
+ * table is only consulted when the abort actually came from `splash_protocol`.
+ */
+const DEPENDENCY_ABORT_CODES: Record<string, Record<number, string>> = {
+  book: {
+    1: 'deepbook::book::EInvalidAmountIn — the liquidity guard asked DeepBook to quote a zero (or otherwise invalid) size.',
+    2: 'deepbook::book::EEmptyOrderbook — the whitelisted DeepBook pool has no live bid or no live ask, so mid_price is undefined. Settlement is correctly blocked; it will clear again once the book has two sides. Check the pool on an explorer before changing any risk parameter.',
+    3: 'deepbook::book::EInvalidPriceRange — level2 range queried with price_low > price_high. Check max_slippage_bps in ComplianceConfig.',
+    5: 'deepbook::book::EOrderBelowMinimumSize — the quoted size is below the pool minSize.',
+    6: 'deepbook::book::EOrderInvalidLotSize — the quoted size is not a multiple of the pool lot size.',
+  },
+  pool: {
+    11: 'deepbook::pool::EPackageVersionDisabled — the deployed DeepBook package version was disabled. The pinned pool id may need to move to a currently-supported pool.',
+    14: 'deepbook::pool::EPoolNotRegistered — DEEPBOOK_POOL_ID is not a registered pool on this network.',
+  },
+};
+
 function humanizeSuiError(rawError: string | undefined | null, stderr: string): string {
   const error = [rawError, stderr].filter(Boolean).join('\n') || 'Unknown Sui error';
   if (/No managed addresses|no active managed address/i.test(error)) {
@@ -364,11 +402,27 @@ function humanizeSuiError(rawError: string | undefined | null, stderr: string): 
   const abortMatch = error.match(/MoveAbort\([^)]*?,\s*(\d+)\)/) ?? error.match(/with code\s+(\d+)/i);
   if (abortMatch) {
     const code = Number.parseInt(abortMatch[1], 10);
-    const human = ABORT_CODES[code];
     const fnMatch = error.match(/function_name:\s*Some\("([^"]+)"\)/) ?? error.match(/within function\s+'([^']+)'/i);
     const fnName = fnMatch?.[1] ?? '';
-    if (human) return `${human}${fnName ? ` (in ${fnName})` : ''}`;
-    return `MoveAbort code ${code}${fnName ? ` in ${fnName}` : ''} — ${error}`;
+    // `ModuleId { address: 0x…, name: Identifier("peg_monitor") }` in the CLI /
+    // SDK rendering, and `name: peg_monitor` in some node responses.
+    const moduleMatch =
+      error.match(/name:\s*Identifier\("([^"]+)"\)/) ?? error.match(/\bname:\s*([a-z_][a-z0-9_]*)/i);
+    const moduleName = moduleMatch?.[1] ?? '';
+
+    const dependency = DEPENDENCY_ABORT_CODES[moduleName]?.[code];
+    if (dependency) return `${dependency}${fnName ? ` (in ${fnName})` : ''}`;
+
+    // Only claim to know the code if it came from our own package. An abort from
+    // a dependency module gets reported verbatim rather than mislabelled.
+    const ours = OUR_MODULES.has(moduleName);
+    const human = ours || !moduleName ? ABORT_CODES[code] : undefined;
+    if (human) {
+      const caveat = moduleName ? '' : ' (module unknown — verify this is a splash_protocol abort)';
+      return `${human}${fnName ? ` (in ${fnName})` : ''}${caveat}`;
+    }
+    const from = moduleName ? ` from module '${moduleName}'` : '';
+    return `MoveAbort code ${code}${from}${fnName ? ` in ${fnName}` : ''} — ${error}`;
   }
   if (/InsufficientGas/i.test(error)) return 'InsufficientGas — increase --gas-budget.';
   if (/ObjectNotFound/i.test(error)) return `ObjectNotFound — one of the configured object IDs does not exist on the network. Verify .env.local.`;
@@ -509,9 +563,38 @@ function eventBySuffix(events: SuiEventView[], suffix: string) {
   return events.find((event) => event.type.endsWith(suffix)) ?? null;
 }
 
+/**
+ * Apply the demo recipient override — loudly, and never on mainnet.
+ *
+ * `SPLASH_TEST_RECIPIENT_ADDRESS` replaces the real beneficiary on every live
+ * settlement path, per row in a batch. It is a genuinely useful testnet
+ * affordance, but it was applied after the simulate-mode early return, with no
+ * network gate and no log line: promote a testnet config to mainnet with the
+ * value still set and a 50-row payroll pays the entire total to one address,
+ * returns 200, and marks the batch SETTLED. The beneficiaries are simply never
+ * paid, and nothing in the record says so.
+ */
+function resolvePayoutRecipient(inputRecipient: string | undefined, label: string): string {
+  const configured = (getContractConfig().testRecipientAddress ?? '').trim();
+  if (!configured) return inputRecipient ?? '';
+
+  if ((process.env.SUI_NETWORK ?? '').trim().toLowerCase() === 'mainnet') {
+    throw new Error(
+      'SPLASH_TEST_RECIPIENT_ADDRESS is set while SUI_NETWORK=mainnet. That override redirects every real ' +
+        'payout to one address. Clear it before settling on mainnet.',
+    );
+  }
+  if (inputRecipient && inputRecipient !== configured) {
+    console.warn(
+      `[Sui Settlement] demo override: ${label} ${inputRecipient.slice(0, 12)}… redirected to ` +
+        `SPLASH_TEST_RECIPIENT_ADDRESS ${configured.slice(0, 12)}…. The real beneficiary is NOT being paid.`,
+    );
+  }
+  return configured;
+}
+
 function requireConfiguredRecipient(inputRecipient: string) {
-  const configured = getContractConfig().testRecipientAddress;
-  return requireSuiAddress(configured || inputRecipient, 'Composed payment recipient');
+  return requireSuiAddress(resolvePayoutRecipient(inputRecipient, 'Composed payment recipient'), 'Composed payment recipient');
 }
 
 function configuredSmartTreasuryId() {
@@ -897,9 +980,19 @@ async function updatePegOnSui(): Promise<void> {
   }
 
   // Deviation in ppm from $1.00: 0 = healthy peg, max allowed on-chain = 3,000 ppm (0.30%).
-  // Function signature: update_peg(peg_state, admin_cap, usdc_deviation_ppm, usdt_deviation_ppm, clock)
-  const usdcDeviationPpm = process.env.SPLASH_PEG_USDC_DEVIATION_PPM ?? '0';
-  const usdtDeviationPpm = process.env.SPLASH_PEG_USDT_DEVIATION_PPM ?? '0';
+  // Function signature: update_peg(peg_state, cap, usdc_deviation_ppm, usdt_deviation_ppm, clock)
+  //
+  // MEASURED, never a constant — see lib/server/peg-attestation.ts. When no
+  // live reading is available we push NOTHING and let PegState go stale, so
+  // assert_pegged aborts (302) instead of clearing settlement against a peg
+  // nobody checked.
+  const pegAttestation = await resolvePegAttestation();
+  if (!pegAttestation.push) {
+    console.warn(`[Sui Peg Update] refusing to attest the peg: ${pegAttestation.reason}`);
+    return;
+  }
+  const usdcDeviationPpm = String(pegAttestation.usdcDeviationPpm);
+  const usdtDeviationPpm = String(pegAttestation.usdtDeviationPpm);
 
   console.log('[Sui Peg Update] Refreshing peg (USDC dev:', usdcDeviationPpm, 'ppm, USDT dev:', usdtDeviationPpm, 'ppm)...');
   const { stdout, stderr } = await runSuiCommand([
@@ -991,9 +1084,7 @@ export async function recordSingleTransferOnSui(input: {
   const USDC_TYPE = cfg.usdcType;
   if (!cfg.deepbookQuoteType) throw new Error('DEEPBOOK_QUOTE_TYPE is not configured. Set it in admin → Contract config.');
   const DEEPBOOK_QUOTE_TYPE = cfg.deepbookQuoteType;
-  const SPLASH_TEST_RECIPIENT_ADDRESS = cfg.testRecipientAddress;
-
-  const recipientAddress = SPLASH_TEST_RECIPIENT_ADDRESS || input.recipient;
+  const recipientAddress = resolvePayoutRecipient(input.recipient, 'Transfer recipient');
   requireSuiAddress(recipientAddress, 'Transfer recipient');
 
   const feeBps = resolveFeeBps({ feeBps: input.feeBps, targetCurrency: input.targetCurrency });
@@ -1006,24 +1097,36 @@ export async function recordSingleTransferOnSui(input: {
   // settle_payment takes no capability, so the only cap this PTB needs is the
   // attestation cap for the peg push — this path stays fully hot after the split.
   const SPLASH_ATTESTATION_CAP_ID = attestationCapObjectId();
-  const usdcDeviationPpm = process.env.SPLASH_PEG_USDC_DEVIATION_PPM ?? '0';
-  const usdtDeviationPpm = process.env.SPLASH_PEG_USDT_DEVIATION_PPM ?? '0';
+  // MEASURED, never a constant. Writing a hardcoded 0 here and reading it back
+  // via assert_pegged one command later is what made the peg breaker inert.
+  const pegAttestation = await resolvePegAttestation();
+  if (!pegAttestation.push) {
+    console.warn(`[Sui Peg] not attesting the peg in this PTB: ${pegAttestation.reason}`);
+  }
+  const usdcDeviationPpm = String(pegAttestation.push ? pegAttestation.usdcDeviationPpm : 0);
+  const usdtDeviationPpm = String(pegAttestation.push ? pegAttestation.usdtDeviationPpm : 0);
 
   const gasBudget = process.env.SUI_RECORD_SETTLEMENT_GAS_BUDGET ?? '10000000';
 
   if (execution === 'sdk') {
     const tx = new Transaction();
     tx.setGasBudget(gasBudget);
-    tx.moveCall({
-      target: `${SPLASH_PACKAGE_ID}::peg_monitor::update_peg`,
-      arguments: [
-        tx.object(SPLASH_PEG_STATE_ID),
-        tx.object(SPLASH_ATTESTATION_CAP_ID),
-        tx.pure.u64(usdcDeviationPpm),
-        tx.pure.u64(usdtDeviationPpm),
-        tx.object('0x6'),
-      ],
-    });
+    // Only attest a peg we actually measured. Pushing a constant here and
+    // reading it back through assert_pegged one command later is what made the
+    // breaker inert; when there is no live reading we omit the command entirely
+    // and let PegState go stale (abort 302) rather than clear the settlement.
+    if (pegAttestation.push) {
+      tx.moveCall({
+        target: `${SPLASH_PACKAGE_ID}::peg_monitor::update_peg`,
+        arguments: [
+          tx.object(SPLASH_PEG_STATE_ID),
+          tx.object(SPLASH_ATTESTATION_CAP_ID),
+          tx.pure.u64(usdcDeviationPpm),
+          tx.pure.u64(usdtDeviationPpm),
+          tx.object('0x6'),
+        ],
+      });
+    }
     const [payment] = tx.splitCoins(tx.gas, [paymentMist]);
     tx.moveCall({
       target: `${SPLASH_PACKAGE_ID}::settlement::settle_payment`,
@@ -1061,15 +1164,21 @@ export async function recordSingleTransferOnSui(input: {
   if (mergeIds.length > 0) {
     ptbArgs.push('--merge-coins', 'gas', `[${mergeIds.map((id) => `@${id}`).join(',')}]`);
   }
+  if (pegAttestation.push) {
+    // 1. Attest the peg reading we just MEASURED, atomically with the settle
+    //    below. Skipped entirely when no live reading is available, so
+    //    assert_pegged falls back to the staleness guard.
+    ptbArgs.push(
+      '--move-call',
+      `${SPLASH_PACKAGE_ID}::peg_monitor::update_peg`,
+      `@${SPLASH_PEG_STATE_ID}`,
+      `@${SPLASH_ATTESTATION_CAP_ID}`,
+      usdcDeviationPpm,
+      usdtDeviationPpm,
+      '@0x6',
+    );
+  }
   ptbArgs.push(
-    // 1. Push fresh Pyth-derived peg reading on chain (atomic with settle below)
-    '--move-call',
-    `${SPLASH_PACKAGE_ID}::peg_monitor::update_peg`,
-    `@${SPLASH_PEG_STATE_ID}`,
-    `@${SPLASH_ATTESTATION_CAP_ID}`,
-    usdcDeviationPpm,
-    usdtDeviationPpm,
-    '@0x6',
     // 2. Split payment from gas
     '--split-coins', 'gas', `[${paymentMist}]`,
     '--assign', 'payment',
@@ -1165,7 +1274,6 @@ export async function recordBatchSettlementOnSui(input: {
     throw new Error('DEEPBOOK_QUOTE_TYPE is not configured — settle_sui_batch<QuoteAsset> needs the DeepBook quote type. Set it in admin → Contract config (or .env.local), or run batches in simulate mode.');
   }
   const DEEPBOOK_QUOTE_TYPE = cfg.deepbookQuoteType;
-  const SPLASH_TEST_RECIPIENT_ADDRESS = cfg.testRecipientAddress;
   const feeBps = resolveFeeBps({ feeBps: input.feeBps, targetCurrency: input.targetCurrency });
 
   // Peg refresh is bundled into the same PTB below — no separate tx, no staleness race.
@@ -1179,10 +1287,22 @@ export async function recordBatchSettlementOnSui(input: {
   // see docs/KEY-CEREMONY-RUNBOOK.md. Single transfers are unaffected.
   const SPLASH_ATTESTATION_CAP_ID = attestationCapObjectId();
   const SPLASH_ADMIN_CAP_ID = configIdOrThrow('adminCapId', 'SPLASH_ADMIN_CAP_ID');
-  const usdcDeviationPpm = process.env.SPLASH_PEG_USDC_DEVIATION_PPM ?? '0';
-  const usdtDeviationPpm = process.env.SPLASH_PEG_USDT_DEVIATION_PPM ?? '0';
+  // MEASURED, never a constant. Writing a hardcoded 0 here and reading it back
+  // via assert_pegged one command later is what made the peg breaker inert.
+  const pegAttestation = await resolvePegAttestation();
+  if (!pegAttestation.push) {
+    console.warn(`[Sui Peg] not attesting the peg in this PTB: ${pegAttestation.reason}`);
+  }
+  const usdcDeviationPpm = String(pegAttestation.push ? pegAttestation.usdcDeviationPpm : 0);
+  const usdtDeviationPpm = String(pegAttestation.push ? pegAttestation.usdtDeviationPpm : 0);
 
-  const gasBudget = process.env.SUI_RECORD_SETTLEMENT_GAS_BUDGET ?? '10000000';
+  // A batch creates one Coin object and emits one event PER ROW, so a flat
+  // budget is wrong by construction: 10_000_000 MIST was exhausted at
+  // single-digit row counts while the single-transfer path next door used
+  // 30_000_000 for one payment.
+  const batchSize = checkBatchSize(input.rows.length);
+  if (!batchSize.ok) throw new Error(batchSize.message);
+  const gasBudget = batchGasBudgetMist(input.rows.length, process.env.SUI_RECORD_SETTLEMENT_GAS_BUDGET);
 
   // Pre-flight: the most common batch failure is an unfunded SettlementPool,
   // which otherwise surfaces as an opaque MoveAbort mid-PTB. Check it here so
@@ -1191,23 +1311,29 @@ export async function recordBatchSettlementOnSui(input: {
 
   const paymentObjects = input.rows.map((row) => {
     const amount = moneyToMicro(Number.parseFloat(row.amount ?? '0'));
-    const recipient = requireSuiAddress(SPLASH_TEST_RECIPIENT_ADDRESS || row.address || '', `Batch recipient ${row.name ?? row.address ?? ''}`.trim());
+    const recipient = requireSuiAddress(resolvePayoutRecipient(row.address, `Batch recipient ${row.name ?? row.address ?? ''}`.trim()), `Batch recipient ${row.name ?? row.address ?? ''}`.trim());
     return { recipient, amount };
   });
 
   if (execution === 'sdk') {
     const tx = new Transaction();
     tx.setGasBudget(gasBudget);
-    tx.moveCall({
-      target: `${SPLASH_PACKAGE_ID}::peg_monitor::update_peg`,
-      arguments: [
-        tx.object(SPLASH_PEG_STATE_ID),
-        tx.object(SPLASH_ATTESTATION_CAP_ID),
-        tx.pure.u64(usdcDeviationPpm),
-        tx.pure.u64(usdtDeviationPpm),
-        tx.object('0x6'),
-      ],
-    });
+    // Only attest a peg we actually measured. Pushing a constant here and
+    // reading it back through assert_pegged one command later is what made the
+    // breaker inert; when there is no live reading we omit the command entirely
+    // and let PegState go stale (abort 302) rather than clear the settlement.
+    if (pegAttestation.push) {
+      tx.moveCall({
+        target: `${SPLASH_PACKAGE_ID}::peg_monitor::update_peg`,
+        arguments: [
+          tx.object(SPLASH_PEG_STATE_ID),
+          tx.object(SPLASH_ATTESTATION_CAP_ID),
+          tx.pure.u64(usdcDeviationPpm),
+          tx.pure.u64(usdtDeviationPpm),
+          tx.object('0x6'),
+        ],
+      });
+    }
     const payments = paymentObjects.map((payment) =>
       tx.moveCall({
         target: `${SPLASH_PACKAGE_ID}::settlement::new_payment`,
@@ -1242,16 +1368,19 @@ export async function recordBatchSettlementOnSui(input: {
     };
   }
 
-  const ptbArgs = ['client', 'ptb',
-    // 1. Push fresh Pyth-derived peg reading on chain (atomic with settle_batch below)
-    '--move-call',
-    `${SPLASH_PACKAGE_ID}::peg_monitor::update_peg`,
-    `@${SPLASH_PEG_STATE_ID}`,
-    `@${SPLASH_ATTESTATION_CAP_ID}`,
-    usdcDeviationPpm,
-    usdtDeviationPpm,
-    '@0x6',
-  ];
+  const ptbArgs = ['client', 'ptb'];
+  if (pegAttestation.push) {
+    // 1. Attest the MEASURED peg reading, atomically with settle_batch below.
+    ptbArgs.push(
+      '--move-call',
+      `${SPLASH_PACKAGE_ID}::peg_monitor::update_peg`,
+      `@${SPLASH_PEG_STATE_ID}`,
+      `@${SPLASH_ATTESTATION_CAP_ID}`,
+      usdcDeviationPpm,
+      usdtDeviationPpm,
+      '@0x6',
+    );
+  }
 
   paymentObjects.forEach((payment, index) => {
     ptbArgs.push(

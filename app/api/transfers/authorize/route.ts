@@ -28,6 +28,12 @@ import { requireCustomerRequest } from '@/lib/server/customer-auth';
 import { assertCleanBody, ProvenanceViolationError, provenanceViolationResponse } from '@/lib/auth/provenance-guard';
 import { requireActiveOrg } from '@/lib/server/kyb-gate';
 import { checkMinimumSettlement } from '@/lib/policy/limits';
+import { checkAuthorizationLimits } from '@/lib/policy/authorization-limits';
+import { verifyPayoutTotp } from '@/lib/auth/totp';
+import { readOperatingSettings } from '@/lib/server/operating-settings';
+import { readComplianceControls } from '@/lib/server/sui-settlement';
+import { isForeignAccountId, resolveSessionAccount } from '@/lib/server/session-account';
+import { listLedgerEntries } from '@/lib/server/operations';
 import { readJsonBody } from '@/lib/server/http';
 
 export const maxDuration = 60;
@@ -89,8 +95,31 @@ export async function POST(request: Request) {
   const body = parsed.data;
   const totp = String(body.totp ?? '');
   const paymentRail = String(body.paymentRail ?? 'STRIPE_CHECKOUT');
-  if (!body.fundingSessionId && body.fundingSelection?.type !== 'held' && paymentRail !== 'STRIPE_CHECKOUT' && paymentRail !== 'AIRWALLEX_WIRE' && !/^\d{6}$/.test(totp)) {
-    return NextResponse.json({ error: 'A valid 6-digit authorization code is required' }, { status: 400 });
+
+  // The paying account is resolved from the SESSION. It used to come from
+  // `body.businessAccountId`, which let any session holder name another org's
+  // funded account and spend it.
+  const { accountId: businessAccountId } = await resolveSessionAccount(auth.session);
+  if (isForeignAccountId(body.businessAccountId, businessAccountId)) {
+    return NextResponse.json({ error: 'businessAccountId does not belong to this organization' }, { status: 403 });
+  }
+
+  const settings = readOperatingSettings();
+
+  // Second factor. This used to be `/^\d{6}$/` and nothing else — any six
+  // digits authorized a payout. `requireTotp` is now load-bearing: when it is
+  // on and no secret is enrolled, we refuse rather than fall back to the shape
+  // check.
+  const totpRequiredForThisRail =
+    !body.fundingSessionId &&
+    body.fundingSelection?.type !== 'held' &&
+    paymentRail !== 'STRIPE_CHECKOUT' &&
+    paymentRail !== 'AIRWALLEX_WIRE';
+  if (totpRequiredForThisRail) {
+    const verdict = verifyPayoutTotp({ code: totp, accountId: businessAccountId, requireTotp: settings.requireTotp });
+    if (!verdict.ok) {
+      return NextResponse.json({ error: verdict.message, code: `totp_${verdict.code}` }, { status: 400 });
+    }
   }
 
   const sourceAmount = Number.parseFloat(body.amount.value);
@@ -104,14 +133,54 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+  // Ceilings the operator configured in Settings. Until now the only amount
+  // rule on this route was the $100 floor, so a $1,000 per-transfer limit
+  // bounded nothing.
+  const limits = checkAuthorizationLimits({
+    amountUsd: sourceAmount,
+    settings,
+    ledger: listLedgerEntries(businessAccountId),
+  });
+  if (!limits.ok) {
+    return NextResponse.json({ error: limits.message, code: limits.code, limitUsd: limits.limitUsd }, { status: 400 });
+  }
+  if (limits.requiresSecondApproval) {
+    return NextResponse.json(
+      {
+        error:
+          `${body.amount.value} USD is at or above the ${settings.approvalThresholdUsd} approval threshold and ` +
+          'dual approval is enabled, so this payment needs a second approver. Submit it through the approval queue.',
+        code: 'requires_second_approval',
+        approvalThresholdUsd: settings.approvalThresholdUsd,
+      },
+      { status: 409 },
+    );
+  }
+
+  // The on-chain pause switch does not gate this path: the live transfer PTB is
+  // payment_intent::confirm_payment_intent, which imports neither
+  // compliance_config nor peg_monitor, so `assert_active` never runs. Until the
+  // republished contract carries those guards, refuse here — otherwise ticking
+  // "Pause settlement" halts batches while customer transfers keep executing.
+  const controls = await readComplianceControls();
+  if (controls.paused) {
+    return NextResponse.json(
+      { error: 'Settlement is paused by the compliance operator.', code: 'settlement_paused' },
+      { status: 503 },
+    );
+  }
+
   const sourceAmountCents = Math.round(sourceAmount * 100);
   const sourceAmountMicro = Math.round(sourceAmount * 1_000_000);
-  const businessAccountId = body.businessAccountId
-    ?? process.env.SPLASH_BUSINESS_ACCOUNT_ID
-    ?? 'dashboard-primary';
   let fundingSession = body.fundingSessionId ? readFundingSession(body.fundingSessionId) : null;
   if (body.fundingSessionId && !fundingSession) {
     return NextResponse.json({ error: 'Funding session not found' }, { status: 404 });
+  }
+  // A funding session carries a CREDITed deposit. Binding another org's session
+  // to this transfer would spend their deposit, so ownership is checked rather
+  // than assumed from possession of the (guessable-length) session id.
+  if (fundingSession && fundingSession.businessAccountId !== businessAccountId) {
+    return NextResponse.json({ error: 'Funding session does not belong to this organization' }, { status: 403 });
   }
   if (fundingSession?.transferIntentId) {
     return NextResponse.json({ error: 'Funding session is already bound to a transfer' }, { status: 409 });
@@ -206,17 +275,43 @@ export async function POST(request: Request) {
     fundingEffectiveSlippageBps: fundingSession?.effectiveSlippageBps,
   });
   if (fundingSession) updateFundingSession(fundingSession.id, { transferIntentId: intent.id });
-  if (fundingSelection.type === 'held') {
-    createLedgerEntry({
-      accountId: businessAccountId,
-      direction: 'DEBIT',
-      amountUsdcMicro: sourceAmountMicro,
-      refType: 'TRANSFER',
-      refId: intent.id,
-      demo: process.env.NODE_ENV !== 'production' || process.env.USE_MOCK_APIS === 'true' || process.env.NEXT_PUBLIC_DEMO_MODE === 'true',
+
+  // Debit the PAYER for every funding source, not only `held`.
+  //
+  // `ingestStablecoinDeposit` writes a CREDIT against the funding session's
+  // account when a deposit lands, and that same account is what
+  // `getLedgerBalance` reports as spendable "Splash Balance". Debiting only on
+  // the `held` branch meant a stablecoin-funded transfer settled without ever
+  // consuming its credit — so one 5,000 deposit funded a 5,000 stablecoin
+  // transfer AND a second 5,000 transfer from the balance it left behind.
+  // (`completeDeliveryForTransfer` does write a DEBIT, but against the
+  // RECIPIENT's account, so it never offsets the payer's credit.)
+  const debitedAmountMicro = fundingSelection.type === 'stablecoin'
+    ? fundingSession?.normalizedAmountUsdcMicro ?? sourceAmountMicro
+    : sourceAmountMicro;
+  const payerDebit = createLedgerEntry({
+    accountId: businessAccountId,
+    direction: 'DEBIT',
+    amountUsdcMicro: debitedAmountMicro,
+    refType: 'TRANSFER',
+    refId: intent.id,
+    demo: process.env.NODE_ENV !== 'production' || process.env.USE_MOCK_APIS === 'true' || process.env.NEXT_PUBLIC_DEMO_MODE === 'true',
+  });
+  // Fiat rails fund the payout externally, so their balance legitimately dips
+  // negative until the provider's credit posts; a coin or held source going
+  // negative means we just spent money the ledger says is not there.
+  if (payerDebit.balanceAfterMicro < 0 && fundingSelection.type !== 'fiat') {
+    updateTransferIntent(intent.id, {
+      state: 'FAILED',
+      failureReason: 'Ledger balance would go negative for this funding source',
+      failedAtState: 'QUEUED',
     });
+    return NextResponse.json(
+      { error: 'Splash balance is insufficient for this payment source', code: 'insufficient_ledger_balance' },
+      { status: 409 },
+    );
   }
-  recordLastUsedFundingSource(fundingSession?.businessAccountId ?? businessAccountId, fundingSelection.source);
+  recordLastUsedFundingSource(businessAccountId, fundingSelection.source);
   updateAuditReceipt(intent.id, {
     approvedBy: 'dashboard-operator',
     approvedAt: new Date().toISOString(),
