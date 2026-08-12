@@ -133,6 +133,14 @@ public fun assert_deepbook_liquidity<BaseAsset, QuoteAsset>(
     base_quantity: u64,
     clock: &Clock,
 ) {
+    // S-12 fix, FIRST — before a single field is read off `pool`. DeepBook pools
+    // are permissionlessly creatable, so without this the guard measures a venue
+    // the CALLER chose: stand up a pool, seed it with your own liquidity, and
+    // the depth and slippage asserts below are satisfied trivially. That turns
+    // the whole guard into theatre on the `settle_batch` path, which pays out of
+    // the shared SettlementPool. Only venues the protocol whitelisted count.
+    compliance_config::assert_pool_allowed(config, object::id(pool));
+
     let (remaining_base, quote_out, _) = pool.get_quote_quantity_out_input_fee(base_quantity, clock);
     assert!(quote_out > 0, E_INSUFFICIENT_DEPTH);
 

@@ -110,9 +110,17 @@ Record: new **package id**, **AdminCap** object id, and the **UpgradeCap**.
 ### 3.3 Re-bootstrap every shared object
 Nothing carries over. Re-create and record ids for:
 `compliance_config::create` → `ComplianceConfig` + `ComplianceCap`
-  — ⚠️ its signature GAINED a 5th parameter, `min_settlement_amount` (the $100
-  floor, in the settled coin's MINOR UNITS: 100_000_000 for 6-decimal USDC).
-  Zero is rejected, so the floor cannot be disabled by accident;
+  — ⚠️ its signature GAINED TWO parameters:
+  **5th, `min_settlement_amount`** — the $100 floor, in the settled coin's MINOR
+  UNITS (100_000_000 for 6-decimal USDC). Zero is rejected, so the floor cannot
+  be disabled by accident;
+  **6th, `allowed_deepbook_pools: vector<ID>`** — the venue whitelist (audit
+  S-12). Must be non-empty: pass the DeepBook pool id you intend to run against,
+  i.e. exactly what `DEEPBOOK_POOL_ID` will hold. An empty vector aborts (355)
+  rather than defaulting to "any pool", because "any pool" is the vulnerability.
+  Duplicates abort. Manage it afterwards with
+  `scripts/set-compliance-config.mjs --allow-pool <id>` / `--disallow-pool <id>`;
+  the last remaining venue cannot be removed — halt with the pause switch instead;
 `peg_monitor::init_peg_state` → `PegState`;
 `settlement` pool → `SettlementPool<SUI>`;
 `smart_treasury::init_treasury` → `SmartTreasury<SUI>`;

@@ -12,6 +12,11 @@ import {
   FALLBACK_FEE_BPS,
   getCorridorFeeBps,
 } from '@/lib/fx/corridors';
+import {
+  checkPoolAllowed,
+  parsePoolWhitelist,
+  type PoolWhitelistVerdict,
+} from '@/lib/policy/deepbook-whitelist';
 import { getContractConfig, type ContractConfigField } from '@/lib/server/contract-config';
 import { suiClient } from '@/lib/sui';
 
@@ -304,6 +309,9 @@ const ABORT_CODES: Record<number, string> = {
   350: 'E_INVALID_CONFIG — Compliance threshold is outside its bounded safety range.',
   351: 'E_INVALID_CAP — ComplianceCap does not own authority for this ComplianceConfig.',
   352: 'E_SETTLEMENT_PAUSED — Settlement has been paused by the compliance operator.',
+  353: 'E_POOL_NOT_ALLOWED — the DeepBook pool passed to the liquidity guard is not on ComplianceConfig.allowed_deepbook_pools (audit S-12). Add it with scripts/set-compliance-config.mjs --allow-pool <id>, and check DEEPBOOK_POOL_ID points at the venue you whitelisted.',
+  354: 'E_TOO_MANY_POOLS — the DeepBook whitelist is already at compliance_config::max_allowed_pools(). Remove a venue before adding another.',
+  355: 'E_POOL_LIST_EMPTY — refused to leave the DeepBook whitelist empty (that would abort every settlement). Add the replacement venue first, then remove the old one; use set_paused for an intentional halt.',
 
   // ── payment_intent ───────────────────────────────────────────────────────
   400: 'E_NOT_PENDING — payment_intent confirm/cancel called on an intent that is not in STATUS_PENDING.',
@@ -977,6 +985,7 @@ export async function recordSingleTransferOnSui(input: {
   const SPLASH_PEG_STATE_ID = configIdOrThrow('pegStateId', 'SPLASH_PEG_STATE_ID');
   const SPLASH_COMPLIANCE_CONFIG_ID = configIdOrThrow('complianceConfigId', 'SPLASH_COMPLIANCE_CONFIG_ID');
   const DEEPBOOK_POOL_ID = configIdOrThrow('deepbookPoolId', 'DEEPBOOK_POOL_ID');
+  await assertDeepbookPoolWhitelisted();
   const SPLASH_BUSINESS_ACCOUNT_ID = configIdOrThrow('businessAccountId', 'SPLASH_BUSINESS_ACCOUNT_ID');
   if (!cfg.usdcType) throw new Error('USDC_TYPE is not configured. Set it in admin → Contract config (or in .env.local) and try again.');
   const USDC_TYPE = cfg.usdcType;
@@ -1151,6 +1160,7 @@ export async function recordBatchSettlementOnSui(input: {
   // QuoteAsset type argument.
   const SPLASH_COMPLIANCE_CONFIG_ID = configIdOrThrow('complianceConfigId', 'SPLASH_COMPLIANCE_CONFIG_ID');
   const DEEPBOOK_POOL_ID = configIdOrThrow('deepbookPoolId', 'DEEPBOOK_POOL_ID');
+  await assertDeepbookPoolWhitelisted();
   if (!cfg.deepbookQuoteType) {
     throw new Error('DEEPBOOK_QUOTE_TYPE is not configured — settle_sui_batch<QuoteAsset> needs the DeepBook quote type. Set it in admin → Contract config (or .env.local), or run batches in simulate mode.');
   }
@@ -1324,6 +1334,16 @@ export type ComplianceControls = {
   maxStalenessMs: number;
   maxSlippageBps: number;
   minDepthBaseUnits: number;
+  /// Gross settlement floor in the settled coin's minor units. `null` when the
+  /// deployed package predates it (see the ABI straddle below).
+  minSettlementAmount: number | null;
+  /// DeepBook venues the on-chain liquidity guard will accept (audit S-12).
+  /// Empty array means the deployed package predates the whitelist — NOT that
+  /// every pool is allowed.
+  allowedDeepbookPools: string[];
+  /// True when the deployed package enforces the whitelist at all. Callers that
+  /// want to fail closed should check this, not `allowedDeepbookPools.length`.
+  poolWhitelistEnforced: boolean;
   paused: boolean;
 };
 
@@ -1333,6 +1353,9 @@ const DEFAULT_COMPLIANCE_CONTROLS: ComplianceControls = {
   maxStalenessMs: 60_000,
   maxSlippageBps: 100,
   minDepthBaseUnits: 100_000_000,
+  minSettlementAmount: null,
+  allowedDeepbookPools: [],
+  poolWhitelistEnforced: false,
   paused: false,
 };
 
@@ -1341,14 +1364,19 @@ export async function readComplianceControls(): Promise<ComplianceControls> {
   if (!config.complianceConfigId) return DEFAULT_COMPLIANCE_CONTROLS;
   try {
     const { object } = await suiClient.getObject({ objectId: config.complianceConfigId, include: { json: true } });
-    const fields = object.json;
+    const fields = object.json as Record<string, unknown> | null | undefined;
     if (!fields) return DEFAULT_COMPLIANCE_CONTROLS;
+    const whitelist = parsePoolWhitelist(fields);
     return {
       configured: true,
       maxDeviationPpm: Number(fields.max_deviation_ppm),
       maxStalenessMs: Number(fields.max_staleness_ms),
       maxSlippageBps: Number(fields.max_slippage_bps),
       minDepthBaseUnits: Number(fields.min_depth_base_units),
+      minSettlementAmount:
+        fields.min_settlement_amount === undefined ? null : Number(fields.min_settlement_amount),
+      allowedDeepbookPools: whitelist ?? [],
+      poolWhitelistEnforced: whitelist !== null,
       paused: fields.paused === true || fields.paused === 'true',
     };
   } catch {
@@ -1356,11 +1384,71 @@ export async function readComplianceControls(): Promise<ComplianceControls> {
   }
 }
 
-export async function updateComplianceControls(input: Omit<ComplianceControls, 'configured'>) {
+export type PoolWhitelistCheck = PoolWhitelistVerdict;
+
+/**
+ * Preflight for audit S-12. `assert_deepbook_liquidity` aborts with 353 if the
+ * pool we pass is not whitelisted on chain; catching it here turns an opaque
+ * MoveAbort into an actionable message, and — more importantly — stops us
+ * burning gas on a settlement that cannot succeed.
+ *
+ * Deliberately does NOT fail when the deployed package predates the whitelist:
+ * that is the ABI straddle, not a misconfiguration. It reports `enforced: false`
+ * so callers can surface the weaker posture instead of pretending it is on.
+ */
+export async function checkDeepbookPoolWhitelisted(): Promise<PoolWhitelistCheck> {
+  const poolId = getContractConfig().deepbookPoolId ?? '';
+  const controls = await readComplianceControls();
+
+  if (!controls.configured) {
+    return {
+      allowed: false,
+      enforced: false,
+      poolId: poolId.trim(),
+      reason: 'SPLASH_COMPLIANCE_CONFIG_ID is not configured or could not be read.',
+    };
+  }
+  return checkPoolAllowed(poolId, controls.poolWhitelistEnforced ? controls.allowedDeepbookPools : null);
+}
+
+/**
+ * Throwing form used on the settlement hot paths. Runs BEFORE the PTB is built,
+ * so a misconfigured venue costs a read instead of a failed on-chain transaction
+ * — and, on the batch path, before we borrow the AdminCap.
+ */
+export async function assertDeepbookPoolWhitelisted(): Promise<void> {
+  const verdict = await checkDeepbookPoolWhitelisted();
+  if (verdict.allowed) {
+    if (!verdict.enforced) {
+      console.warn(
+        '[Sui Settlement] the deployed package predates ComplianceConfig.allowed_deepbook_pools ' +
+          '(audit S-12): the liquidity guard still accepts any pool the operator passes. ' +
+          'Republish to enforce the venue whitelist.',
+      );
+    }
+    return;
+  }
+  throw new Error(`DeepBook venue rejected (audit S-12): ${verdict.reason}`);
+}
+
+export async function updateComplianceControls(
+  input: Omit<ComplianceControls, 'configured' | 'allowedDeepbookPools' | 'poolWhitelistEnforced'>,
+) {
   const packageId = configIdOrThrow('packageId', 'SPLASH_PACKAGE_ID');
   const configId = configIdOrThrow('complianceConfigId', 'SPLASH_COMPLIANCE_CONFIG_ID');
   const capId = configIdOrThrow('complianceCapId', 'SPLASH_COMPLIANCE_CAP_ID');
   if (!getOperatorKeypair()) throw new Error('OPERATOR_SUI_PRIVATE_KEY is required to update compliance controls.');
+
+  // ABI straddle. `update` gained a 5th parameter (min_settlement_amount) in the
+  // republished package; the version deployed today still has 4. Detect which
+  // one we are talking to from the object itself rather than guessing, because
+  // an arity mismatch is a hard MoveCall failure, not a graceful degrade.
+  const onChain = await readComplianceControls();
+  const supportsMinSettlement = onChain.minSettlementAmount !== null;
+  const minSettlement = input.minSettlementAmount ?? onChain.minSettlementAmount;
+  if (supportsMinSettlement && !(typeof minSettlement === 'number' && minSettlement > 0)) {
+    throw new Error('minSettlementAmount must be greater than zero — a zero floor disables the minimum on chain.');
+  }
 
   const tx = new Transaction();
   tx.moveCall({
@@ -1372,6 +1460,7 @@ export async function updateComplianceControls(input: Omit<ComplianceControls, '
       tx.pure.u64(input.maxStalenessMs),
       tx.pure.u64(input.maxSlippageBps),
       tx.pure.u64(input.minDepthBaseUnits),
+      ...(supportsMinSettlement ? [tx.pure.u64(minSettlement as number)] : []),
     ],
   });
   tx.moveCall({

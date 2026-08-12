@@ -7,11 +7,16 @@ import { readComplianceControls, updateComplianceControls } from '@/lib/server/s
 
 export const dynamic = 'force-dynamic';
 
+// Bounds mirror `compliance_config::assert_valid` so a bad value is rejected
+// here, with a readable message, instead of as an opaque MoveAbort 350.
 const schema = z.object({
   maxDeviationPpm: z.number().int().min(1).max(10_000),
   maxStalenessMs: z.number().int().min(1).max(600_000),
   maxSlippageBps: z.number().int().min(1).max(1_000),
   minDepthBaseUnits: z.number().int().min(1),
+  // Null means "leave whatever is on chain" — the deployed package may predate
+  // the field entirely. Zero is rejected on chain because it disables the floor.
+  minSettlementAmount: z.number().int().min(1).nullable().optional().default(null),
   paused: z.boolean(),
 });
 

@@ -34,6 +34,7 @@ export default function ComplianceControlForm({ initial }: { initial: Compliance
     ['maxStalenessMs', 'Pyth max age', 'ms'],
     ['maxSlippageBps', 'DeepBook max slippage', 'bps'],
     ['minDepthBaseUnits', 'DeepBook minimum depth', 'base units'],
+    ['minSettlementAmount', 'Minimum settlement', 'minor units'],
   ] as const;
 
   return (
@@ -49,7 +50,7 @@ export default function ComplianceControlForm({ initial }: { initial: Compliance
           Pause settlement
         </label>
       </div>
-      <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {numberFields.map(([key, label, unit]) => (
           <label key={key} className="grid gap-1 text-xs font-bold text-[#326273]">
             {label}
@@ -58,13 +59,40 @@ export default function ComplianceControlForm({ initial }: { initial: Compliance
                 className="min-w-0 flex-1 bg-transparent py-2.5 font-mono outline-none"
                 type="number"
                 min={1}
-                value={values[key]}
-                onChange={(event) => setValues({ ...values, [key]: Number(event.target.value) })}
+                value={values[key] ?? ''}
+                onChange={(event) => {
+                  const raw = event.target.value;
+                  // Empty means "leave the on-chain value alone". Coercing it to
+                  // 0 would be rejected on chain (a zero floor disables the
+                  // control), so keep null distinct from a real zero.
+                  setValues({ ...values, [key]: raw === '' ? null : Number(raw) });
+                }}
               />
               <small className="text-[#326273]/45">{unit}</small>
             </span>
           </label>
         ))}
+      </div>
+      <div className="mt-4 rounded-xl border border-[#326273]/15 bg-white/60 px-4 py-3">
+        <span className="text-xs font-bold text-[#326273]">DeepBook venues allowed on chain</span>
+        {values.poolWhitelistEnforced ? (
+          <ul className="mt-2 grid gap-1">
+            {values.allowedDeepbookPools.map((poolId) => (
+              <li key={poolId} className="font-mono text-xs text-[#326273]/75">
+                {poolId}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-1 text-xs text-[#326273]/70">
+            The deployed package predates the venue whitelist, so the liquidity guard still accepts any pool the
+            operator passes. Republish to enforce it.
+          </p>
+        )}
+        <p className="mt-2 text-xs text-[#326273]/60">
+          Venues change through allow_pool / disallow_pool with the ComplianceCap, not from this form — each change
+          emits its own on-chain event.
+        </p>
       </div>
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
         <span className="text-xs text-[#326273]/60">{status || (initial.configured ? 'Loaded from the shared ComplianceConfig.' : 'Configure contract IDs before saving.')}</span>

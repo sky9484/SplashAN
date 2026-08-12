@@ -80,11 +80,19 @@ testnet SUI/DBUSDC pool `0x1c19362c…`.
 |----|-----|---------|--------|
 | S-10 | Medium | Every routine attestation (`peg_monitor::update_peg`, `audit_anchor::anchor_audit_hash`, `receipt_v2::create_receipt`, `smart_treasury::emit_rebalance`) required `&AdminCap` — the same cap that authorizes withdrawals. Because the peg daemon must sign every ~30s, `AdminCap` could never move to the cold 2-of-3 multisig, so a compromised operator host held full money authority. **Fixed**: new `AttestationCap` (`key` only, no `store` — non-transferable, minted/destroyed by `AdminCap`) gates the four non-financial writes; `AdminCap` keeps withdraw/allocate/redeem/config only. | Fixed |
 | S-11 | High | `peg_monitor::assert_deepbook_liquidity` rejected **100% of batches regardless of liquidity**, via two independent bugs: (a) it required `remaining_base == 0`, unsatisfiable on a lot-quantized book whose input-fee quote path also deducts the taker fee from the input — measured remainder was ~0.098 SUI at every size from 1.1 to 5.0; (b) slippage was priced against the *requested* quantity, charging the unfilled dust as if it executed at zero, turning a real 56 bps into a reported 809 bps and tripping `E_SLIPPAGE_EXCEEDED` on a healthy pool. **Fixed**: require `filled/requested >= MIN_FILL_BPS` (9,000) and price the filled base. Arithmetic pinned in `tests/deepbook-liquidity-guard.test.mjs`. | Fixed (needs republish) |
-| S-12 | Medium | `settle_batch` calls `assert_deepbook_liquidity` against pooled funds — exactly the repurposing **S-09** warns against. The pool argument is operator-supplied, so a compromised operator could point the guard at a permissionlessly-created pool with self-provided liquidity and satisfy it trivially. Mitigation today is off-chain: `lib/server/sui-settlement.ts` resolves the pool from `DEEPBOOK_POOL_ID` (server env), never from request input. **Chain-side fix requires a whitelist of pool IDs in `ComplianceConfig` — not yet implemented.** | Open |
+| S-12 | Medium | `settle_batch` calls `assert_deepbook_liquidity` against pooled funds — exactly the repurposing **S-09** warns against. The pool argument is operator-supplied and DeepBook pools are permissionlessly creatable, so a compromised operator could stand up a pool, seed it with their own liquidity, and satisfy the depth and slippage asserts trivially while draining the shared `SettlementPool`. **Fixed**: `ComplianceConfig.allowed_deepbook_pools: VecSet<ID>` (non-empty, capped at `MAX_ALLOWED_POOLS = 8`, mutated only through `allow_pool` / `disallow_pool`, each emitting its own event); `assert_deepbook_liquidity` now calls `assert_pool_allowed(config, object::id(pool))` **before reading a single field off the pool** (abort 353). Off-chain preflight in `lib/server/sui-settlement.ts::assertDeepbookPoolWhitelisted` blocks a mismatched `DEEPBOOK_POOL_ID` before the PTB is built; encoding semantics pinned in `tests/deepbook-pool-whitelist.test.mjs`. | Fixed (needs republish) |
 
 New abort codes to mirror in `lib/server/sui-settlement.ts::ABORT_CODES`:
 `107 E_BELOW_MINIMUM` (settlement below `min_settlement_amount`), `304
-E_INSUFFICIENT_DEPTH` (now also fires on a sub-`MIN_FILL_BPS` fill).
+E_INSUFFICIENT_DEPTH` (now also fires on a sub-`MIN_FILL_BPS` fill), `353
+E_POOL_NOT_ALLOWED`, `354 E_TOO_MANY_POOLS`, `355 E_POOL_LIST_EMPTY`.
+
+**S-09 status.** The advisory said "do not repurpose [the DeepBook guard] to
+protect pooled funds". S-12 is that repurposing, and the whitelist is what makes
+it defensible: the guard now measures a venue the protocol chose rather than one
+the caller chose. S-09 stays Advisory — the guard still proves depth on a book
+the settlement never trades against, so it is a sanity check on market
+conditions, not a proof of execution.
 
 **Publish dependency.** S-11 and the `min_settlement_amount` field on
 `ComplianceConfig` are source-level fixes. The deployed package is immutable

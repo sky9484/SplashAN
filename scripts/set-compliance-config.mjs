@@ -24,6 +24,14 @@
  * Run (values are explicit — nothing is silently defaulted):
  *   node --use-system-ca --env-file=.env.local scripts/set-compliance-config.mjs \
  *     --slippage-bps 150 --min-depth 1000000 --deviation-ppm 3000 --staleness-ms 60000
+ *
+ * DeepBook venue whitelist (audit S-12) — these are separate transactions from
+ * the threshold update, on purpose, so each venue change lands as its own
+ * auditable event:
+ *   ... scripts/set-compliance-config.mjs --allow-pool 0x1c19362c…
+ *   ... scripts/set-compliance-config.mjs --disallow-pool 0x1c19362c…
+ * The last remaining venue cannot be removed; add the replacement first. To halt
+ * settlement entirely use the pause switch, not an empty whitelist.
  */
 import { SuiGrpcClient } from '@mysten/sui/grpc';
 import { Transaction } from '@mysten/sui/transactions';
@@ -55,8 +63,73 @@ async function readConfig() {
   return (res.object ?? res).json;
 }
 
+function operatorKeypair() {
+  const encoded = env('OPERATOR_SUI_PRIVATE_KEY') || env('SUI_SPONSOR_PRIVATE_KEY');
+  if (!encoded) throw new Error('OPERATOR_SUI_PRIVATE_KEY is required.');
+  const { scheme, secretKey } = decodeSuiPrivateKey(encoded);
+  return scheme === 'Secp256k1'
+    ? Secp256k1Keypair.fromSecretKey(secretKey)
+    : Ed25519Keypair.fromSecretKey(secretKey);
+}
+
+async function submit(tx, label) {
+  const result = await client.signAndExecuteTransaction({
+    signer: operatorKeypair(),
+    transaction: tx,
+    include: { effects: true },
+  });
+  const executed = result.Transaction ?? result.FailedTransaction;
+  if (result.$kind !== 'Transaction' || !executed.status.success) {
+    throw new Error(`${label} failed: ${JSON.stringify(executed?.status?.error)}`);
+  }
+  await client.waitForTransaction({ digest: executed.digest }).catch(() => {});
+  console.log(`${label} digest:`, executed.digest);
+  return executed.digest;
+}
+
 const current = await readConfig();
 console.log('current on-chain config:', current);
+
+// ─── DeepBook venue whitelist (S-12) ────────────────────────────────────────
+// Handled first and as its own transaction: a venue change is a security event
+// and should never be buried inside a routine threshold tweak.
+const allowPool = arg('allow-pool');
+const disallowPool = arg('disallow-pool');
+if (allowPool || disallowPool) {
+  if (current.allowed_deepbook_pools === undefined) {
+    throw new Error(
+      'The deployed package predates the DeepBook whitelist (audit S-12). Republish before managing venues.',
+    );
+  }
+  const poolId = (allowPool ?? disallowPool).trim();
+  if (!/^0x[0-9a-fA-F]{1,64}$/.test(poolId)) {
+    throw new Error(`--${allowPool ? 'allow' : 'disallow'}-pool expects a 0x object id, got: ${poolId}`);
+  }
+  // Prove the id is a live DeepBook pool before whitelisting it — a typo here
+  // would either brick settlement or, worse, authorize the wrong venue.
+  if (allowPool) {
+    const probe = await client.core.getObject({ objectId: poolId, include: { json: true } }).catch(() => null);
+    const type = probe?.object?.type ?? probe?.type ?? '';
+    if (!String(type).includes('::pool::Pool<')) {
+      throw new Error(`${poolId} does not look like a DeepBook Pool (type: ${type || 'unreadable'}). Refusing to whitelist it.`);
+    }
+    console.log(`verified ${poolId} is ${type}`);
+  }
+
+  const poolTx = new Transaction();
+  poolTx.setGasBudget('20000000');
+  poolTx.moveCall({
+    target: `${PACKAGE}::compliance_config::${allowPool ? 'allow_pool' : 'disallow_pool'}`,
+    arguments: [poolTx.object(CONFIG), poolTx.object(CAP), poolTx.pure.id(poolId)],
+  });
+  await submit(poolTx, allowPool ? 'allow_pool' : 'disallow_pool');
+  console.log('whitelist now:', (await readConfig()).allowed_deepbook_pools);
+
+  // Venue management is a standalone operation. Only fall through to the
+  // threshold update if the caller also passed threshold flags.
+  const thresholdFlags = ['deviation-ppm', 'staleness-ms', 'slippage-bps', 'min-depth', 'min-settlement'];
+  if (!thresholdFlags.some((flag) => arg(flag) !== null)) process.exit(0);
+}
 
 const next = {
   deviationPpm: Number(arg('deviation-ppm') ?? current.max_deviation_ppm),
@@ -77,15 +150,6 @@ if (NETWORK === 'mainnet' && next.slippageBps > 50) {
 }
 
 console.log('applying:', next);
-
-function operatorKeypair() {
-  const encoded = env('OPERATOR_SUI_PRIVATE_KEY') || env('SUI_SPONSOR_PRIVATE_KEY');
-  if (!encoded) throw new Error('OPERATOR_SUI_PRIVATE_KEY is required.');
-  const { scheme, secretKey } = decodeSuiPrivateKey(encoded);
-  return scheme === 'Secp256k1'
-    ? Secp256k1Keypair.fromSecretKey(secretKey)
-    : Ed25519Keypair.fromSecretKey(secretKey);
-}
 
 // ABI straddle: the package deployed today has a 4-parameter `update`. The
 // republished package adds `min_settlement_amount` (the on-chain $100 floor).
@@ -115,15 +179,5 @@ tx.moveCall({
   ],
 });
 
-const result = await client.signAndExecuteTransaction({
-  signer: operatorKeypair(),
-  transaction: tx,
-  include: { effects: true },
-});
-const executed = result.Transaction ?? result.FailedTransaction;
-if (result.$kind !== 'Transaction' || !executed.status.success) {
-  throw new Error(`update failed: ${JSON.stringify(executed?.status?.error)}`);
-}
-await client.waitForTransaction({ digest: executed.digest }).catch(() => {});
-console.log('digest:', executed.digest);
+await submit(tx, 'update');
 console.log('new on-chain config:', await readConfig());
