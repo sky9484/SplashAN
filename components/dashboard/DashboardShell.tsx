@@ -21,6 +21,7 @@ import {
   UserCircle,
   X,
   type LucideIcon,
+  ShieldAlert,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -62,9 +63,11 @@ const navGroups: NavGroup[] = [
 type DashboardShellProps = {
   children: ReactNode;
   session: CustomerSession;
+  /** KYB gate state, resolved server-side in app/dashboard/layout.tsx. */
+  kyb?: { state: string; blocked: boolean; reason: string };
 };
 
-export default function DashboardShell({ children, session }: DashboardShellProps) {
+export default function DashboardShell({ children, session, kyb }: DashboardShellProps) {
   const [collapsed,  setCollapsed]  = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const router   = useRouter();
@@ -284,6 +287,24 @@ export default function DashboardShell({ children, session }: DashboardShellProp
           collapsed ? 'md:ml-20' : 'md:ml-60'
         }`}
       >
+        {kyb?.blocked ? (
+          <div
+            role="status"
+            className="mb-5 flex flex-wrap items-center gap-3 rounded-lg border border-[var(--warn)] bg-[var(--warn-bg)] px-4 py-3"
+          >
+            <ShieldAlert aria-hidden="true" className="h-4 w-4 shrink-0 text-[var(--warn)]" />
+            <div className="min-w-0 flex-1">
+              <p className="text-[13px] font-bold text-[var(--warn)]">Read-only workspace</p>
+              <p className="mt-0.5 text-[13px] font-medium text-[#326273]/78">{kyb.reason}</p>
+            </div>
+            <Link
+              href="/settings/kyb"
+              className="rounded-md bg-[#1F4452] px-3 py-1.5 text-[13px] font-bold text-white"
+            >
+              Verification
+            </Link>
+          </div>
+        ) : null}
         {children}
       </main>
 

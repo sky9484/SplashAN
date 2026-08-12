@@ -90,6 +90,69 @@ export async function setOrgKybState(
   return { from, to };
 }
 
+/**
+ * The full KYB_ADMIN_APPROVED → on-chain verify → ACTIVE sequence (spec §3.3).
+ *
+ * Ordering matters and is deliberate:
+ *   1. transition to KYB_ADMIN_APPROVED first, so the accountable decision is
+ *      recorded even if the chain call later fails;
+ *   2. call `business_account::verify_business` (AdminCap-gated);
+ *   3. only then ACTIVE — money movement unlocks strictly after the chain
+ *      agrees the account is verified.
+ *
+ * If step 2 throws, the org is left at KYB_ADMIN_APPROVED — approved, but NOT
+ * able to move money. That is the correct failure posture: never activate on an
+ * unverified account.
+ */
+export async function approveOrgKybOnChain(input: {
+  orgId: string;
+  riskScore: number;
+}): Promise<{ digest: string; businessAccountId: string; state: KybLifecycleState }> {
+  const from = await readOrgKybState(input.orgId);
+  // Idempotent re-approval of an already-active org is a no-op, not an error.
+  if (from === 'ACTIVE') {
+    return { digest: '', businessAccountId: await resolveBusinessAccountId(input.orgId), state: 'ACTIVE' };
+  }
+
+  if (from !== 'KYB_ADMIN_APPROVED') {
+    await setOrgKybState(input.orgId, 'KYB_ADMIN_APPROVED', 'ADMIN');
+  }
+
+  const businessAccountId = await resolveBusinessAccountId(input.orgId);
+  const { verifyBusinessOnSui } = await import('../server/sui-settlement.ts');
+  const verified = await verifyBusinessOnSui({ businessAccountId, riskScore: input.riskScore });
+
+  await setOrgKybState(input.orgId, 'ACTIVE', 'ADMIN');
+  return { digest: verified.digest, businessAccountId, state: 'ACTIVE' };
+}
+
+/**
+ * The org's on-chain BusinessAccount. Per-org first so verifying one tenant can
+ * never flip another's account; the env value is a single-tenant fallback for
+ * the demo workspace only.
+ */
+export async function resolveBusinessAccountId(orgId: string): Promise<string> {
+  const db = await resolveDb();
+  if (db) {
+    const rows = await db
+      .select({ id: organizations.suiBusinessAccountId })
+      .from(organizations)
+      .where(eq(organizations.id, orgId))
+      .limit(1);
+    const stored = rows[0]?.id?.trim();
+    if (stored) return stored;
+  }
+
+  const fallback = (process.env.SPLASH_BUSINESS_ACCOUNT_ID ?? '').trim();
+  if (!fallback) {
+    throw new Error(
+      `No on-chain BusinessAccount for org ${orgId}. Set organizations.sui_business_account_id, ` +
+      'or SPLASH_BUSINESS_ACCOUNT_ID for the single-tenant demo workspace.',
+    );
+  }
+  return fallback;
+}
+
 /** Record the org's on-chain BusinessAccount object id (wallet spec §2.3). */
 export async function setOrgBusinessAccountId(orgId: string, objectId: string): Promise<void> {
   const db = await resolveDb();

@@ -86,7 +86,11 @@ test('default dashboard is the streaming 0xWal surface and avoids browser money 
   assert.match(page, /href="\/queue"/);
   assert.doesNotMatch(page, /localStorage|sessionStorage/);
   assert.match(layout, /export const dynamic = 'force-dynamic'/);
-  assert.match(layout, /<DashboardShell session=\{session\}>\{children\}<\/DashboardShell>/);
+  // The layout must hand the server-resolved session to the shell and render
+  // children through it. Matched by intent rather than exact JSX so adding a
+  // prop (e.g. the KYB gate state) does not fail a test about the desk surface.
+  assert.match(layout, /<DashboardShell[^>]*session=\{session\}/);
+  assert.match(layout, /\{children\}<\/DashboardShell>/);
   assert.match(shell, /label: '0xWal',\s+href: '\/dashboard'/);
   assert.match(shell, /href: '\/dashboard\/overview'/);
   assert.match(queue, /export const dynamic = 'force-dynamic'/);

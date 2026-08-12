@@ -21,6 +21,9 @@ export type KybAuditEvent = {
 
 export type KybCaseRecord = {
   id: string;
+  /** Owning organization. Wallet spec §3 — the KYB lifecycle is assessed at org
+   *  level, and the on-chain verify must target THAT org's BusinessAccount. */
+  orgId: string;
   businessName: string;
   registrationNumber: string;
   state: KybReviewState;
@@ -80,6 +83,7 @@ function seededCases() {
       firstCaseId,
       {
         id: firstCaseId,
+        orgId: 'demo-business',
         businessName: 'Acme Trading Sdn Bhd',
         registrationNumber: '202401012345',
         state: 'SUBMITTED',
@@ -99,6 +103,7 @@ function seededCases() {
       secondCaseId,
       {
         id: secondCaseId,
+        orgId: 'demo-business',
         businessName: 'Nusantara Export House Sdn Bhd',
         registrationNumber: '202301998877',
         state: 'NEEDS_INFORMATION',
@@ -148,6 +153,8 @@ export function readKybCase(caseId: string) {
 
 export function recordKybSubmission(input: {
   caseId: string;
+  /** Owning org; defaults to the demo workspace when the caller has none. */
+  orgId?: string;
   businessName: string;
   registrationNumber: string;
   documents: KybDocumentRecord[];
@@ -157,6 +164,7 @@ export function recordKybSubmission(input: {
   const existing = kybStore.cases.get(input.caseId);
   const record: KybCaseRecord = {
     id: input.caseId,
+    orgId: input.orgId ?? 'demo-business',
     businessName: input.businessName,
     registrationNumber: input.registrationNumber,
     state: 'SUBMITTED',

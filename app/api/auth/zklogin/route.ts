@@ -8,7 +8,10 @@ import {
   hashSubjectForLog,
   verifyZkLoginJwt,
   zkLoginEnabled,
+  deriveZkLoginAddress,
 } from '@/lib/auth/zklogin';
+import { DEFAULT_ORG_ID } from '@/lib/auth/authority';
+import { ensureUserForIdentity, upsertWalletIdentity } from '@/lib/db/wallet-identities';
 import { createCustomerSessionFromIdentity } from '@/lib/auth/customer-session';
 import { setCustomerSessionCookie } from '@/lib/server/customer-auth';
 import { readJsonBody } from '@/lib/server/http';
@@ -73,11 +76,43 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Onboarding is not available for this domain.' }, { status: 403 });
     }
 
-    // Identity is proven. Persisting the wallet_identities row + resolving the
-    // real userRole happens on the authority path; the cookie carries only what
-    // the UI needs, and never anything authorization-bearing.
+    // Identity is proven — persist it (wallet spec §2.3) so maker-checker can
+    // attribute a signature to a named human. Requires a salt to derive the
+    // address; without one we still mint a session, we just have no signer to
+    // record yet.
+    let suiAddress: string | undefined;
+    const userSalt = (process.env.ZKLOGIN_USER_SALT ?? '').trim();
+    if (userSalt && process.env.DATABASE_URL) {
+      try {
+        suiAddress = await deriveZkLoginAddress(jwt, userSalt);
+        const { getDb } = await import('@/lib/db/client');
+        const db = getDb() as never;
+        const userId = `op_${email}`;
+        await ensureUserForIdentity(db, { userId, orgId: DEFAULT_ORG_ID, email });
+        await upsertWalletIdentity(db, {
+          userId,
+          orgId: DEFAULT_ORG_ID,
+          suiAddress,
+          oauthIss: claims.iss,
+          oauthSub: claims.sub,
+          oauthAud: claims.aud,
+          emailAtLogin: email,
+        });
+      } catch (error) {
+        // A rebind conflict is a real signal, not noise — surface it rather
+        // than minting a session against an identity we could not record.
+        console.error('[zklogin] wallet identity persistence failed', error);
+        return NextResponse.json(
+          { error: 'Your wallet identity could not be verified. Contact support.', code: 'identity_conflict' },
+          { status: 409 },
+        );
+      }
+    }
+
     const session = createCustomerSessionFromIdentity({
       email,
+      suiAddress,
+      orgId: DEFAULT_ORG_ID,
       fallbackOrganization: process.env.CUSTOMER_ORGANIZATION,
     });
     const refreshed = await setCustomerSessionCookie(session, { remember });

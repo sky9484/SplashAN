@@ -712,6 +712,47 @@ export async function anchorAuditHashOnSui(input: {
   };
 }
 
+/**
+ * On-chain half of KYB_ADMIN_APPROVED (wallet spec §3.3).
+ *
+ * AdminCap-gated on purpose: this is the accountable human decision, so it must
+ * NOT be reachable from the Sumsub webhook. The provider only advances the
+ * off-chain state to KYB_PROVIDER_APPROVED; a Splash admin action calls this.
+ *
+ * `businessAccountId` is resolved per-org (organizations.sui_business_account_id)
+ * rather than from the single global env value, so verifying one tenant can
+ * never flip another's account.
+ */
+export async function verifyBusinessOnSui(input: {
+  businessAccountId: string;
+  riskScore: number;
+}) {
+  await requireSdkExecution();
+  const packageId = configIdOrThrow('packageId', 'SPLASH_PACKAGE_ID');
+  const adminCapId = configIdOrThrow('adminCapId', 'SPLASH_ADMIN_CAP_ID');
+  const businessAccountId = requireSuiObjectId(input.businessAccountId, 'businessAccountId');
+
+  const riskScore = Math.max(0, Math.min(255, Math.round(input.riskScore)));
+
+  const tx = new Transaction();
+  tx.setGasBudget(process.env.SUI_KYB_VERIFY_GAS_BUDGET ?? '20000000');
+  tx.moveCall({
+    target: `${packageId}::business_account::verify_business`,
+    arguments: [
+      tx.object(adminCapId),
+      tx.object(businessAccountId),
+      tx.pure.u8(riskScore),
+    ],
+  });
+
+  const result = await executeSdkTransaction(tx);
+  const verified = eventBySuffix(resultEvents(result), '::business_account::BusinessVerified');
+  if (!verified) {
+    throw new Error(`verify_business succeeded but BusinessVerified was missing. Digest: ${result.digest}`);
+  }
+  return { digest: result.digest, businessAccountId, riskScore, event: verified };
+}
+
 export async function refreshPegOnSui(input: { usdcPrice: number; usdtPrice: number }) {
   await requireSdkExecution();
   const packageId = configIdOrThrow('packageId', 'SPLASH_PACKAGE_ID');
