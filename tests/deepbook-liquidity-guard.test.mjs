@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 /**
- * Regression guard for the S-07 fix in
+ * Regression guard for the S-11 fix in
  * `peg_monitor::assert_deepbook_liquidity` (move/sources/peg_monitor.move).
  *
  * `sui move test` cannot run in this repo — the pinned DeepBook dependency
@@ -40,20 +40,20 @@ function slippageBps(quoteOut, baseUnits, midPrice) {
   return effective >= midPrice ? 0 : Math.floor(((midPrice - effective) / midPrice) * BPS);
 }
 
-test('S-07: the old perfect-fill requirement rejected a healthy book', () => {
+test('S-11: the old perfect-fill requirement rejected a healthy book', () => {
   // This is the assert that shipped: remaining_base == 0.
   assert.notEqual(REMAINING, 0, 'a lot-quantized book always returns dust');
   // Measured across 1.1 - 5.0 SUI, the remainder never reached zero, so the
   // old guard rejected 100% of batches regardless of available liquidity.
 });
 
-test('S-07: pricing the requested quantity wildly overstates slippage', () => {
+test('S-11: pricing the requested quantity wildly overstates slippage', () => {
   const wrong = slippageBps(QUOTE_OUT, REQUESTED, MID_PRICE);
   // ~809 bps — this is what tripped E_SLIPPAGE_EXCEEDED on a healthy pool.
   assert.ok(wrong > 700, `expected the buggy formula to overstate slippage, got ${wrong}`);
 });
 
-test('S-07: pricing the filled quantity gives the true execution slippage', () => {
+test('S-11: pricing the filled quantity gives the true execution slippage', () => {
   const correct = slippageBps(QUOTE_OUT, filled, MID_PRICE);
   // ~56 bps — the real cost of crossing a 43 bps spread.
   assert.ok(correct < 100, `expected realistic slippage, got ${correct}`);
@@ -63,7 +63,7 @@ test('S-07: pricing the filled quantity gives the true execution slippage', () =
   );
 });
 
-test('S-07: the fill-ratio floor accepts lot dust but rejects an unfillable book', () => {
+test('S-11: the fill-ratio floor accepts lot dust but rejects an unfillable book', () => {
   const fillBps = Math.floor((filled / REQUESTED) * BPS);
   assert.ok(fillBps >= MIN_FILL_BPS, `1.3 SUI fills ${fillBps} bps, must clear ${MIN_FILL_BPS}`);
 
@@ -76,7 +76,7 @@ test('S-07: the fill-ratio floor accepts lot dust but rejects an unfillable book
   );
 });
 
-test('S-07: a batch below the pool minSize is rejected, not silently settled', () => {
+test('S-11: a batch below the pool minSize is rejected, not silently settled', () => {
   // Measured: getQuoteQuantityOutInputFee(0.009) -> remaining 0.009, quote 0.
   const tinyRequested = 0.009;
   const tinyRemaining = 0.009;

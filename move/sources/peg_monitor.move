@@ -77,7 +77,7 @@ public fun init_peg_state(_admin: &AdminCap, clock: &Clock, ctx: &mut TxContext)
 }
 
 /// Operator pushes a fresh Hermes-derived peg reading. AttestationCap-gated
-/// (cap split S-06): a peg reading is an attestation about the outside world,
+/// (cap split S-10): a peg reading is an attestation about the outside world,
 /// not a movement of value, so the hot operator key can push it while money
 /// authority stays offline in the cold multisig.
 ///
@@ -136,7 +136,7 @@ public fun assert_deepbook_liquidity<BaseAsset, QuoteAsset>(
     let (remaining_base, quote_out, _) = pool.get_quote_quantity_out_input_fee(base_quantity, clock);
     assert!(quote_out > 0, E_INSUFFICIENT_DEPTH);
 
-    // S-07 fix. The previous form was `remaining_base == 0`, which no real
+    // S-11 fix. The previous form was `remaining_base == 0`, which no real
     // DeepBook pool can satisfy: books are lot-quantized (SUI/DBUSDC uses a 0.1
     // lot) and the input-fee quote path deducts the taker fee from the input,
     // so a sub-lot remainder is ALWAYS returned. Measured on testnet, every
@@ -152,7 +152,7 @@ public fun assert_deepbook_liquidity<BaseAsset, QuoteAsset>(
 
     let mid_price = pool.mid_price(clock);
     assert!(mid_price > 0, E_INVALID_MARKET_PRICE);
-    // S-07 fix. Price the FILLED base, not the requested base. Dividing by the
+    // S-11 fix. Price the FILLED base, not the requested base. Dividing by the
     // requested quantity charges the unfilled remainder as if it had executed
     // at zero, understating the execution price and overstating slippage by the
     // unfilled fraction — on testnet that turned a real 56 bps into a reported

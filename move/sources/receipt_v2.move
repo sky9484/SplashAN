@@ -72,7 +72,7 @@ public struct ReceiptVerificationChecked has copy, drop {
 
 // ─── Entry / public functions ──────────────────────────────────────────────
 
-/// AttestationCap-gated receipt minting (L-05 fix; cap split S-06). The cap
+/// AttestationCap-gated receipt minting (L-05 fix; cap split S-10). The cap
 /// holder is the only party that can record settlement receipts on-chain,
 /// preventing forged receipts from showing up in indexer queries.
 ///

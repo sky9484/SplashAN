@@ -5,7 +5,7 @@
  * settlement, an audit anchor, a Walrus/Seal evidence write, and a partner
  * payout leg. Below ~$100 the fixed cost dominates the 0.80% corridor fee, and
  * on the settlement side a sub-minimum batch cannot even clear DeepBook's
- * minimum order size — it returns a zero quote and aborts (see S-07 in
+ * minimum order size — it returns a zero quote and aborts (see S-11 in
  * docs/KEY-CEREMONY-RUNBOOK.md).
  *
  * Applies to a SINGLE transfer, and to a BATCH's TOTAL (not per row — payroll

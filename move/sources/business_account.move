@@ -21,7 +21,11 @@ public struct AdminCap has key, store {
 
 /// AttestationCap — hot-key authority for routine, NON-FINANCIAL attestations:
 /// `audit_anchor::anchor_audit_hash`, `receipt_v2::create_receipt`,
-/// `peg_monitor::update_peg`.
+/// `peg_monitor::update_peg`, `smart_treasury::emit_rebalance`.
+///
+/// S-10 fix (see SECURITY.md). Those four writes previously required
+/// `&AdminCap`; because the peg daemon signs one every ~30s, `AdminCap` could
+/// never move to the cold multisig, leaving full money authority on a hot host.
 ///
 /// Segregation of duties: the operator server holds ONLY this cap, so a
 /// compromised server key can write attestations but cannot move a single

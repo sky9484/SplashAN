@@ -77,7 +77,7 @@ public struct SettlementAnchored has copy, drop {
     anchorer: address,
 }
 
-/// Anchor an audit hash. AttestationCap-gated (M-01 fix; cap split S-06).
+/// Anchor an audit hash. AttestationCap-gated (M-01 fix; cap split S-10).
 ///
 /// Writing an anchor is a routine, non-financial attestation, so it runs on the
 /// hot operator key's `AttestationCap` rather than the cold-multisig `AdminCap`.

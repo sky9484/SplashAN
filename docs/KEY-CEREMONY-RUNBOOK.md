@@ -181,7 +181,7 @@ anchor calls now run on the AttestationCap — if they abort, the cap id is wron
 
 ---
 
-## 5 · Batch payouts — why they cannot settle until this publish (S-07)
+## 5 · Batch payouts — why they cannot settle until this publish (S-11)
 
 Batch settlement was investigated end-to-end on testnet. Four preconditions must
 hold simultaneously; three now do, one is blocked on the contract:
@@ -198,7 +198,7 @@ hold simultaneously; three now do, one is blocked on the contract:
 Verified the pool's on-chain type is exactly the `0xfb28c4cb…::pool::Pool<SUI, DBUSDC>`
 the contract expects.
 
-**The blocker is a contract bug, now fixed in source (S-07):**
+**The blocker is a contract bug, now fixed in source (S-11):**
 
 1. The guard required `remaining_base == 0` — a *perfect* fill. DeepBook books are
    lot-quantized (SUI/DBUSDC lot = 0.1) and the input-fee quote path deducts the

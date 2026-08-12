@@ -66,6 +66,38 @@ New abort codes to mirror in `lib/server/sui-settlement.ts::ABORT_CODES`:
 
 ---
 
+## Custody & liquidity pass — 2026-08-13
+
+**Scope**: the capability split required by `docs/splash-wallet-onboarding-custody-spec.md`
+§10 (cold multisig holds money authority; hot operator key runs the daemons),
+plus a live-fire investigation of why batch payouts never settled on testnet.
+Methodology: same OtterSec checklist, plus reproduction against the live
+testnet SUI/DBUSDC pool `0x1c19362c…`.
+
+**New findings (this pass):**
+
+| ID | Sev | Finding | Status |
+|----|-----|---------|--------|
+| S-10 | Medium | Every routine attestation (`peg_monitor::update_peg`, `audit_anchor::anchor_audit_hash`, `receipt_v2::create_receipt`, `smart_treasury::emit_rebalance`) required `&AdminCap` — the same cap that authorizes withdrawals. Because the peg daemon must sign every ~30s, `AdminCap` could never move to the cold 2-of-3 multisig, so a compromised operator host held full money authority. **Fixed**: new `AttestationCap` (`key` only, no `store` — non-transferable, minted/destroyed by `AdminCap`) gates the four non-financial writes; `AdminCap` keeps withdraw/allocate/redeem/config only. | Fixed |
+| S-11 | High | `peg_monitor::assert_deepbook_liquidity` rejected **100% of batches regardless of liquidity**, via two independent bugs: (a) it required `remaining_base == 0`, unsatisfiable on a lot-quantized book whose input-fee quote path also deducts the taker fee from the input — measured remainder was ~0.098 SUI at every size from 1.1 to 5.0; (b) slippage was priced against the *requested* quantity, charging the unfilled dust as if it executed at zero, turning a real 56 bps into a reported 809 bps and tripping `E_SLIPPAGE_EXCEEDED` on a healthy pool. **Fixed**: require `filled/requested >= MIN_FILL_BPS` (9,000) and price the filled base. Arithmetic pinned in `tests/deepbook-liquidity-guard.test.mjs`. | Fixed (needs republish) |
+| S-12 | Medium | `settle_batch` calls `assert_deepbook_liquidity` against pooled funds — exactly the repurposing **S-09** warns against. The pool argument is operator-supplied, so a compromised operator could point the guard at a permissionlessly-created pool with self-provided liquidity and satisfy it trivially. Mitigation today is off-chain: `lib/server/sui-settlement.ts` resolves the pool from `DEEPBOOK_POOL_ID` (server env), never from request input. **Chain-side fix requires a whitelist of pool IDs in `ComplianceConfig` — not yet implemented.** | Open |
+
+New abort codes to mirror in `lib/server/sui-settlement.ts::ABORT_CODES`:
+`107 E_BELOW_MINIMUM` (settlement below `min_settlement_amount`), `304
+E_INSUFFICIENT_DEPTH` (now also fires on a sub-`MIN_FILL_BPS` fill).
+
+**Publish dependency.** S-11 and the `min_settlement_amount` field on
+`ComplianceConfig` are source-level fixes. The deployed package is immutable
+and predates both, so batch payouts stay blocked on-chain until the package is
+republished and `scripts/set-compliance-config.mjs` runs against the new
+`ComplianceConfig`. See `docs/KEY-CEREMONY-RUNBOOK.md` §4.
+
+**Numbering note.** `S-06`/`S-07` are the 2026-07-13 advisories above
+(`AdminCap` abilities; `settle_batch` event attribution). The cap split and the
+DeepBook guard fix are `S-10`/`S-11` — module doc-comments use those IDs.
+
+---
+
 ## Findings
 
 ### C-01 · `smart_treasury::add_usdc` always aborts on non-zero coins
