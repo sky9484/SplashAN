@@ -109,7 +109,10 @@ Record: new **package id**, **AdminCap** object id, and the **UpgradeCap**.
 
 ### 3.3 Re-bootstrap every shared object
 Nothing carries over. Re-create and record ids for:
-`compliance_config::create` → `ComplianceConfig` + `ComplianceCap`;
+`compliance_config::create` → `ComplianceConfig` + `ComplianceCap`
+  — ⚠️ its signature GAINED a 5th parameter, `min_settlement_amount` (the $100
+  floor, in the settled coin's MINOR UNITS: 100_000_000 for 6-decimal USDC).
+  Zero is rejected, so the floor cannot be disabled by accident;
 `peg_monitor::init_peg_state` → `PegState`;
 `settlement` pool → `SettlementPool<SUI>`;
 `smart_treasury::init_treasury` → `SmartTreasury<SUI>`;
@@ -224,3 +227,28 @@ mainnet.
 **After this publish**, re-run `scripts/e2e-testnet.mjs`; the batch flow should
 settle for real. If it still aborts 304, re-measure the book — testnet depth
 moves.
+
+---
+
+## 6 · Minimum settlement size ($100)
+
+Enforced at four layers so no single bypass opens a sub-minimum payout:
+
+| Layer | Where |
+|---|---|
+| UI | transfer step + batch authorization summary (blocks before a TOTP is spent) |
+| API | `transfers/authorize`, `batches/authorize` → 400 `below_minimum` |
+| Policy engine | `evaluatePolicy` → `BLOCK` — the choke point in-chat approval, the queue and submit-time re-evaluation all share |
+| Contract | `settlement::settle_payment` and `settle_batch` → abort 107 `E_BELOW_MINIMUM` against `ComplianceConfig.min_settlement_amount` |
+
+The floor applies to a single transfer and to a batch **TOTAL** (not per row — a
+payroll run legitimately contains small rows). Internal transfers and treasury
+moves are exempt: the floor exists because of corridor settlement fixed costs,
+which internal movements do not incur.
+
+Server default is `$100`, overridable with `MIN_SETTLEMENT_USD`. A malformed or
+non-positive override falls back to $100 rather than disabling the rule.
+On-chain it is `min_settlement_amount` in **minor units**, set at
+`compliance_config::create` and changeable with
+`scripts/set-compliance-config.mjs --min-settlement <minor units>` (that script
+auto-detects whether the deployed contract has the field yet).

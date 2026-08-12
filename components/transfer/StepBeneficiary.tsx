@@ -16,6 +16,7 @@ import {
 
 import type { TransferState } from '@/app/dashboard/transfer/page';
 import type { RecipientRecord } from '@/lib/server/operations';
+import { checkMinimumSettlement, minSettlementUsd, formatUsd } from '@/lib/policy/limits';
 
 type TransferPatch = (patch: Partial<TransferState>) => void;
 type RecipientCountry = TransferState['recipient']['country'];
@@ -65,7 +66,11 @@ export default function StepBeneficiary({ state, set, next }: { state: TransferS
 
   const nameOk = recipient.name.trim().length > 1;
   const accountOk = Boolean(recipient.bank?.account?.trim());
-  const amountOk = Number.parseFloat(amount.value || '0') > 0;
+  // Minimum settlement size — the same rule the API, the policy engine and the
+  // contract enforce. Gating the step here means the operator cannot walk a
+  // sub-minimum transfer all the way to the authorization screen.
+  const minimumCheck = checkMinimumSettlement(Number.parseFloat(amount.value || '0'), 'transfer');
+  const amountOk = minimumCheck.ok;
   const valid = nameOk && accountOk && amountOk;
 
   useEffect(() => {
@@ -411,13 +416,14 @@ export default function StepBeneficiary({ state, set, next }: { state: TransferS
               </div>
               <p className="mt-3 text-[13px] leading-4 text-[#326273]/50">
                 Indicative only — the exact quote locks with fees shown before you sign.
+                {' '}Minimum transfer {formatUsd(minSettlementUsd())}.
               </p>
             </div>
           </div>
         </div>
         {touchedSubmit && !amountOk && (
           <p className="mt-2 flex items-center gap-1.5 text-[13px] font-semibold text-[#9b4e32]">
-            <CircleAlert className="h-3.5 w-3.5" /> Enter the USD amount to send.
+            <CircleAlert className="h-3.5 w-3.5" /> {minimumCheck.ok ? 'Enter the USD amount to send.' : minimumCheck.message}
           </p>
         )}
       </section>

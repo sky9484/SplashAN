@@ -1,7 +1,7 @@
 module splash_protocol::settlement;
 
 use splash_protocol::business_account::{Self, BusinessAccount, AdminCap};
-use splash_protocol::compliance_config::ComplianceConfig;
+use splash_protocol::compliance_config::{Self, ComplianceConfig};
 use splash_protocol::peg_monitor::{Self, PegState};
 use deepbook::pool::Pool;
 use openzeppelin_math::rounding;
@@ -23,6 +23,8 @@ const E_INVALID_AMOUNT: u64 = 105;
 /// The BusinessAccount object was transferred away from the address recorded
 /// as its owner. Verified status is not transferable (audit fix S-01).
 const E_NOT_ACCOUNT_OWNER: u64 = 106;
+/// Gross settlement below the configured minimum (ComplianceConfig).
+const E_BELOW_MINIMUM: u64 = 107;
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 const BPS_DENOMINATOR: u64 = 10_000;
@@ -109,6 +111,11 @@ public fun settle_payment<T, QuoteAsset>(
 
     let gross = coin::value(&payment);
     assert!(gross > 0, E_INVALID_AMOUNT);
+    // Minimum settlement size. On-chain so the floor holds even if a caller
+    // bypasses the API — the fixed cost of a settlement (anchor, evidence,
+    // payout leg) does not scale down, and sub-minimum sizes cannot clear
+    // DeepBook's minimum order size either.
+    assert!(gross >= compliance_config::min_settlement_amount(compliance_config), E_BELOW_MINIMUM);
     peg_monitor::assert_deepbook_liquidity(compliance_config, deepbook_pool, gross, clock);
     // OpenZeppelin checked mul_div (u128 intermediate, rounds down): fee
     // rounding always favors the payer, and overflow aborts instead of
@@ -168,6 +175,9 @@ public fun settle_batch<T, QuoteAsset>(
         total_amount = total_amount + vector::borrow(&payments, index).amount;
         index = index + 1;
     };
+    // The floor applies to the batch TOTAL, not per row — a payroll run
+    // legitimately contains small individual rows.
+    assert!(total_amount >= compliance_config::min_settlement_amount(compliance_config), E_BELOW_MINIMUM);
     peg_monitor::assert_deepbook_liquidity(compliance_config, deepbook_pool, total_amount, clock);
 
     let business_owner = business_account::owner(business_account);

@@ -87,6 +87,19 @@ function operatorKeypair() {
     : Ed25519Keypair.fromSecretKey(secretKey);
 }
 
+// ABI straddle: the package deployed today has a 4-parameter `update`. The
+// republished package adds `min_settlement_amount` (the on-chain $100 floor).
+// Detect which one we are talking to from the config object itself rather than
+// guessing, so this script keeps working across the publish.
+const hasMinSettlement = current.min_settlement_amount !== undefined;
+next.minSettlement = Number(arg('min-settlement') ?? current.min_settlement_amount ?? 0);
+if (hasMinSettlement && !(next.minSettlement > 0)) {
+  throw new Error('min-settlement must be > 0 (a zero floor would disable the minimum)');
+}
+console.log(hasMinSettlement
+  ? `contract supports min_settlement_amount -> setting ${next.minSettlement} (minor units)`
+  : 'deployed contract predates min_settlement_amount — using the legacy 4-arg update');
+
 const tx = new Transaction();
 tx.setGasBudget('20000000');
 tx.moveCall({
@@ -98,6 +111,7 @@ tx.moveCall({
     tx.pure.u64(next.stalenessMs),
     tx.pure.u64(next.slippageBps),
     tx.pure.u64(next.minDepth),
+    ...(hasMinSettlement ? [tx.pure.u64(next.minSettlement)] : []),
   ],
 });
 

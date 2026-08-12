@@ -68,11 +68,32 @@ const compliance = {
 };
 
 test('adversarial tier cannot auto-execute third-party payment', () => {
+  // $500, deliberately above the $100 settlement floor, so this test exercises
+  // what it is named for — that a third-party payment never auto-executes even
+  // when PAYMENT is whitelisted at TIER_2 — rather than being short-circuited
+  // by the minimum-amount block.
+  const amountMicro = BigInt(500_000_000);
+  const matchingSimulation = simulation({
+    balanceChanges: [{ owner: 'payer', coinType: 'USDC', amount: '-500000000' }],
+  });
   const decision = evaluatePolicy({
-    proposal: proposal({ tier: 'TIER_2_SCOPED_AUTO' }),
+    proposal: proposal({
+      tier: 'TIER_2_SCOPED_AUTO',
+      explain: {
+        ...proposal().explain,
+        financialImpact: { amountOut: amountMicro, currencyOut: 'USDC' },
+      },
+      simulation: matchingSimulation,
+    }),
     actor: 'OWNER',
-    policy: policy({ whitelistedAutoKinds: ['TREASURY_ALLOCATE', 'PAYMENT'] }),
-    simulation: simulation(),
+    // Dual-control threshold raised above the amount so the assertion stays on
+    // "one approver, not auto-execute" — the behaviour under test — instead of
+    // drifting into the dual-approval path.
+    policy: policy({
+      whitelistedAutoKinds: ['TREASURY_ALLOCATE', 'PAYMENT'],
+      dualApprovalThresholdUsd: BigInt(50_000_000_000),
+    }),
+    simulation: matchingSimulation,
     compliance,
     now,
   });

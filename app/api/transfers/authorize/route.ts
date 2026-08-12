@@ -27,6 +27,7 @@ import {
 import { requireCustomerRequest } from '@/lib/server/customer-auth';
 import { assertCleanBody, ProvenanceViolationError, provenanceViolationResponse } from '@/lib/auth/provenance-guard';
 import { requireActiveOrg } from '@/lib/server/kyb-gate';
+import { checkMinimumSettlement } from '@/lib/policy/limits';
 import { readJsonBody } from '@/lib/server/http';
 
 export const maxDuration = 60;
@@ -93,6 +94,16 @@ export async function POST(request: Request) {
   }
 
   const sourceAmount = Number.parseFloat(body.amount.value);
+  // Minimum settlement size. Checked server-side before any funding session,
+  // quote or ledger write, so a client that skips the form validation cannot
+  // open a sub-minimum transfer.
+  const minimum = checkMinimumSettlement(sourceAmount, 'transfer');
+  if (!minimum.ok) {
+    return NextResponse.json(
+      { error: minimum.message, code: 'below_minimum', minimumUsd: minimum.minimumUsd },
+      { status: 400 },
+    );
+  }
   const sourceAmountCents = Math.round(sourceAmount * 100);
   const sourceAmountMicro = Math.round(sourceAmount * 1_000_000);
   const businessAccountId = body.businessAccountId

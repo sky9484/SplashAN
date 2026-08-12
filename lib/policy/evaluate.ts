@@ -6,6 +6,7 @@ import type {
   UnsignedProposal,
   UserRole,
 } from '../agent/types.ts';
+import { USD_MICRO, checkMinimumSettlement, formatUsd } from './limits.ts';
 
 export type PolicyDecision =
   | { outcome: 'AUTO_EXECUTE' }
@@ -135,6 +136,21 @@ export function evaluatePolicy(ctx: PolicyContext): PolicyDecision {
   const forceHumanApproval = proposal.explain.evidenceQuality === 'CONTAINS_DEMO_DATA';
 
   const amount = amountUsdMicro(proposal);
+
+  // Minimum settlement size. Enforced here as well as at the API edge, because
+  // this is the choke point every path shares — in-chat approval, the
+  // maker-checker queue, and submit-time re-evaluation all run evaluatePolicy,
+  // so a sub-minimum proposal can never be approved by any route.
+  if (OUTBOUND_KINDS.has(proposal.kind)) {
+    const amountUsd = Number(amount) / USD_MICRO;
+    const minimum = checkMinimumSettlement(
+      amountUsd,
+      proposal.kind === 'BATCH_PAYOUT' ? 'batch' : 'transfer',
+    );
+    if (!minimum.ok) {
+      return { outcome: 'BLOCK', reason: `below minimum (${formatUsd(minimum.minimumUsd)})` };
+    }
+  }
 
   if (OUTBOUND_KINDS.has(proposal.kind)) {
     if (!hasVerifiedCounterpartyEvidence(proposal)) {

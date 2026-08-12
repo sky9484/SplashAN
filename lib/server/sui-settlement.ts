@@ -290,7 +290,8 @@ const ABORT_CODES: Record<number, string> = {
   103: 'E_FEE_EXCEEDED — fee_bps passed to settle_payment/settle_batch is above MAX_FEE_BPS (200). Check the corridor fee in lib/fx/corridors.ts.',
   104: 'E_INVALID_RECIPIENT — settlement recipient is the zero address.',
   105: 'E_INVALID_AMOUNT — settlement amount or deposit coin value is zero.',
-  106: 'E_NOT_ACCOUNT_OWNER — BusinessAccount object was transferred away from its recorded owner; verified status is not transferable (audit S-01).',
+  107: 'E_BELOW_MINIMUM — the settlement (or batch total) is below the on-chain minimum in ComplianceConfig.min_settlement_amount. Raise the amount, or change the floor with scripts/set-compliance-config.mjs --min-settlement <minor units>.',
+  106:'E_NOT_ACCOUNT_OWNER — BusinessAccount object was transferred away from its recorded owner; verified status is not transferable (audit S-01).',
 
   // ── peg_monitor ──────────────────────────────────────────────────────────
   300: 'E_PEG_BROKEN_USDC — USDC deviation > 30 bps. Update peg with valid data.',

@@ -2,6 +2,7 @@ import { after, NextResponse } from 'next/server';
 
 import { assertCleanBody, ProvenanceViolationError, provenanceViolationResponse } from '@/lib/auth/provenance-guard';
 import { requireActiveOrg } from '@/lib/server/kyb-gate';
+import { checkMinimumSettlement } from '@/lib/policy/limits';
 import { requireCustomerRequest } from '@/lib/server/customer-auth';
 import { readJsonBody } from '@/lib/server/http';
 import { createBatch, updateBatch } from '@/lib/server/operations';
@@ -39,6 +40,17 @@ export async function POST(request: Request) {
 
   const acceptedRows = rows.filter((row) => row.name && row.address && Number.parseFloat(String(row.amount ?? '0')) > 0);
   const total = acceptedRows.reduce((sum, row) => sum + Number.parseFloat(String(row.amount ?? '0')), 0);
+
+  // Minimum applies to the batch TOTAL, not per row — a payroll run legitimately
+  // contains small individual rows. Checked before the batch record is created
+  // so a sub-minimum run never enters the operations store.
+  const minimum = checkMinimumSettlement(total, 'batch');
+  if (!minimum.ok) {
+    return NextResponse.json(
+      { error: minimum.message, code: 'below_minimum', minimumUsd: minimum.minimumUsd },
+      { status: 400 },
+    );
+  }
   const batch = createBatch({
     rowCount: rows.length,
     acceptedRows: acceptedRows.length,

@@ -12,6 +12,7 @@ import DashStat from "@/components/dashboard/DashStat";
 import ExplorerLinks from "@/components/dashboard/ExplorerLinks";
 import SettlementEngineFlow from "@/components/dashboard/SettlementEngineFlow";
 import { takeBatchDraft } from "@/lib/batch-parse";
+import { checkMinimumSettlement, minSettlementUsd, formatUsd } from '@/lib/policy/limits';
 
 type ComplianceResult = "PASS" | "REVIEW" | "BLOCK";
 
@@ -276,6 +277,14 @@ export default function BatchPage() {
       return;
     }
 
+    // Minimum settlement size — same rule the server and the contract enforce.
+    // Checked here only so the operator finds out before spending a TOTP.
+    const minimum = checkMinimumSettlement(acceptedTotal, "batch");
+    if (!minimum.ok) {
+      toast.error(minimum.message);
+      return;
+    }
+
     setBusy(true);
 
     try {
@@ -465,7 +474,13 @@ ${sampleCsvRows.map((row) => `${row.name},${row.address},${row.country},${row.pu
                   <Row label="Cleared total" value={`$${acceptedTotal.toFixed(2)}`} />
                   <Row label="Estimated fees" value={`$${estimatedFees.toFixed(2)}`} />
                   <Row label="Rows excluded" value={`${reviewRows.length + blockedRows.length}`} />
+                  <Row label="Minimum batch total" value={formatUsd(minSettlementUsd())} />
                 </div>
+                {acceptedTotal > 0 && acceptedTotal < minSettlementUsd() ? (
+                  <p className="mt-3 rounded-lg border border-[var(--warn)] bg-[var(--warn-bg)] px-3 py-2 text-[13px] font-semibold text-[var(--warn)]">
+                    Cleared total is below the {formatUsd(minSettlementUsd())} minimum — add rows or increase the amounts before authorizing.
+                  </p>
+                ) : null}
                 <form
                   onSubmit={(event) => {
                     event.preventDefault();

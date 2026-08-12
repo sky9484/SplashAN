@@ -3,6 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { composeAndSimulateProposal } from '../chain/compose.ts';
 import { estimateNettingSavedUsd, getCorridorFeeBps, getUsdCorridorByCurrency } from '../fx/corridors.ts';
 import { getUsdyNetApyPct } from '../server/usdy.ts';
+import { checkMinimumSettlement } from '../policy/limits.ts';
 import { InMemoryProposalStore } from '../queue/proposal-state.ts';
 import { makeProposalWriter } from '../queue/proposal-persistence.ts';
 import { evidenceQualityOf, makeEnvelope, type Envelope } from './envelope.ts';
@@ -803,6 +804,11 @@ export async function proposePayment(input: unknown): Promise<UnsignedProposal> 
     throw new Error('payment proposals require a verified counterparty with clear KYT and sanctions status');
   }
   const amountUsd = requireAmount(object, 'amountUsd');
+  // Fail fast with the real reason — the desk surfaces tool errors as warnings,
+  // which is far better UX than drafting a proposal the policy engine will
+  // block at approval time.
+  const minimum = checkMinimumSettlement(amountUsd, 'transfer');
+  if (!minimum.ok) throw new Error(minimum.message);
   const currency = requireString(object, 'currency').toUpperCase();
   const invoiceId = optionalString(object, 'invoiceId');
   const invoice = invoiceId ? getInvoice({ id: invoiceId }) : undefined;
@@ -964,6 +970,9 @@ export async function proposeBatchPayout(input: unknown): Promise<UnsignedPropos
     counterpartyIds.push(counterpartyId);
     totalUsd += requireAmount(item, 'amountUsd');
   }
+  // The floor applies to the batch TOTAL, not per row.
+  const batchMinimum = checkMinimumSettlement(totalUsd, 'batch');
+  if (!batchMinimum.ok) throw new Error(batchMinimum.message);
   return createDraftProposal({
     keyParts: ['BATCH_PAYOUT', orgId, corridor, payouts],
     kind: 'BATCH_PAYOUT',
@@ -1048,8 +1057,17 @@ function extractKnownCounterpartyId(message: string) {
 }
 
 function extractAmountUsd(message: string, invoice?: InvoiceForAgent) {
-  const match = message.match(/\$?\s*([\d,]+(?:\.\d{1,2})?)\s*(?:usd|usdc|\$)?/i);
-  if (match) return Number(match[1].replace(/,/g, ''));
+  // Only a STANDALONE money token counts. The previous pattern matched digits
+  // embedded in identifiers — "inv_e2e_ph" yielded `2`, so "pay invoice
+  // inv_e2e_ph" silently drafted a $2 transfer instead of using the invoice
+  // amount. Require a boundary before the number and after the optional unit.
+  const match = message.match(
+    /(?:^|[\s$(])\$?\s*([\d,]+(?:\.\d{1,2})?)\s*(?:usd|usdc|dollars?)?(?=$|[\s.,!?)])/i,
+  );
+  if (match) {
+    const parsed = Number(match[1].replace(/,/g, ''));
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
   return invoice ? Number(invoice.amountUsd) : 0;
 }
 

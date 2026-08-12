@@ -22,6 +22,12 @@ public struct ComplianceConfig has key {
     max_staleness_ms: u64,
     max_slippage_bps: u64,
     min_depth_base_units: u64,
+    /// Minimum gross settlement size, in the settled coin's MINOR UNITS.
+    /// Configurable rather than a constant because the unit depends on the
+    /// coin: $100 is 100_000_000 for 6-decimal USDC but a different figure for
+    /// any other decimals. Zero is rejected by `assert_valid`, so the floor can
+    /// never be silently disabled.
+    min_settlement_amount: u64,
     paused: bool,
 }
 
@@ -36,6 +42,7 @@ public struct ComplianceConfigUpdated has copy, drop {
     max_staleness_ms: u64,
     max_slippage_bps: u64,
     min_depth_base_units: u64,
+    min_settlement_amount: u64,
     paused: bool,
 }
 
@@ -46,15 +53,17 @@ public fun create(
     max_staleness_ms: u64,
     max_slippage_bps: u64,
     min_depth_base_units: u64,
+    min_settlement_amount: u64,
     ctx: &mut TxContext,
 ) {
-    assert_valid(max_deviation_ppm, max_staleness_ms, max_slippage_bps, min_depth_base_units);
+    assert_valid(max_deviation_ppm, max_staleness_ms, max_slippage_bps, min_depth_base_units, min_settlement_amount);
     let config = ComplianceConfig {
         id: object::new(ctx),
         max_deviation_ppm,
         max_staleness_ms,
         max_slippage_bps,
         min_depth_base_units,
+        min_settlement_amount,
         paused: false,
     };
     let config_id = object::id(&config);
@@ -70,13 +79,15 @@ public fun update(
     max_staleness_ms: u64,
     max_slippage_bps: u64,
     min_depth_base_units: u64,
+    min_settlement_amount: u64,
 ) {
     assert!(cap.config_id == object::id(config), E_INVALID_CAP);
-    assert_valid(max_deviation_ppm, max_staleness_ms, max_slippage_bps, min_depth_base_units);
+    assert_valid(max_deviation_ppm, max_staleness_ms, max_slippage_bps, min_depth_base_units, min_settlement_amount);
     config.max_deviation_ppm = max_deviation_ppm;
     config.max_staleness_ms = max_staleness_ms;
     config.max_slippage_bps = max_slippage_bps;
     config.min_depth_base_units = min_depth_base_units;
+    config.min_settlement_amount = min_settlement_amount;
     emit_update(config);
 }
 
@@ -101,6 +112,7 @@ public fun max_deviation_ppm(config: &ComplianceConfig): u64 { config.max_deviat
 public fun max_staleness_ms(config: &ComplianceConfig): u64 { config.max_staleness_ms }
 public fun max_slippage_bps(config: &ComplianceConfig): u64 { config.max_slippage_bps }
 public fun min_depth_base_units(config: &ComplianceConfig): u64 { config.min_depth_base_units }
+public fun min_settlement_amount(config: &ComplianceConfig): u64 { config.min_settlement_amount }
 public fun paused(config: &ComplianceConfig): bool { config.paused }
 
 fun assert_valid(
@@ -108,11 +120,14 @@ fun assert_valid(
     max_staleness_ms: u64,
     max_slippage_bps: u64,
     min_depth_base_units: u64,
+    min_settlement_amount: u64,
 ) {
     assert!(max_deviation_ppm > 0 && max_deviation_ppm <= MAX_DEVIATION_PPM, E_INVALID_CONFIG);
     assert!(max_staleness_ms > 0 && max_staleness_ms <= MAX_STALENESS_MS, E_INVALID_CONFIG);
     assert!(max_slippage_bps > 0 && max_slippage_bps <= MAX_SLIPPAGE_BPS, E_INVALID_CONFIG);
     assert!(min_depth_base_units > 0, E_INVALID_CONFIG);
+    // A zero floor would disable the minimum entirely — reject it.
+    assert!(min_settlement_amount > 0, E_INVALID_CONFIG);
 }
 
 fun emit_update(config: &ComplianceConfig) {
@@ -122,6 +137,7 @@ fun emit_update(config: &ComplianceConfig) {
         max_staleness_ms: config.max_staleness_ms,
         max_slippage_bps: config.max_slippage_bps,
         min_depth_base_units: config.min_depth_base_units,
+        min_settlement_amount: config.min_settlement_amount,
         paused: config.paused,
     });
 }
