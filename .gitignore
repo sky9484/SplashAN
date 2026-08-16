@@ -25,6 +25,8 @@
 # production
 /build
 /move/build/
+# Post-split: each Move package has its own build/ output.
+/move/*/build/
 /.tools/
 
 # misc
