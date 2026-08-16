@@ -110,7 +110,20 @@ peg_monitor) publishes to mainnet; `splash_custody` (settlement, smart_treasury,
 dual_treasury, liquidity_guard) publishes only when the Labuan e-money licence is
 granted. Non-custody stops being an assert someone can forget and becomes a
 property of the type system: **no struct in `splash_core` holds a `Balance<T>`**,
-CI-enforced by `scripts/check-core-no-balance.mjs` on every `npm run lint`.
+enforced by `scripts/check-core-no-balance.mjs` in CI
+(`.github/workflows/core-invariant.yml`) and in `npm run lint`.
+
+**The checker was itself defeated once and rebuilt.** An adversarial review
+compiled a complete client omnibus into `splash_core` — per-client balances in a
+`Table`, a `vector<Coin>`, an `Option<Balance>`, an aliased `Balance as Ledger`,
+a field split across two lines, a single-line struct, and a module in a
+subdirectory the non-recursive scan never opened — while v1 reported "invariant
+holds". v1 matched only `name: Type<` at the start of a physical line. The
+rewrite parses struct bodies out of comment-stripped source and matches value
+types at any nesting depth under any local alias, walks `sources/` recursively,
+and cross-checks its module count against the compiler's bytecode output. All
+seven bypasses are pinned in `tests/core-invariant-check.test.mjs`. A control
+quoted as evidence has to actually hold, so it is now tested like one.
 
 | ID | Sev | Finding | Status |
 |----|-----|---------|--------|

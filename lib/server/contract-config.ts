@@ -139,6 +139,10 @@ function isMoveTypeLike(value: string) {
 
 const ID_FIELDS: ContractConfigField[] = [
   'packageId',
+  // Validated like any other object id — without these the split's two new
+  // ids escaped the canonical-64-hex check that packageId gets.
+  'corePackageId',
+  'custodyPackageId',
   'treasuryId',
   'adminCapId',
   'attestationCapId',

@@ -182,9 +182,21 @@ export async function settleDueWithdrawals(opts: { force?: boolean } = {}): Prom
  * Cancel a still-pending withdrawal and return the reserved funds to Treasury.
  * Completes the notice state machine (PENDING → CANCELLED).
  */
-export function cancelTreasuryWithdrawal(noticeId: string): WithdrawalNotice {
+/**
+ * Cancel a pending withdrawal notice.
+ *
+ * `userId` is REQUIRED and checked against the notice's owner. It used to be
+ * absent: any caller who had seen an id (they are handed out by the snapshot
+ * endpoint) could cancel any other tenant's withdrawal. Harmless while every
+ * caller resolves to the same demo ledger, and a cross-tenant write the moment
+ * ledgers are keyed per user — which is exactly the kind of latent hole that
+ * gets missed during the migration that introduces it.
+ */
+export function cancelTreasuryWithdrawal(noticeId: string, userId: string): WithdrawalNotice {
   const notice = notices.find((n) => n.id === noticeId);
-  if (!notice) throw new Error('notice not found');
+  // Same error for "does not exist" and "belongs to someone else" — otherwise
+  // the response distinguishes them and the endpoint becomes an id oracle.
+  if (!notice || notice.userId !== userId) throw new Error('notice not found');
   if (notice.state !== 'PENDING') throw new Error(`cannot cancel a ${notice.state} withdrawal`);
   const ledger = getLedger(notice.userId);
   ledger.treasuryPrincipalMicro += notice.amountMicro; // un-reserve

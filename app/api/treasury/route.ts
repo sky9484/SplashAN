@@ -16,6 +16,7 @@ import { requireCustomerRequest } from '@/lib/server/customer-auth';
 import { assertCleanBody, ProvenanceViolationError, provenanceViolationResponse } from '@/lib/auth/provenance-guard';
 import { requireActiveOrg } from '@/lib/server/kyb-gate';
 import { readJsonBody } from '@/lib/server/http';
+import { resolveSessionAccount } from '@/lib/server/session-account';
 import {
   cancelTreasuryWithdrawal,
   getLedger,
@@ -32,8 +33,8 @@ export const dynamic = 'force-dynamic';
 
 const toUsd = (micro: number) => Math.round(micro / 10_000) / 100;
 
-function snapshot() {
-  const ledger = getLedger();
+function snapshot(accountId: string) {
+  const ledger = getLedger(accountId);
   const rate = getTreasuryRate();
   return {
     available: toUsd(ledger.availableMicro),
@@ -58,7 +59,8 @@ export async function GET(request: Request) {
   const auth = await requireCustomerRequest(request);
   if (auth.response) return auth.response;
 
-  return NextResponse.json(snapshot());
+  const { accountId } = await resolveSessionAccount(auth.session);
+  return NextResponse.json(snapshot(accountId));
 }
 
 export async function POST(request: Request) {
@@ -81,18 +83,21 @@ export async function POST(request: Request) {
   const gate = await requireActiveOrg(auth.session);
   if (gate.response) return gate.response;
 
-  const ledger = getLedger();
+  // Scoped to the caller's org. `getLedger()` with no argument defaults to a
+  // single shared demo ledger, so every tenant read and mutated the same object.
+  const { accountId } = await resolveSessionAccount(auth.session);
+  const ledger = getLedger(accountId);
 
   // Cancel a still-pending withdrawal — returns reserved funds to Treasury.
   if (body.action === 'cancel') {
     const noticeId = typeof body.noticeId === 'string' ? body.noticeId : '';
     if (!noticeId) return NextResponse.json({ error: 'noticeId is required to cancel a withdrawal' }, { status: 400 });
     try {
-      cancelTreasuryWithdrawal(noticeId);
+      cancelTreasuryWithdrawal(noticeId, ledger.userId);
     } catch (error) {
       return NextResponse.json({ error: (error as Error).message }, { status: 400 });
     }
-    return NextResponse.json(snapshot());
+    return NextResponse.json(snapshot(accountId));
   }
 
   const amountUsd = Number(body.amountUsd);
@@ -113,5 +118,5 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: (error as Error).message }, { status: 400 });
   }
 
-  return NextResponse.json(snapshot());
+  return NextResponse.json(snapshot(accountId));
 }

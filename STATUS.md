@@ -70,9 +70,16 @@ Do not publish `splash_core` until every line is checked.
       `deepbook/tests/vault/vault_tests.move`). Tests are written and will run
       when the pin moves. Not a mainnet blocker: custody does not publish in
       Phase 0.
-- [x] `grep -r "Balance<" move/splash_core/sources/` returns nothing —
-      CI-enforced by `npm run check:core`, which runs on every `npm run lint`
-      (verified against a deliberately planted violation)
+- [x] No value-bearing field in `splash_core` — `scripts/check-core-no-balance.mjs`,
+      run by `.github/workflows/core-invariant.yml` on every push and PR, and by
+      `npm run lint` locally. The checker parses struct BODIES out of
+      comment-stripped source, so it catches nested containers
+      (`Table<address, Balance<SUI>>`, `vector<Coin<SUI>>`, `Option<..>`),
+      aliased imports (`Balance as Ledger`), multi-line fields, single-line
+      structs and modules in subdirectories — every bypass an adversarial review
+      found in the first version, each pinned in
+      `tests/core-invariant-check.test.mjs` (12 tests). It also cross-checks the
+      scanned module count against the compiler's bytecode output.
 - [x] `npx tsc --noEmit` exits 0 · all TS suites green (165 tests)
 - [x] M1 closed — `create` returns `PaymentIntent` only; no `SettleReceipt`
       without a consumed `Coin`; `AnchorWitness` enforces a single consumer

@@ -656,7 +656,7 @@ export async function createPaymentIntentOnSui(input: {
   fxRateScaled: number;
 }) {
   await requireSdkExecution();
-  const packageId = configIdOrThrow('packageId', 'SPLASH_PACKAGE_ID');
+  const packageId = corePackageIdOrThrow();
   const recipient = requireConfiguredRecipient(input.recipient);
   const amountMist = Math.max(1, Math.floor(input.amountMist));
   const fxRateScaled = Math.max(1, Math.floor(input.fxRateScaled));
@@ -698,7 +698,7 @@ export async function confirmComposedPaymentOnSui(input: {
   backingBlobId: string;
 }): Promise<ComposedSettlementResult> {
   await requireSdkExecution();
-  const packageId = configIdOrThrow('packageId', 'SPLASH_PACKAGE_ID');
+  const packageId = corePackageIdOrThrow();
   const attestationCapId = attestationCapObjectId();
   const businessAccountId = configIdOrThrow('businessAccountId', 'SPLASH_BUSINESS_ACCOUNT_ID');
   const smartTreasuryId = configuredSmartTreasuryId();
@@ -737,9 +737,17 @@ export async function confirmComposedPaymentOnSui(input: {
   });
 
   if (treasuryAmountMist > 0) {
+    // `smart_treasury` is a splash_custody module — the ONE custody call on the
+    // otherwise non-custodial composed path. It must resolve through the custody
+    // package, not the core one: addressing a custody module with the core
+    // package id is not a compile error, it is a runtime failure deep inside a
+    // PTB. In Phase 0 this throws the licence-named error instead, which is the
+    // honest outcome — the treasury allocation is a custodial operation and the
+    // licence does not permit it yet.
+    const custodyPackageId = custodyPackageIdOrThrow();
     const [treasuryCoin] = tx.splitCoins(tx.gas, [treasuryAmountMist]);
     tx.moveCall({
-      target: `${packageId}::smart_treasury::deposit`,
+      target: `${custodyPackageId}::smart_treasury::deposit`,
       typeArguments: ['0x2::sui::SUI'],
       arguments: [
         tx.object(smartTreasuryId),
@@ -815,7 +823,7 @@ export async function anchorAuditHashOnSui(input: {
   backingBlobId: string;
 }) {
   await requireSdkExecution();
-  const packageId = configIdOrThrow('packageId', 'SPLASH_PACKAGE_ID');
+  const packageId = corePackageIdOrThrow();
   const attestationCapId = attestationCapObjectId();
   const businessAccountId = configIdOrThrow('businessAccountId', 'SPLASH_BUSINESS_ACCOUNT_ID');
   const tx = new Transaction();
@@ -857,7 +865,7 @@ export async function verifyBusinessOnSui(input: {
   riskScore: number;
 }) {
   await requireSdkExecution();
-  const packageId = configIdOrThrow('packageId', 'SPLASH_PACKAGE_ID');
+  const packageId = corePackageIdOrThrow();
   const adminCapId = configIdOrThrow('adminCapId', 'SPLASH_ADMIN_CAP_ID');
   const businessAccountId = requireSuiObjectId(input.businessAccountId, 'businessAccountId');
 
@@ -884,7 +892,7 @@ export async function verifyBusinessOnSui(input: {
 
 export async function refreshPegOnSui(input: { usdcPrice: number; usdtPrice: number }) {
   await requireSdkExecution();
-  const packageId = configIdOrThrow('packageId', 'SPLASH_PACKAGE_ID');
+  const packageId = corePackageIdOrThrow();
   const pegStateId = configIdOrThrow('pegStateId', 'SPLASH_PEG_STATE_ID');
   const attestationCapId = attestationCapObjectId();
   const usdcDeviationPpm = Math.max(0, Math.round(Math.abs(input.usdcPrice - 1) * 1_000_000));
@@ -1608,7 +1616,7 @@ export async function assertDeepbookPoolWhitelisted(): Promise<void> {
 export async function updateComplianceControls(
   input: Omit<ComplianceControls, 'configured' | 'allowedDeepbookPools' | 'poolWhitelistEnforced'>,
 ) {
-  const packageId = configIdOrThrow('packageId', 'SPLASH_PACKAGE_ID');
+  const packageId = corePackageIdOrThrow();
   const configId = configIdOrThrow('complianceConfigId', 'SPLASH_COMPLIANCE_CONFIG_ID');
   const capId = configIdOrThrow('complianceCapId', 'SPLASH_COMPLIANCE_CAP_ID');
   if (!getOperatorKeypair()) throw new Error('OPERATOR_SUI_PRIVATE_KEY is required to update compliance controls.');
