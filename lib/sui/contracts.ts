@@ -53,7 +53,7 @@ export async function submitBusinessApplication(input: KybApplicationInput) {
     kind: "business_account::submit_application",
     sender: input.owner ?? "0xmerchant",
     payload: {
-      module: "splash_protocol::business_account",
+      module: "splash_core::business_account",
       function: "submit_application",
       arguments: [input.ssmNumber, input.kybCid ?? "ipfs://pending"],
     },
@@ -65,7 +65,8 @@ export function buildSubmitBusinessApplicationTx(input: Required<Pick<KybApplica
   const tx = new Transaction()
 
   tx.moveCall({
-    target: `${cfg.packageId}::business_account::submit_application`,
+    // business_account is a splash_core module.
+    target: `${cfg.corePackageId || cfg.packageId}::business_account::submit_application`,
     arguments: [tx.pure.string(input.ssmNumber), tx.pure.string(input.kybCid)],
   })
 
@@ -88,7 +89,7 @@ export async function executeBatchSettlement(
     kind: "settlement::settle_batch",
     sender: "0xmerchant",
     payload: {
-      module: "splash_protocol::settlement",
+      module: "splash_custody::settlement",
       function: "settle_batch",
       businessAccount: "0xbusiness_account",
       feeBps,

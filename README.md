@@ -10,7 +10,7 @@ Splash Finance is a B2B cross-border settlement prototype for SEA exporters, mar
 - CSV batch payout flow with PapaParse and server-side batch authorization.
 - KYB upload API that records encrypted-storage metadata, document SHA-256 hashes, and a KYB case ID.
 - Separate staff admin console for KYB approvals, support replies, and complaint management.
-- Move package with `splash_protocol::business_account` and `splash_protocol::settlement` modules.
+- Two Move packages: `splash_core` (mainnet, holds no client value) and `splash_custody` (publishes on the Labuan e-money licence). See STATUS.md.
 
 ## Environment
 

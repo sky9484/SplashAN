@@ -92,20 +92,45 @@ sui keytool multi-sig-address --pks <pk1> <pk2> <pk3> --weights 1 1 1 --threshol
 Record the multisig address. Verify each signer can independently reproduce it from the
 same public keys — if the address differs, stop.
 
-### 3.2 Publish the package
-The current package is **immutable**, so this mints a NEW package id and every shared
-object from the old package is unusable by the new one.
+### 3.2 Publish the package(s)
+
+⚠️ **`move/` is now TWO packages** (2026-08-17). There is no `move/Move.toml` any more.
+
+**Phase 0 — publish `splash_core` ONLY.**
 ```bash
-cd move
-sui move build
+cd move/splash_core
+sui move build && sui move test        # 10 tests must pass
 sui client publish --gas-budget 500000000
 ```
+
+**Do NOT publish `splash_custody`.** It holds every `Balance<T>` in the system, and the
+Labuan MFCA licence does not permit holding client funds. Leaving it unpublished is the
+control: there is no flag to flip, because the bytecode does not exist on chain. It
+publishes when the e-money licence is granted — see `STATUS.md`.
+
+The current combined package is **immutable**, so this mints a NEW package id and every
+shared object from the old package is unusable by the new one.
+
 Record: new **package id**, **AdminCap** object id, and the **UpgradeCap**.
 
-> Decide deliberately whether to publish immutable again. Immutable means this ceremony is
-> the only way to ever change the contract. If you keep the `UpgradeCap`, it must go into
-> the same cold multisig — an unrestricted `UpgradeCap` on a hot key makes the whole cap
-> split meaningless, because the package can simply be rewritten.
+> **Decision made (STATUS.md): `splash_core` publishes IMMUTABLE — burn the `UpgradeCap`.**
+> A settlement contract whose logic cannot change is a stronger regulatory position than
+> one under multisig, where "who holds the keys" becomes a custody procedure an auditor
+> takes on trust. The package split is what makes this affordable: core is six modules
+> with no third-party dependencies.
+>
+> The cost is real — a post-publish bug needs a fresh publish and a full re-bootstrap.
+> That is why the independent review gate in `STATUS.md` is not optional.
+>
+> If you overrule this and keep the `UpgradeCap`, it MUST go into the same cold multisig.
+> An unrestricted `UpgradeCap` on a hot key makes the whole cap split meaningless, because
+> the package can simply be rewritten.
+
+Then set both package ids in the environment:
+```
+SPLASH_CORE_PACKAGE_ID=<new core package id>
+SPLASH_CUSTODY_PACKAGE_ID=                  # EMPTY in Phase 0 — intentionally
+```
 
 ### 3.3 Re-bootstrap every shared object
 Nothing carries over. Re-create and record ids for:
@@ -217,7 +242,7 @@ the contract expects.
    quantity, charging the unfilled dust as if it executed at zero. On a healthy
    book this reported **809 bps** where the true cost was **56 bps**.
 
-Both are fixed in `move/sources/peg_monitor.move` and guarded by
+Both are fixed in `move/splash_core/sources/peg_monitor.move` and guarded by
 `tests/deepbook-liquidity-guard.test.mjs` (`sui move test` cannot run here — the
 pinned DeepBook dependency's own test files fail to compile).
 

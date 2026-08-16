@@ -14,7 +14,7 @@
  */
 
 /**
- * Must match `MAX_BATCH_ROWS` in `move/sources/settlement.move`.
+ * Must match `MAX_BATCH_ROWS` in `move/splash_custody/sources/settlement.move`.
  *
  * 256 leaves ~4x headroom under Sui's 1024-event and 1024-command ceilings
  * (one `new_payment` command and one `PaymentExecuted` event per row, plus the

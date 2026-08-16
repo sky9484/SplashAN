@@ -378,7 +378,8 @@ const OUR_MODULES = new Set([
  * DeepBook's own codes are small integers (1-21) that overlap nothing of ours
  * today — but nothing stops a future dependency from aborting with, say, 100,
  * which our table would confidently mislabel as `E_NOT_VERIFIED`. So the code
- * table is only consulted when the abort actually came from `splash_protocol`.
+ * table is only consulted when the abort actually came from a splash module
+ * (splash_core or splash_custody).
  */
 const DEPENDENCY_ABORT_CODES: Record<string, Record<number, string>> = {
   book: {
@@ -418,7 +419,7 @@ function humanizeSuiError(rawError: string | undefined | null, stderr: string): 
     const ours = OUR_MODULES.has(moduleName);
     const human = ours || !moduleName ? ABORT_CODES[code] : undefined;
     if (human) {
-      const caveat = moduleName ? '' : ' (module unknown — verify this is a splash_protocol abort)';
+      const caveat = moduleName ? '' : ' (module unknown — verify this is a splash_core/splash_custody abort)';
       return `${human}${fnName ? ` (in ${fnName})` : ''}${caveat}`;
     }
     const from = moduleName ? ` from module '${moduleName}'` : '';
