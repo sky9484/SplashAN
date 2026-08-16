@@ -1,0 +1,24 @@
+# splash_custody — publishes ONLY when the Labuan e-money licence is granted.
+#
+# Every struct that holds a `Balance<T>` lives here: `SettlementPool`,
+# `SmartTreasury`, `UsdtBuffer`. Under the Phase 0 MFCA licence this package is
+# NOT PUBLISHED, so these functions do not exist on chain — there is no flag to
+# flip and no assert to bypass, because there is no bytecode.
+#
+# It depends on splash_core and cannot compile without it: at publish time it
+# inherits `AdminCap`, `AttestationCap` and the intent/receipt types from core.
+# Nothing in core changes when this publishes.
+[package]
+name = "splash_custody"
+version = "0.0.1"
+edition = "2024.beta"
+license = "Apache-2.0"
+authors = ["Splash Finance"]
+
+[dependencies]
+splash_core = { local = "../splash_core" }
+deepbook = { git = "https://github.com/MystenLabs/deepbookv3.git", subdir = "packages/deepbook", rev = "daa5a9514908968f11be1d0388f673e0ee1a5059" }
+openzeppelin_math = { git = "https://github.com/OpenZeppelin/contracts-sui.git", subdir = "math/core", rev = "a9703fe834a56990ccbcee3a1cf0802e7cd3b8d9" }
+
+[addresses]
+splash_custody = "0x0"

@@ -24,6 +24,17 @@ export type MoneyPathStep = {
   role: string;
   /** One-line detail below the role. */
   detail: string;
+  /**
+   * Is Splash a party to the money at this hop?
+   *
+   * The header claim is "Splash orchestrates — we never hold your funds", and
+   * this field is what makes that claim checkable rather than rhetorical: it
+   * must be `true` on exactly ONE step (orchestration), and that step must move
+   * no money. `tests/money-path.test.mjs` asserts the count, so adding a hop
+   * where Splash touches client funds fails the build instead of quietly
+   * contradicting the panel above it.
+   */
+  splashIsParty: boolean;
 };
 
 /** PHP payout rails — render the ACTIVE one. When the Coins.ph rail goes
@@ -40,20 +51,24 @@ export const MONEY_PATH_STEPS: MoneyPathStep[] = [
     partner: 'Airwallex',
     role: 'Collection',
     detail: 'Your USD arrives into partner-held accounts.',
+    splashIsParty: false,
   },
-  {
-    partner: 'Hata',
-    role: 'Conversion',
-    detail: 'Regulated venue converts at the quoted rate.',
-  },
+  // The conversion hop previously named a venue that is not a partner of record.
+  // Per this file's own rule — "never add a partner that has not signed" — it is
+  // removed rather than relabelled. Do not reinstate a conversion step until a
+  // signed venue exists to name, and route it past 0xSky when it does.
   {
     partner: activePhRail.name,
     role: 'PHP payout',
     detail: 'Licensed local rail delivers to your supplier.',
+    splashIsParty: false,
   },
   {
     partner: 'Splash',
     role: 'Orchestrates and proves',
     detail: REQUIRED_HONESTY_SENTENCE,
+    // The ONLY step where Splash is a party — and it moves no money. This is
+    // the header claim, expressed as data.
+    splashIsParty: true,
   },
 ];

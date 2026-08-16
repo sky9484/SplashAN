@@ -597,6 +597,43 @@ function requireConfiguredRecipient(inputRecipient: string) {
   return requireSuiAddress(resolvePayoutRecipient(inputRecipient, 'Composed payment recipient'), 'Composed payment recipient');
 }
 
+/**
+ * Resolve the CORE package — the one that publishes to mainnet.
+ *
+ * Falls back to the legacy `SPLASH_PACKAGE_ID` so a deployment that predates the
+ * package split keeps working: before the split, one package held every module.
+ */
+function corePackageIdOrThrow(): string {
+  const cfg = getContractConfig();
+  const core = (cfg.corePackageId ?? '').trim();
+  if (core) return requireSuiObjectId(core, 'SPLASH_CORE_PACKAGE_ID');
+  return configIdOrThrow('packageId', 'SPLASH_PACKAGE_ID');
+}
+
+/**
+ * Resolve the CUSTODY package, or explain why it does not exist.
+ *
+ * Under the Labuan MFCA licence Splash cannot hold client funds, so
+ * splash_custody — every struct that holds a `Balance<T>` — is NOT PUBLISHED.
+ * This is not a feature flag: the bytecode is absent, so there is nothing to
+ * flip and nothing to bypass. The error names the licence rather than reporting
+ * a missing environment variable, because "not configured" would read as a
+ * deployment mistake when it is in fact the regulatory posture working.
+ */
+function custodyPackageIdOrThrow(): string {
+  const custody = (getContractConfig().custodyPackageId ?? '').trim();
+  if (custody) return requireSuiObjectId(custody, 'SPLASH_CUSTODY_PACKAGE_ID');
+
+  // Pre-split deployments carried custody modules inside the single package.
+  const legacy = (getContractConfig().packageId ?? '').trim();
+  if (legacy && !(getContractConfig().corePackageId ?? '').trim()) return legacy;
+
+  throw new Error(
+    'Batch settlement requires the splash_custody package, which publishes when the Labuan ' +
+      'e-money licence is granted. Phase 0 uses payment_intent (non-custodial). See STATUS.md.',
+  );
+}
+
 function configuredSmartTreasuryId() {
   const value = getContractConfig().smartTreasurySuiId.trim();
   return value ? requireSuiObjectId(value, 'SPLASH_SMART_TREASURY_SUI_ID') : '';
@@ -1073,7 +1110,9 @@ export async function recordSingleTransferOnSui(input: {
     return sim;
   }
   const cfg = getContractConfig();
-  const SPLASH_PACKAGE_ID = configIdOrThrow('packageId', 'SPLASH_PACKAGE_ID');
+  const SPLASH_PACKAGE_ID = corePackageIdOrThrow();
+  // settlement::settle_payment lives in splash_custody.
+  const SPLASH_CUSTODY_PACKAGE_ID = custodyPackageIdOrThrow();
   const SPLASH_TREASURY_ID = configIdOrThrow('treasuryId', 'SPLASH_TREASURY_ID');
   const SPLASH_PEG_STATE_ID = configIdOrThrow('pegStateId', 'SPLASH_PEG_STATE_ID');
   const SPLASH_COMPLIANCE_CONFIG_ID = configIdOrThrow('complianceConfigId', 'SPLASH_COMPLIANCE_CONFIG_ID');
@@ -1129,7 +1168,7 @@ export async function recordSingleTransferOnSui(input: {
     }
     const [payment] = tx.splitCoins(tx.gas, [paymentMist]);
     tx.moveCall({
-      target: `${SPLASH_PACKAGE_ID}::settlement::settle_payment`,
+      target: `${SPLASH_CUSTODY_PACKAGE_ID}::settlement::settle_payment`,
       typeArguments: [USDC_TYPE, DEEPBOOK_QUOTE_TYPE],
       arguments: [
         tx.object(SPLASH_TREASURY_ID),
@@ -1185,7 +1224,7 @@ export async function recordSingleTransferOnSui(input: {
     // 3. Settle — assert_pegged reads the freshly-updated PegState from step 1.
     //    Published v1 requires fee_bps before the Clock argument.
     '--move-call',
-    `${SPLASH_PACKAGE_ID}::settlement::settle_payment`,
+    `${SPLASH_CUSTODY_PACKAGE_ID}::settlement::settle_payment`,
     `<${USDC_TYPE},${DEEPBOOK_QUOTE_TYPE}>`,
     `@${SPLASH_TREASURY_ID}`,
     `@${SPLASH_BUSINESS_ACCOUNT_ID}`,
@@ -1259,7 +1298,12 @@ export async function recordBatchSettlementOnSui(input: {
     return { ...sim, simulated: true as const };
   }
   const cfg = getContractConfig();
-  const SPLASH_PACKAGE_ID = configIdOrThrow('packageId', 'SPLASH_PACKAGE_ID');
+  // Core modules (peg_monitor) and custody modules (settlement) now live in
+  // SEPARATE packages. Under Phase 0 the custody package is not published, so
+  // this resolution is what turns 'the licence does not permit custody' into a
+  // clear error instead of an ObjectNotFound deep inside a PTB.
+  const SPLASH_PACKAGE_ID = corePackageIdOrThrow();
+  const SPLASH_CUSTODY_PACKAGE_ID = custodyPackageIdOrThrow();
   const SPLASH_TREASURY_ID = configIdOrThrow('treasuryId', 'SPLASH_TREASURY_ID');
   const SPLASH_PEG_STATE_ID = configIdOrThrow('pegStateId', 'SPLASH_PEG_STATE_ID');
   const SPLASH_BUSINESS_ACCOUNT_ID = configIdOrThrow('businessAccountId', 'SPLASH_BUSINESS_ACCOUNT_ID');
@@ -1336,7 +1380,7 @@ export async function recordBatchSettlementOnSui(input: {
     }
     const payments = paymentObjects.map((payment) =>
       tx.moveCall({
-        target: `${SPLASH_PACKAGE_ID}::settlement::new_payment`,
+        target: `${SPLASH_CUSTODY_PACKAGE_ID}::settlement::new_payment`,
         arguments: [tx.pure.address(payment.recipient), tx.pure.u64(payment.amount)],
       }),
     );
@@ -1345,7 +1389,7 @@ export async function recordBatchSettlementOnSui(input: {
       elements: payments,
     });
     tx.moveCall({
-      target: `${SPLASH_PACKAGE_ID}::settlement::settle_sui_batch`,
+      target: `${SPLASH_CUSTODY_PACKAGE_ID}::settlement::settle_sui_batch`,
       typeArguments: [DEEPBOOK_QUOTE_TYPE],
       arguments: [
         tx.object(SPLASH_ADMIN_CAP_ID),
@@ -1385,7 +1429,7 @@ export async function recordBatchSettlementOnSui(input: {
   paymentObjects.forEach((payment, index) => {
     ptbArgs.push(
       '--move-call',
-      `${SPLASH_PACKAGE_ID}::settlement::new_payment`,
+      `${SPLASH_CUSTODY_PACKAGE_ID}::settlement::new_payment`,
       `@${payment.recipient}`,
       payment.amount.toString(),
       '--assign',
@@ -1402,7 +1446,7 @@ export async function recordBatchSettlementOnSui(input: {
     // AdminCap gates pooled liquidity; the pool pays recipients in SUI directly.
     // New package: ComplianceConfig + DeepBook pool + <QuoteAsset> are required.
     '--move-call',
-    `${SPLASH_PACKAGE_ID}::settlement::settle_sui_batch`,
+    `${SPLASH_CUSTODY_PACKAGE_ID}::settlement::settle_sui_batch`,
     `<${DEEPBOOK_QUOTE_TYPE}>`,
     `@${SPLASH_ADMIN_CAP_ID}`,
     `@${SPLASH_TREASURY_ID}`,

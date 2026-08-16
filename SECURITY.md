@@ -102,6 +102,44 @@ republished and `scripts/set-compliance-config.mjs` runs against the new
 
 ---
 
+## Mainnet cutover — package split & M1/M3 — 2026-08-17
+
+**The structural change.** `move/` split into two packages. `splash_core`
+(business_account, payment_intent, audit_anchor, receipt_v2, compliance_config,
+peg_monitor) publishes to mainnet; `splash_custody` (settlement, smart_treasury,
+dual_treasury, liquidity_guard) publishes only when the Labuan e-money licence is
+granted. Non-custody stops being an assert someone can forget and becomes a
+property of the type system: **no struct in `splash_core` holds a `Balance<T>`**,
+CI-enforced by `scripts/check-core-no-balance.mjs` on every `npm run lint`.
+
+| ID | Sev | Finding | Status |
+|----|-----|---------|--------|
+| M-01 | High | `payment_intent::create` returned `(PaymentIntent, SettleReceipt)` and minted the receipt with `settled_at: now` and **no `Coin` anywhere in the function**. The type asserted a settlement that had not happened, and `audit_anchor` would anchor that assertion on chain as proof of payment — a forgeable receipt. **Fixed**: `create` returns `PaymentIntent` only; `SettleReceipt` is minted solely by `confirm_payment_intent`, which consumes a `Coin<T>`. Pinned by `core_invariants_tests`. | Fixed |
+| M-02 | Medium | `unpack_settle_receipt` was `public(package)`, so any module in the package could consume a `SettleReceipt` and discard the fields without anchoring — breaking "every settlement is anchored" silently. **Fixed**: `audit_anchor::AnchorWitness`, constructible only inside `audit_anchor`, is now required (abort 413). Note the witness is generic + module-checked rather than named directly: `audit_anchor` already depends on `payment_intent` and Move forbids circular imports, so binding on the witness type's defining module achieves the same restriction. | Fixed |
+| M-03 | Medium | `settlement::deposit` was open to anyone and recorded nothing — the pool could not be reconciled, a deposit could not be attributed or returned, and an unsolicited deposit into a shared object that pays third parties is an obvious layering vector. **Fixed**: AdminCap-gated, emits `PoolFunded{pool_id, depositor, amount, new_balance, funded_at_ms}`. | Fixed |
+| M-04 | Medium | `settle_batch` / `settle_sui_batch` asserted `is_verified` but omitted the `owner == sender` binding that `settle_payment` has, leaving S-07's event attribution operator-trusted. **Fixed**: binding mirrored into both. **Consequence:** batches must now be signed by the business owner rather than driven unilaterally by the operator's `AdminCap`. That is a real change to the batch operating model, made deliberately — an operator who can both move pooled funds and choose whose name is on the payout is the authority concentration S-10 exists to break up. The delegation design (a bounded `SettlementCap`, cf. A-11) lands before custody publishes. | Fixed |
+| M-05 | Info | `'X-Source-Entity': 'splash-my'` on every Labuan settlement call, plus `intercompanyRef` and MYR conversion aliases — all asserting a Malaysian leg that the licence perimeter does not have. Splash Labuan receives USD only. **Fixed**: `'splash-labuan'`; the MYR aliases and the intercompany field removed. | Fixed |
+| M-06 | Info | `content/money-path.ts` named Hata as the conversion venue without Hata being a partner of record, against the file's own rule. **Fixed**: removed, and `splashIsParty: boolean` added to every step so `tests/money-path.test.mjs` asserts the header claim ("Splash orchestrates — we never hold your funds") as data: exactly one step may have `splashIsParty === true`, and it moves no money. | Fixed |
+
+**Dependency posture.** `splash_core` now has **no third-party Move
+dependencies** — the DeepBook liquidity guard moved to custody, where the pooled
+funds it protects actually live. Two consequences: the mainnet package's
+dependency surface is the Sui framework and nothing else (Cetus was drained
+through a third-party math library, and the strongest defence against that class
+is not having the dependency); and `sui move test` runs, which it previously
+could not — the pinned DeepBook rev ships test files that fail to compile against
+this toolchain, aborting the test build before our modules were reached. **Move
+test coverage went from 0 runnable tests to 10 passing.**
+
+**Upgrade policy: `splash_core` publishes IMMUTABLE.** The `UpgradeCap` is burned
+at publish. A settlement contract whose logic cannot change is a stronger
+regulatory position than one under multisig, where the question becomes "who
+holds the keys" and the answer is a custody procedure taken on trust. The cost is
+real and accepted: a post-publish bug requires a fresh publish and a
+re-bootstrap of every shared object. See `STATUS.md`.
+
+---
+
 ## Adversarial pass — 2026-08-13 (application tier)
 
 **Scope**: 24 agents across two workflows — Move authority, Move arithmetic,

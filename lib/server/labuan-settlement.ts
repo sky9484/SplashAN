@@ -3,7 +3,7 @@
 
 const LABUAN_API_BASE = process.env.LABUAN_API_BASE_URL ?? 'https://settlement.splash-labuan.internal';
 const LABUAN_API_KEY = process.env.LABUAN_API_KEY ?? '';
-const TIMEOUT_MS = 60_000; // Labuan settlement may take longer than Hata spot
+const TIMEOUT_MS = 60_000; // Labuan settlement can be slower than a spot venue
 
 export type SettlementTier = 'labuan_spot' | 'labuan_otc' | 'bank_wire_fallback';
 
@@ -16,7 +16,6 @@ export interface LabuanConversionResult {
   feeUsdc: string;
   txReference: string;
   labuanSettlementId: string;
-  intercompanyRef: string;
   error: string | null;
 }
 
@@ -29,10 +28,6 @@ export interface LabuanQuote {
   expiresAt: number;
 }
 
-export type HataConversionResult = LabuanConversionResult;
-export type HataQuote = LabuanQuote;
-export type HataTier = SettlementTier;
-
 async function fetchLabuan(path: string, body: object): Promise<Record<string, unknown>> {
   if (!LABUAN_API_KEY) return {}; // mock mode if no key configured
 
@@ -41,7 +36,11 @@ async function fetchLabuan(path: string, body: object): Promise<Record<string, u
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${LABUAN_API_KEY}`,
-      'X-Source-Entity': 'splash-my',
+      // Splash Labuan is the settlement entity of record. The Malaysian Sdn Bhd
+      // is technology and marketing only and is never a party to a settlement —
+      // asserting 'splash-my' on a settlement call misstates the perimeter to
+      // the counterparty and to anyone reading the request logs.
+      'X-Source-Entity': 'splash-labuan',
     },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(TIMEOUT_MS),
@@ -119,7 +118,6 @@ export async function convertUsdToUsdc(usdAmount: number): Promise<LabuanConvers
       feeUsdc: String(data.fee_usdc ?? '0'),
       txReference: String(data.settlement_id ?? ''),
       labuanSettlementId: String(data.settlement_id ?? ''),
-      intercompanyRef: String(data.intercompany_ref ?? ''),
       error: null,
     };
   } catch (error) {
@@ -133,7 +131,6 @@ export async function convertUsdToUsdc(usdAmount: number): Promise<LabuanConvers
       feeUsdc: '0',
       txReference: '',
       labuanSettlementId: '',
-      intercompanyRef: '',
       error: message,
     };
   }
@@ -186,12 +183,17 @@ function mockConversion(usdAmount: number): LabuanConversionResult {
     feeUsdc: '0',
     txReference: ref,
     labuanSettlementId: ref,
-    intercompanyRef: `IC-${ref}`,
     error: null,
   };
 }
 
-export const getHataQuote = getLabuanQuote;
-export const convertMyrToUsdc = convertUsdToUsdc;
-export const getMyrToUsdcRate = getUsdToUsdcRate;
-export const myrSenToUsdcMicro = usdCentsToUsdcMicro;
+// The `convertMyrToUsdc` / `getMyrToUsdcRate` / `myrSenToUsdcMicro` aliases were
+// removed deliberately: Splash Labuan receives USD only, so a MYR entry point in
+// the settlement module described a ringgit leg the licence perimeter does not
+// have. They were aliases of the USD functions, so the names were the only thing
+// that ever said "MYR" — which is precisely why they were a claims defect rather
+// than a code defect. Use `convertUsdToUsdc` / `getUsdToUsdcRate` /
+// `usdCentsToUsdcMicro`.
+//
+// `getHataQuote` and the Hata* type aliases are gone for the same reason: Hata is
+// not a party to the money path (see content/money-path.ts).

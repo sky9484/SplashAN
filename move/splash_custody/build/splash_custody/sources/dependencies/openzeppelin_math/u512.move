@@ -1,0 +1,352 @@
+/// This module provides a 512-bit unsigned integer type that is intended to be used as an
+/// intermediary step for u256 operations that may overflow, rather than being used directly
+/// like other integer types. It enables safe handling of intermediate calculations that exceed
+/// u256 bounds before being reduced back to u256.
+module openzeppelin_math::u512;
+
+use openzeppelin_math::common;
+
+// === Errors ===
+
+/// Raised when a cross-limb addition carry exceeds the representable range.
+#[error(code = 0)]
+const ECarryOverflow: vector<u8> = "Cross-limb addition overflowed";
+/// Raised when a subtraction borrow underflows the high limb.
+#[error(code = 1)]
+const EUnderflow: vector<u8> = "Borrow underflowed high limb";
+/// Raised when a division or modular operation is given a zero divisor.
+#[error(code = 2)]
+const EDivideByZero: vector<u8> = "Divisor must be non-zero";
+/// Raised when a division remainder leaves non-zero high bits, violating the result invariant.
+#[error(code = 3)]
+const EInvalidRemainder: vector<u8> = "High remainder bits must be zero";
+
+// === Constants ===
+
+/// Bit-width of each half-limb used when splitting a `u256` into two 128-bit halves.
+const HALF_BITS: u8 = 128;
+/// Bitmask selecting the low 128 bits of a `u256` value.
+const HALF_MASK: u256 = (1u256 << HALF_BITS) - 1;
+
+// === Structs ===
+
+/// Represents a 512-bit unsigned integer as two 256-bit words.
+public struct U512 has copy, drop, store {
+    /// Upper 256 bits.
+    hi: u256,
+    /// Lower 256 bits.
+    lo: u256,
+}
+
+// === Public Functions ===
+
+/// Construct a `U512` from its high and low 256-bit components.
+///
+/// #### Parameters
+/// - `hi`: Upper 256-bit limb.
+/// - `lo`: Lower 256-bit limb.
+///
+/// #### Returns
+/// - A `U512` composed from `hi` and `lo`.
+public fun new(hi: u256, lo: u256): U512 {
+    U512 { hi, lo }
+}
+
+/// Return the all-zero `U512` value.
+///
+/// #### Returns
+/// - A zero-initialized `U512`.
+public fun zero(): U512 {
+    U512 { hi: 0, lo: 0 }
+}
+
+/// Lift a single `u256` into the wide representation.
+///
+/// #### Parameters
+/// - `value`: Lower 256-bit value to embed.
+///
+/// #### Returns
+/// - A `U512` with `hi = 0` and `lo = value`.
+public fun from_u256(value: u256): U512 {
+    U512 { hi: 0, lo: value }
+}
+
+/// Accessor for the high 256 bits.
+///
+/// #### Parameters
+/// - `value`: Wide integer.
+///
+/// #### Returns
+/// - High 256-bit limb.
+public fun hi(value: &U512): u256 {
+    value.hi
+}
+
+/// Accessor for the low 256 bits.
+///
+/// #### Parameters
+/// - `value`: Wide integer.
+///
+/// #### Returns
+/// - Low 256-bit limb.
+public fun lo(value: &U512): u256 {
+    value.lo
+}
+
+/// Check whether `value` is greater than or equal to another `U512` value.
+///
+/// #### Parameters
+/// - `value`: Left operand.
+/// - `other`: Right operand.
+///
+/// #### Returns
+/// - `true` when `value >= other`, `false` otherwise.
+public fun ge(value: &U512, other: &U512): bool {
+    if (value.hi > other.hi) {
+        true
+    } else if (value.hi < other.hi) {
+        false
+    } else {
+        value.lo >= other.lo
+    }
+}
+
+/// Multiply two `u256` integers and return the full 512-bit product using cross-limb accumulation.
+///
+/// We split both operands into 128-bit halves and compute the four partial products:
+/// `p0 = a_lo * b_lo`, `p1 = a_lo * b_hi`, `p2 = a_hi * b_lo`, `p3 = a_hi * b_hi`. Conceptually
+/// every bit of the final 512-bit result sits on one of the diagonals of this 2×2 partial-product
+/// matrix. We therefore combine the results diagonal-by-diagonal:
+///
+/// - The lowest limb comes directly from `p0`'s low half.
+/// - The second limb sums `p0`'s high half with the low halves of `p1` and `p2`, propagating the
+///   carry to the next diagonal.
+/// - The third limb adds `p1`'s and `p2`'s high halves plus `p3`'s low half and the carry we just
+///   produced.
+/// - The top limb adds `p3`'s high half plus any remaining carry.
+///
+/// The helper `sum_three_u128` performs each diagonal addition in 256-bit space and returns the
+/// resulting limb and carry-out, which we feed into the next diagonal. The final compose step packs
+/// the four 128-bit outputs into two `u256` words.
+///
+/// #### Parameters
+/// - `a`: First factor.
+/// - `b`: Second factor.
+///
+/// #### Returns
+/// - Full-width 512-bit product `a * b`.
+///
+/// #### Aborts
+/// - `ECarryOverflow` if an unexpected final carry exceeds the representable range.
+public fun mul_u256(a: u256, b: u256): U512 {
+    let (a_hi, a_lo) = split_u256(a);
+    let (b_hi, b_lo) = split_u256(b);
+
+    let p0 = (a_lo as u256) * (b_lo as u256);
+    let p1 = (a_lo as u256) * (b_hi as u256);
+    let p2 = (a_hi as u256) * (b_lo as u256);
+    let p3 = (a_hi as u256) * (b_hi as u256);
+
+    let (p0_hi, p0_lo) = split_u256(p0);
+    let (p1_hi, p1_lo) = split_u256(p1);
+    let (p2_hi, p2_lo) = split_u256(p2);
+    let (p3_hi, p3_lo) = split_u256(p3);
+
+    let (limb1, carry1) = sum_three_u128(p0_hi, p1_lo, p2_lo);
+    let (temp2, carry2a) = sum_three_u128(p1_hi, p2_hi, p3_lo);
+    let (limb2, carry2b) = sum_three_u128(temp2, carry1, 0);
+    let carry_total = carry2a + carry2b;
+    let (limb3, carry3) = sum_three_u128(p3_hi, carry_total, 0);
+    assert!(carry3 == 0, ECarryOverflow);
+
+    let hi = compose_u256(limb3, limb2);
+    let lo = compose_u256(limb1, p0_lo);
+    U512 { hi, lo }
+}
+
+/// Divide a 512-bit numerator by a 256-bit divisor.
+///
+/// Returns `(overflow, quotient, remainder)` where `overflow` is `true` when the
+/// exact quotient does not fit in 256 bits. In the overflow case, `quotient` is
+/// returned as zero while `remainder` is still the correct modulus.
+///
+/// #### Parameters
+/// - `numerator`: Wide dividend.
+/// - `divisor`: Non-zero `u256` divisor.
+///
+/// #### Returns
+/// - `(overflow, quotient, remainder)` as documented above.
+///
+/// #### Aborts
+/// - `EDivideByZero` if `divisor` is zero.
+/// - `EInvalidRemainder` if post-division remainder invariants are violated.
+public fun div_rem_u256(numerator: U512, divisor: u256): (bool, u256, u256) {
+    assert!(divisor != 0, EDivideByZero);
+
+    if (numerator.hi == 0) {
+        return (false, numerator.lo / divisor, numerator.lo % divisor)
+    };
+
+    let mut quotient = 0u256;
+    let mut remainder = zero();
+    let mut overflow = false;
+
+    // numerator is not zero, so we can safely call msb
+    let mut idx = numerator.msb();
+    loop {
+        remainder = remainder.shift_left1();
+        let bit = numerator.get_bit(idx);
+        if (bit == 1) {
+            remainder.lo = remainder.lo | 1;
+        };
+
+        if (remainder.ge_u256(divisor)) {
+            remainder = remainder.sub_u256(divisor);
+            if (idx >= 256) {
+                overflow = true;
+            } else if (!overflow) {
+                // If the overflow flag is set, we can stop computing the quotient
+                // because it will be 0.
+                quotient = quotient | (1 << (idx as u8));
+            };
+        };
+
+        if (idx == 0) {
+            break
+        };
+        idx = idx - 1;
+    };
+
+    assert!(remainder.hi == 0, EInvalidRemainder);
+    if (overflow) (true, 0, remainder.lo) else (false, quotient, remainder.lo)
+}
+
+// === Private Functions ===
+
+/// Check whether `value` is greater than or equal to a `u256` scalar.
+///
+/// #### Parameters
+/// - `value`: Wide integer.
+/// - `other`: Scalar comparator.
+///
+/// #### Returns
+/// - `true` when `value >= other`, `false` otherwise.
+fun ge_u256(value: &U512, other: u256): bool {
+    if (value.hi != 0) true else value.lo >= other
+}
+
+/// Split a `u256` into two `u128` halves (hi, lo).
+///
+/// #### Parameters
+/// - `value`: Input scalar.
+///
+/// #### Returns
+/// - `(hi, lo)` 128-bit halves.
+fun split_u256(value: u256): (u128, u128) {
+    let lo = (value & HALF_MASK) as u128;
+    let hi = (value >> HALF_BITS) as u128;
+    (hi, lo)
+}
+
+/// Reassemble two `u128` halves (hi, lo) into a single `u256`.
+///
+/// #### Parameters
+/// - `hi`: Upper 128-bit half.
+/// - `lo`: Lower 128-bit half.
+///
+/// #### Returns
+/// - Reconstructed `u256` value.
+fun compose_u256(hi: u128, lo: u128): u256 {
+    ((hi as u256) << HALF_BITS) | (lo as u256)
+}
+
+/// Add three `u128` values and return the lower limb plus carry-out.
+///
+/// #### Parameters
+/// - `a`, `b`, `c`: Operands.
+///
+/// #### Returns
+/// - `(limb, carry)` where `limb` is the low 128 bits of the sum and `carry` is the high part.
+fun sum_three_u128(a: u128, b: u128, c: u128): (u128, u128) {
+    let total = (a as u256) + (b as u256) + (c as u256);
+    (((total & HALF_MASK) as u128), ((total >> HALF_BITS) as u128))
+}
+
+/// Shift a 512-bit value left by one bit, preserving the carry between limbs.
+///
+/// #### Parameters
+/// - `value`: Wide integer.
+///
+/// #### Returns
+/// - `value << 1` with carry propagated from low to high limb.
+fun shift_left1(value: &U512): U512 {
+    let hi = (value.hi << 1) | (value.lo >> 255);
+    let lo = value.lo << 1;
+    U512 { hi, lo }
+}
+
+/// Return the bit at `idx` where index 0 is the least significant bit of the low limb.
+///
+/// #### Parameters
+/// - `value`: Wide integer.
+/// - `idx`: Bit index in `[0, 511]`.
+///
+/// #### Returns
+/// - Bit value `0` or `1` at index `idx`.
+fun get_bit(value: &U512, idx: u16): u8 {
+    if (idx >= 256) {
+        let shift = (idx - 256) as u8;
+        ((value.hi >> shift) & 1) as u8
+    } else {
+        ((value.lo >> (idx as u8)) & 1) as u8
+    }
+}
+
+/// Subtract a `u256` scalar from a `U512`, handling a potential borrow from the high limb.
+///
+/// #### Parameters
+/// - `value`: Minuend.
+/// - `other`: Subtrahend.
+///
+/// #### Returns
+/// - `value - other` as `U512`.
+///
+/// #### Aborts
+/// - `EUnderflow` if a borrow from the high limb would underflow.
+fun sub_u256(value: U512, other: u256): U512 {
+    if (value.lo >= other) {
+        let new_lo = value.lo - other;
+        U512 { hi: value.hi, lo: new_lo }
+    } else {
+        assert!(value.hi > 0, EUnderflow);
+        let hi = value.hi - 1;
+        let complement = (std::u256::max_value!() - other) + 1;
+        let new_lo = value.lo + complement;
+        U512 { hi, lo: new_lo }
+    }
+}
+
+/// Return the index of the most significant set bit in `value`.
+///
+/// NOTE: By convention, if `value` is zero, this function returns 0.
+///
+/// #### Parameters
+/// - `value`: Wide integer.
+///
+/// #### Returns
+/// - Zero-based index of the most significant set bit.
+/// - Returns `0` when `value` is `0`.
+fun msb(value: &U512): u16 {
+    if (value.hi != 0) {
+        256 + (common::msb(value.hi, 256) as u16)
+    } else {
+        common::msb(value.lo, 256) as u16
+    }
+}
+
+// === Test-Only Helpers ===
+
+#[test_only]
+public fun sub_u256_for_testing(value: U512, other: u256): U512 {
+    sub_u256(value, other)
+}

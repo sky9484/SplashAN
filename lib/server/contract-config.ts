@@ -2,7 +2,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 export type ContractConfigField =
+  /**
+   * The mainnet package. `packageId` is retained as the legacy alias for the
+   * combined pre-split package and still resolves core modules, but new code
+   * should read `corePackageId`.
+   */
   | 'packageId'
+  | 'corePackageId'
+  | 'custodyPackageId'
   | 'treasuryId'
   | 'adminCapId'
   | 'attestationCapId'
@@ -29,6 +36,8 @@ export type ContractConfig = Record<ContractConfigField, string>;
 
 const FIELD_TO_ENV: Record<ContractConfigField, string> = {
   packageId: 'SPLASH_PACKAGE_ID',
+  corePackageId: 'SPLASH_CORE_PACKAGE_ID',
+  custodyPackageId: 'SPLASH_CUSTODY_PACKAGE_ID',
   treasuryId: 'SPLASH_TREASURY_ID',
   adminCapId: 'SPLASH_ADMIN_CAP_ID',
   attestationCapId: 'SPLASH_ATTESTATION_CAP_ID',

@@ -9,8 +9,7 @@ import {
   REQUIRED_HONESTY_SENTENCE,
 } from '../content/money-path.ts';
 
-test('money path: four steps ending with the Splash honesty sentence', () => {
-  assert.equal(MONEY_PATH_STEPS.length, 4);
+test('money path: ends with the Splash honesty sentence', () => {
   const splash = MONEY_PATH_STEPS.at(-1);
   assert.equal(splash.partner, 'Splash');
   // Locked copy — never paraphrased (also enforced by scripts/check-copy.mjs).
@@ -25,7 +24,33 @@ test('money path: four steps ending with the Splash honesty sentence', () => {
 test('money path: exactly one active PHP payout rail renders in the path', () => {
   const active = PH_PAYOUT_RAILS.filter((rail) => rail.active);
   assert.equal(active.length, 1);
-  assert.equal(MONEY_PATH_STEPS[2].partner, active[0].name);
+  const payout = MONEY_PATH_STEPS.find((step) => step.role === 'PHP payout');
+  assert.equal(payout.partner, active[0].name);
+});
+
+test('money path: Splash is a party to exactly one step, and that step moves no money', () => {
+  // The header says "Splash orchestrates - we never hold your funds." This is
+  // that sentence as an assertion. A new hop where Splash touches client funds
+  // fails here rather than silently contradicting the panel it renders under.
+  const splashSteps = MONEY_PATH_STEPS.filter((step) => step.splashIsParty === true);
+  assert.equal(splashSteps.length, 1, 'exactly one step may have splashIsParty === true');
+  assert.equal(splashSteps[0].partner, 'Splash');
+  assert.equal(splashSteps[0].role, 'Orchestrates and proves');
+
+  // Every other hop is a licensed partner of record, and Splash is not a party.
+  for (const step of MONEY_PATH_STEPS) {
+    assert.equal(typeof step.splashIsParty, 'boolean', `${step.partner} must declare splashIsParty`);
+    if (step.partner !== 'Splash') {
+      assert.equal(step.splashIsParty, false, `${step.partner} is a partner of record, not Splash`);
+    }
+  }
+});
+
+test('money path: no partner appears who is not a partner of record', () => {
+  // Hata was named as the conversion venue without being a signed partner.
+  // Removing it is a claims fix; this keeps it from coming back by habit.
+  const partners = MONEY_PATH_STEPS.map((step) => step.partner);
+  assert.equal(partners.includes('Hata'), false, 'Hata is not a partner of record');
 });
 
 test('money path panel renders from config only — no hardcoded partner copy', async () => {
@@ -33,7 +58,7 @@ test('money path panel renders from config only — no hardcoded partner copy', 
   assert.match(source, /from '@\/content\/money-path'/);
   assert.match(source, /MONEY_PATH_STEPS\.map/);
   // Partner names and license copy must come from the config, not the component.
-  for (const literal of ['Airwallex', 'Hata', 'PDAX', 'GCash', 'Coins.ph', 'Labuan']) {
+  for (const literal of ['Airwallex', 'PDAX', 'GCash', 'Coins.ph', 'Labuan']) {
     assert.equal(source.includes(literal), false, `${literal} must live in content/money-path.ts, not the component`);
   }
   // The panel links to the trust page from every mount.
