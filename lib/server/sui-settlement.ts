@@ -676,7 +676,7 @@ function custodyPackageIdOrThrow(): string {
 
   throw new Error(
     'Batch settlement requires the splash_custody package, which publishes when the Labuan ' +
-      'e-money licence is granted. Phase 0 uses payment_intent (non-custodial). See STATUS.md.',
+      'e-money licence is granted. Phase 0 settles through payment_intent, which holds no balance. See STATUS.md.',
   );
 }
 
@@ -814,7 +814,7 @@ export async function confirmComposedPaymentOnSui(input: {
 
   if (treasuryAmountMist > 0) {
     // `smart_treasury` is a splash_custody module — the ONE custody call on the
-    // otherwise non-custodial composed path. It must resolve through the custody
+    // composed path, which otherwise holds no balance. It must resolve through custody
     // package, not the core one: addressing a custody module with the core
     // package id is not a compile error, it is a runtime failure deep inside a
     // PTB. In Phase 0 this throws the licence-named error instead, which is the

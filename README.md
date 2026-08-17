@@ -2,6 +2,81 @@
 
 Splash Finance is a B2B cross-border settlement prototype for SEA exporters, marketplaces, and payroll operators. The app uses Next.js App Router, React Query, Tailwind CSS, server-driven settlement APIs, and Sui Move contracts.
 
+## Architecture
+
+Splash operates under Labuan MFCA and **cannot hold client funds**. That is not a
+runtime flag — it is a property of the type system. `splash_core`, the package
+that publishes to mainnet, contains no struct that can hold a `Balance`. Every
+struct that can lives in `splash_custody`, which is **not published** until the
+e-money licence is granted.
+
+```mermaid
+flowchart LR
+    payer["Payer wallet"] -->|"Coin&lt;T&gt;"| confirm
+
+    subgraph core["splash_core — MAINNET, immutable, no dependencies"]
+        direction TB
+        confirm["payment_intent<br/>confirm_payment_intent"]
+        anchor["audit_anchor<br/>consumes the receipt"]
+        peg["peg_monitor<br/>compliance_config"]
+        confirm -->|"SettleReceipt<br/>hot potato"| anchor
+    end
+
+    confirm -->|"exact amount"| recipient["Recipient wallet"]
+    confirm -->|"overpay"| payer
+
+    subgraph custody["splash_custody — PHASE 1 ONLY, not published"]
+        direction TB
+        pool["settlement<br/>SettlementPool + per-tenant credits"]
+        treas["smart_treasury<br/>dual_treasury"]
+        deleg["delegation<br/>PayoutDelegation"]
+    end
+
+    subgraph meter["splash_meter — velocity bounds"]
+        direction TB
+        sm["spend_meter<br/>24h sliding window"]
+        gd["guardian<br/>pause only"]
+    end
+
+    custody -.->|"every value path<br/>charges a meter"| meter
+    custody -.->|"inherits AdminCap,<br/>AttestationCap, receipts"| core
+
+    classDef mainnet fill:#0C3E48,stroke:#0C3E48,color:#F6F0ED
+    classDef phase1 fill:#F6F0ED,stroke:#326273,color:#1f4350,stroke-dasharray: 5 5
+    classDef bounds fill:#E8F0F2,stroke:#326273,color:#1f4350
+    class core mainnet
+    class custody phase1
+    class meter bounds
+```
+
+**Read the diagram this way:** client value enters as a `Coin` parameter and
+leaves in the same transaction. There is no object in `splash_core` to accumulate
+into — `npm run lint` runs `scripts/check-core-no-balance.mjs`, which fails the
+build if one ever appears. The dashed box is bytecode that does not exist on
+chain in Phase 0, so its functions cannot be called, flagged, or bypassed.
+
+See [`STATUS.md`](./STATUS.md) for the phase gate and
+[`SECURITY.md`](./SECURITY.md) for the audit trail.
+
+## Toolchain
+
+**Sui CLI >= 1.61.1 is required.** Below that, `sui move test` fails in
+`move/splash_custody` with errors pointing at *DeepBook's own test files*
+(`unbound function 'destroy'`) — which looks like a broken dependency but is not.
+
+`sui move test` compiles a git dependency's test files. DeepBook's tests use
+`std::unit_test::destroy`, added in sui `d95572e1c1` (#24078) and first shipped
+in `testnet-v1.61.1`. On older CLIs the stdlib exports only `assert_eq` and
+`assert_ref_eq`, so the build aborts before this repo's modules are reached.
+
+```bash
+choco upgrade sui -y
+```
+
+Windows: this needs an **elevated** shell. Without one it fails on
+`C:\ProgramData\chocolatey` permissions and still prints a success-looking
+summary — check the tail says `upgraded 1/1 packages`, not `0/0`.
+
 ## Features
 
 - Landing page with Splash hero, trust rail, feature bento grid, batch payout preview, FPX simulation, and footer.
@@ -22,6 +97,10 @@ NEXT_PUBLIC_SUPPORT_EMAIL=support@splash.finance
 
 SUI_NETWORK=testnet
 SUI_RPC_URL=
+SPLASH_CORE_PACKAGE_ID=0x...
+# Empty in Phase 0 — that is the regulatory posture, not a misconfiguration.
+SPLASH_CUSTODY_PACKAGE_ID=
+# Legacy single-package id, still honoured for pre-split deployments.
 SPLASH_PACKAGE_ID=0x...
 SPLASH_TREASURY_ID=0x...
 USDC_TYPE=0x2::sui::SUI
@@ -76,11 +155,20 @@ sui move build
 
 ## Move publish flow
 
-From the `move` directory:
+There is no `move/Move.toml` — `move/` holds three packages, each built from its
+own directory:
 
 ```bash
-sui move build
+cd move/splash_core   && sui move build && sui move test   # 14 tests
+cd move/splash_meter  && sui move build && sui move test   # 22 tests
+cd move/splash_custody && sui move build && sui move test  # 16 tests
 ```
+
+**Phase 0 publishes `splash_core` ONLY.** `splash_custody` holds every
+`Balance` in the system and publishes when the Labuan e-money licence is
+granted — leaving it unpublished is the control, not an oversight. `splash_core`
+publishes **immutable** (UpgradeCap burned); see
+[`docs/KEY-CEREMONY-RUNBOOK.md`](./docs/KEY-CEREMONY-RUNBOOK.md).
 
 When you are ready to publish to testnet, run only after explicit confirmation:
 
