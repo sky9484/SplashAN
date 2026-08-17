@@ -19,38 +19,31 @@ authors = ["Splash Finance"]
 splash_core = { local = "../splash_core" }
 # Velocity bounds (A-11). Publishes UPGRADEABLE so ceilings stay tunable.
 splash_meter = { local = "../splash_meter" }
-# DeepBook pin — chosen so `sui move test` RUNS in this package.
+# DeepBook pin.
 #
-# `sui move test` compiles a git dependency's own test files. DeepBook adopted
-# `std::unit_test::destroy` in its tests on 2025-11-20 (commit 53d34351,
-# "Deposit/withdraw test changes" #686), and the Move stdlib shipped with Sui CLI
-# 1.59.1 exports only `assert_eq`/`assert_ref_eq` from that module. So every rev
-# after that date aborts the whole test build before splash_custody's own modules
-# are reached — which is why this package had unrunnable tests, and why
-# splash_meter was deliberately made dependency-free.
+# Moved FORWARD to daa5a951 on 2026-08-18, once the Sui CLI reached 1.77.2.
 #
-# 7b48e61b is the commit immediately before that change. Verified against the
-# previous pin (daa5a951, 2026-06-18) before moving:
-#   * FLOAT_SCALING is 1_000_000_000 in both — this is the constant
+# History worth keeping, because the failure was counter-intuitive: `sui move
+# test` compiles a git dependency's own test files, and DeepBook's tests adopted
+# `std::unit_test::destroy` on 2025-11-20 (53d34351). That macro was added to the
+# Move stdlib by sui commit d95572e1c1 (#24078, 2025-11-11) and first shipped in
+# testnet-v1.61.1. On the CLI 1.59.1 this repo used to run, the stdlib exported
+# only `assert_eq`/`assert_ref_eq`, so every DeepBook rev after that date aborted
+# the whole test build before splash_custody's own modules were reached — the pin
+# was too NEW for the toolchain, not too old. It was parked at 7b48e61b (the
+# commit before the break) until the CLI caught up.
+#
+# Re-verified against 7b48e61b at the time of this move, rather than assumed:
+#   * FLOAT_SCALING is 1_000_000_000 in both revs. This is the constant
 #     `liquidity_guard::DEEPBOOK_PRICE_SCALING` must match, and a wrong value
-#     here is the Cetus failure mode.
+#     there is the Cetus failure mode.
 #   * get_quote_quantity_out_input_fee, mid_price and get_level2_range have
 #     byte-identical signatures in both.
-#   * Neither rev sets `published-at`, so no on-chain address changes.
-# The guard only READS those three views, so the older rev is sufficient for
-# everything splash_custody compiles against.
+#   * Neither rev sets `published-at`, so no on-chain package address changes.
 #
-# TO MOVE THIS PIN FORWARD you need Sui CLI >= 1.61.1. Not "latest" — that exact
-# floor. `std::unit_test::destroy` was added by sui commit d95572e1c1
-# ("[framework] move `test_utils::destroy` to `unit_test`", #24078, 2025-11-11)
-# and first shipped in testnet-v1.61.1 / mainnet-v1.61.2. The CLI on this box is
-# 1.59.1, which is two minors short — verified by `git tag --contains d95572e1c1`
-# against the sui repo, which returns zero 1.59.x tags.
-#
-# Do NOT move the pin before the toolchain moves: every rev after 53d34351 makes
-# `sui move test` fail for anyone still on an older CLI, which is the state this
-# pin was chosen to escape.
-deepbook = { git = "https://github.com/MystenLabs/deepbookv3.git", subdir = "packages/deepbook", rev = "7b48e61b1ce695c94b553fdbb98ddb9b6fa5ad25" }
+# REQUIRES Sui CLI >= 1.61.1. Below that, `sui move test` cannot compile
+# DeepBook's test files and this package's suite is unrunnable.
+deepbook = { git = "https://github.com/MystenLabs/deepbookv3.git", subdir = "packages/deepbook", rev = "daa5a9514908968f11be1d0388f673e0ee1a5059" }
 openzeppelin_math = { git = "https://github.com/OpenZeppelin/contracts-sui.git", subdir = "math/core", rev = "a9703fe834a56990ccbcee3a1cf0802e7cd3b8d9" }
 
 [addresses]

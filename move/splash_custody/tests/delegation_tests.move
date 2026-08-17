@@ -1,10 +1,9 @@
 /// Delegation and credit-segregation tests.
 ///
-/// These now RUN. The DeepBook pin moved to 7b48e61b — the commit before
-/// DeepBook's own tests adopted `std::unit_test::destroy`, which the Move stdlib
-/// shipped with Sui CLI 1.59.1 does not export. Every later rev aborted the test
-/// build before this file was reached. See `Move.toml` for the verification done
-/// before moving.
+/// Requires Sui CLI >= 1.61.1, the release that first shipped
+/// `std::unit_test::destroy` — DeepBook's own tests use it, and without it the
+/// dependency's test files abort the build before this file is reached. See
+/// `Move.toml` for the full history and the checks done when the pin moved.
 ///
 /// The properties below are the ones that decide whether A-11 is actually
 /// closed: credit segregation, operator binding, epoch revocation, TTL expiry,

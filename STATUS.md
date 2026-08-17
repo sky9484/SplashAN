@@ -70,36 +70,17 @@ Do not publish `splash_core` until every line is checked.
 - [x] `sui move build` clean for both packages
 - [x] `sui move test` green for `splash_core` — **14 tests** (was 0 runnable)
 - [x] `sui move test` green for `splash_custody` — **16 tests** (was blocked).
-      The DeepBook pin moved to `7b48e61b`, the commit before DeepBook's tests
-      adopted `std::unit_test::destroy`, which the Move stdlib shipped with Sui
-      CLI 1.59.1 does not export. Verified before moving: `FLOAT_SCALING` is
-      still `1_000_000_000`, the three view functions the guard calls have
-      byte-identical signatures, and neither rev sets `published-at`.
-- [ ] **Upgrade the Sui CLI to >= 1.61.1, then move the DeepBook pin forward.**
-      Needs an ELEVATED shell — Chocolatey writes to `C:\ProgramData` and the
-      normal shell gets `Access to the path ... is denied`:
-
-      ```
-      choco upgrade sui -y
-      ```
-
-      Rollback if anything regresses: `choco install sui --version=1.59.1 --force -y`
-
-      **Why 1.61.1 exactly.** `std::unit_test::destroy` was added by sui commit
-      `d95572e1c1` (#24078, 2025-11-11) and first shipped in `testnet-v1.61.1` /
-      `mainnet-v1.61.2`. DeepBook's own tests use it from `53d34351` (2025-11-20)
-      onward. `git tag --contains d95572e1c1` returns zero `1.59.x` tags, so the
-      installed 1.59.1 cannot compile them — which is the whole reason the pin
-      sits where it does.
-
-      After upgrading, re-run all three suites BEFORE moving the pin (a newer
-      Move compiler can change what builds), then move the pin and re-verify:
-      `FLOAT_SCALING == 1_000_000_000` and the three view signatures the
-      liquidity guard calls. Do not assume a version bump left them alone —
-      a wrong scaling constant is the Cetus failure mode.
-
-      The CLI is also needed at >= 1.76 for gRPC publishing (1.59.1 gets
-      `Request rejected`), so the September ceremony needs this regardless.
+      DeepBook pin is `daa5a951`; see the CLI item below for how it got there.
+- [x] **Sui CLI upgraded to 1.77.2 and the DeepBook pin moved forward** to
+      `daa5a951` (2026-08-18). The toolchain floor was 1.61.1:
+      `std::unit_test::destroy` arrived in sui `d95572e1c1` (#24078) and first
+      shipped in `testnet-v1.61.1`, while DeepBook's tests began using it in
+      `53d34351` — so on 1.59.1 the pin was too NEW, not too old. Suites were
+      re-run on the new CLI BEFORE the pin moved (52/52, no change), then again
+      after. Re-verified at the new rev rather than assumed: `FLOAT_SCALING ==
+      1_000_000_000` matching `DEEPBOOK_PRICE_SCALING`, the three view
+      signatures byte-identical, and no `published-at`.
+      **Minimum CLI for this repo is now 1.61.1.**
 - [x] No value-bearing field in `splash_core` — `scripts/check-core-no-balance.mjs`,
       run by `.github/workflows/core-invariant.yml` on every push and PR, and by
       `npm run lint` locally. The checker parses struct BODIES out of

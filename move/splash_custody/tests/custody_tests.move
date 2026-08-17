@@ -1,7 +1,7 @@
 /// Custody-side tests.
 ///
-/// Runnable since the DeepBook pin moved to 7b48e61b — see `Move.toml` for why
-/// that rev and what was verified before moving.
+/// Requires Sui CLI >= 1.61.1 — see `Move.toml` for why, and for what was
+/// verified when the DeepBook pin moved.
 #[test_only]
 module splash_custody::custody_tests;
 

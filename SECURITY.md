@@ -112,7 +112,7 @@ move/splash_meter/    velocity bounds, UPGRADEABLE, no deps    22 tests passing
 move/splash_custody/  every Balance<T>, publishes on licence   tests blocked*
 ```
 
-\* **Resolved 2026-08-19.** All three suites now run — 14 + 22 + 16. The DeepBook
+\* **Resolved 2026-08-18.** All three suites now run — 14 + 22 + 16. The DeepBook
 pin moved to `7b48e61b`, the commit immediately before DeepBook's own tests
 adopted `std::unit_test::destroy`; the Move stdlib shipped with Sui CLI 1.59.1
 exports only `assert_eq` and `assert_ref_eq` from that module, so every later rev
@@ -121,6 +121,13 @@ moving: `FLOAT_SCALING` is `1_000_000_000` in both revs (this is the constant
 `DEEPBOOK_PRICE_SCALING` must match, and a wrong value there is the Cetus failure
 mode), the three view functions the guard calls have byte-identical signatures,
 and neither rev sets `published-at` so no on-chain address changed.
+
+**Superseded 2026-08-18.** The Sui CLI was upgraded to 1.77.2 and the pin moved
+forward to `daa5a951`. The floor was 1.61.1 — `std::unit_test::destroy` first
+shipped there — so the constraint was the toolchain, never DeepBook. All three
+suites were re-run on the new CLI before the pin moved and again after, and the
+scaling constant and view signatures were re-verified at the new rev.
+**The repo now requires Sui CLI >= 1.61.1.**
 
 ### What was built
 
