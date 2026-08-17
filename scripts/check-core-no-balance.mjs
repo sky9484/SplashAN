@@ -43,6 +43,7 @@ import path from 'node:path';
 
 const CORE_SOURCES = path.join('move', 'splash_core', 'sources');
 const CORE_BYTECODE = path.join('move', 'splash_core', 'build', 'splash_core', 'bytecode_modules');
+const CORE_TESTS = path.join('move', 'splash_core', 'tests');
 
 /**
  * Types that can hold or mint value. Matched anywhere inside a struct body, so
@@ -160,11 +161,24 @@ async function main() {
 
   // Coverage cross-check: if a build exists, every compiled module must have
   // been scanned. Catches a module the source walk missed for any reason.
+  //
+  // `sui move test` also compiles modules under tests/ into bytecode_modules.
+  // Those are `#[test_only]` and never publish, so they are legitimately outside
+  // the scan — but they must be enumerated rather than pattern-guessed, or this
+  // check quietly stops noticing a real gap.
   let coverageNote = '';
   try {
     const compiled = (await readdir(CORE_BYTECODE)).filter((f) => f.endsWith('.mv'));
     const scanned = new Set(files.map((f) => path.basename(f, '.move')));
-    const missed = compiled.map((f) => path.basename(f, '.mv')).filter((m) => !scanned.has(m));
+    let testModules = new Set();
+    try {
+      testModules = new Set((await moveFiles(CORE_TESTS)).map((f) => path.basename(f, '.move')));
+    } catch {
+      /* no tests/ directory — nothing to exclude */
+    }
+    const missed = compiled
+      .map((f) => path.basename(f, '.mv'))
+      .filter((m) => !scanned.has(m) && !testModules.has(m));
     if (missed.length > 0) {
       console.error(`\n  FAIL: the compiler produced modules this scan never opened: ${missed.join(', ')}`);
       console.error('  Every module that publishes must be scanned. Fix the source walk before trusting this check.\n');

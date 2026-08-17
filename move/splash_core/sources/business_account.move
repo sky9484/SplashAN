@@ -7,6 +7,8 @@ const E_ALREADY_VERIFIED: u64 = 1;
 const E_EMPTY_SSM_NUMBER: u64 = 2;
 const E_EMPTY_KYB_CID: u64 = 3;
 const E_INVALID_HOLDER: u64 = 4;
+/// `revoke_verification` called on an account that was never verified.
+const E_NOT_VERIFIED_YET: u64 = 5;
 
 /// AdminCap — MONEY AUTHORITY. Gates `verify_business`, `smart_treasury::*`,
 /// `settlement::settle_*` / `withdraw_fees`, `dual_treasury::*`,
@@ -53,6 +55,11 @@ public struct ApplicationReceived has copy, drop {
     owner: address,
     ssm_number: String,
     kyb_cid: String,
+}
+
+public struct BusinessUnverified has copy, drop {
+    business_account_id: address,
+    owner: address,
 }
 
 public struct BusinessVerified has copy, drop {
@@ -116,6 +123,29 @@ public fun verify_business(_: &AdminCap, account: &mut BusinessAccount, risk_sco
 
 /// Grant attestation authority to the hot operator server. AdminCap-gated, so
 /// only the cold multisig can create it.
+/// Withdraw a business's verified status.
+///
+/// MUST ship before the immutable publish — it cannot be added afterwards.
+/// `verify_business` asserts `!is_verified` and there was no inverse anywhere in
+/// the package, so an account verified on mainnet was verified FOREVER. For a
+/// licensed e-money issuer that is a compliance defect standing on its own: a
+/// business whose KYB lapses, whose licence is withdrawn, or which turns out to
+/// be a shell cannot be un-verified, and `settle_payment` gates on exactly this
+/// flag.
+///
+/// Deliberately resets `risk_score` to 0 as well — leaving a stale score on an
+/// unverified account invites a later reader to treat it as still assessed.
+public fun revoke_verification(_: &AdminCap, account: &mut BusinessAccount) {
+    assert!(account.is_verified, E_NOT_VERIFIED_YET);
+    account.is_verified = false;
+    account.risk_score = 0;
+
+    event::emit(BusinessUnverified {
+        business_account_id: object::uid_to_address(&account.id),
+        owner: account.owner,
+    });
+}
+
 public fun mint_attestation_cap(_: &AdminCap, holder: address, ctx: &mut TxContext) {
     assert!(holder != @0x0, E_INVALID_HOLDER);
 

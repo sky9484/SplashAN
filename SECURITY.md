@@ -102,6 +102,102 @@ republished and `scripts/set-compliance-config.mjs` runs against the new
 
 ---
 
+## A-11 / A-12 design ruling — 2026-08-18
+
+Three rival designs were argued by independent advocates, each cross-examined by
+an agent who did not write it, then judged. All three cross-examiners returned
+`build_with_changes` — no design survived intact.
+
+### The finding that reframed the problem
+
+**`settle_batch` and `settle_sui_batch` are already UNCALLABLE after the key
+ceremony, and the M-04 fix in commit `188af29` is what made them so.**
+
+`business_account.move:102` does `transfer::transfer(account, owner)`, so
+`BusinessAccount` is address-owned by the tenant. `AdminCap` goes to the cold
+multisig. A Sui transaction can only name owned objects belonging to its
+*sender* — so one transaction cannot supply both, and the
+`owner == tx_context::sender` assert added for S-07 pins the sender to the
+tenant, which excludes the `AdminCap` input entirely.
+
+The security property was right; the shape was wrong. Runbook §1 option A
+("accept it — batch becomes a multisig-signed operation") is therefore not
+"safest but inconvenient", it is **not executable**. Correcting that is the
+single most valuable output of the exercise.
+
+### Ruling
+
+Adopt a hybrid: **spend meters + credit segregation + tenant delegation**, with
+the delegation *removing* `&BusinessAccount` from the batch signature rather than
+adding a capability beside it.
+
+| Component | Package | Purpose |
+|---|---|---|
+| `splash_meter::spend_meter` | new, upgradeable | Sliding-window ceiling: per-tx cap, per-window cap, lazy roll-forward (Sui has no cron, so the spender's own transaction advances the window). Relaxations cost 4x per step and 48h of public `LimitsProposed` notice. |
+| `splash_meter::guardian` | new | `GuardianCap`, pause-only, never resume, never spend — safe for an automated watcher, and a stolen one is a denial of service rather than a theft. |
+| `settlement::credits` | custody | Per-tenant credit ledger inside the pool. Makes cross-tenant drain structurally impossible rather than assert-prevented. |
+| `PayoutDelegation` | custody | Tenant grants it from their own wallet; it lands with the operator. `settle_batch_delegated` takes the delegation *instead of* `&BusinessAccount`, which is what makes a batch executable by one signer at all. TTL <= 30 days. |
+| Fixed `fee_recipient` / `sweep_recipient` | custody | Set at pool creation by the multisig. `withdraw_fees` takes no recipient argument. |
+
+Sized against real volume — RM 250k/month is roughly USD 2.5k/business day — a
+USD 50k/24h pool ceiling is ~20x actual flow. It will not bind in normal
+operation, and it caps a total compromise at $50k/day instead of everything in
+one PTB.
+
+### Custody topology (A-12)
+
+| Address | Holds | A compromise yields |
+|---|---|---|
+| **M** cold 2-of-3 multisig | `AdminCap` | Everything *metered* — bounded per window, only to fixed recipients; raising a ceiling costs 48h of public notice. Cannot drain the pool: `settle_batch_delegated` needs a delegation M does not hold. |
+| **H** hot operator server | `AttestationCap`, gas key, tenants' delegations | False peg readings and forged anchors — an integrity problem, not a solvency one. Payouts only to addresses a tenant already named, bounded by two meters. |
+| **G** guardian host, separate machine | `GuardianCap` | Denial of service. Zero coins, by construction. |
+| **C** compliance custodian | `ComplianceCap` | Pause, or a widened DeepBook whitelist. Moves no funds. |
+
+**May `AdminCap` and `AttestationCap` share an address? No — never.**
+`AttestationCap` exists *because* `update_peg` fires every ~30s, roughly 2,880
+signatures a day from an internet-facing host. Co-locating the money authority
+there is precisely the condition A-12 records.
+
+**They currently do.** `attestationCapObjectId()` fell back to `adminCapId`, and
+`.env.example` shipped `SPLASH_ATTESTATION_CAP_ID` empty. **Fixed in this
+commit** — the fallback now throws. It was convenient exactly because it made
+the split invisible, which is what made it the bug.
+
+`compliance_config::create` transfers `ComplianceCap` to `ctx.sender()`, i.e. to
+M. Rotating it to C via `transfer_cap` is a **required ceremony step that was
+not in the runbook**.
+
+### Shipped now (all three impossible after the immutable publish)
+
+| ID | Finding | Status |
+|----|---------|--------|
+| M-07 | `verify_business` asserts `!is_verified` and no de-verification path existed anywhere. An account verified on mainnet was verified **forever**, in an immutable package — a business whose KYB lapses, or which turns out to be a shell, could never be un-verified, and `settle_payment` gates on exactly that flag. **Fixed**: `business_account::revoke_verification` (abort 5), resetting `risk_score` so a stale score cannot later be read as a current assessment. | Fixed |
+| M-08 | `set_paused` is `ComplianceCap`-only; that cap is `key` with no `store`, minted once, movable only by its own holder. Losing it **while paused** deadlocks `assert_pegged` and therefore every settlement path, permanently, with no recovery. **Fixed**: `compliance_config::admin_set_paused` break-glass. This does weaken the two-key pause — a permanent unrecoverable brick is the strictly worse outcome. | Fixed |
+| M-09 | `confirm_payment_intent` took `Coin<SUI>` — a USD corridor settling in a volatile asset, so SUI movement between intent and confirmation changed what the recipient received. **Fixed**: generic `Coin<T>` **with the asset bound at creation** and asserted at confirmation (abort 414). A bare generic would have been strictly worse than the hardcode: the only amount check is `value(payment) >= amount_usd`, so any coin type could discharge the obligation — 100,000,000 units of a worthless token for a 100 USDC debt. | Fixed |
+
+### Not yet built
+
+`splash_meter`, credit segregation and `PayoutDelegation` are a multi-package
+Move project with its own test suite; the ruling's own build order puts the
+settlement rewrite last and largest. They land before `splash_custody` publishes,
+which is Phase 1 — there is no Phase 0 exposure, because custody has no bytecode
+on chain.
+
+### What none of this protects against
+
+- A compromised cold multisig still extracts one window per window, indefinitely.
+  The bound buys time; monitoring is what spends it.
+- An attacker who owns the server **and onboards a shell tenant** through the KYB
+  queue they themselves operate. Credit segregation caps this at what the
+  attacker funded — a laundering channel, not theft of other tenants' money.
+  Nothing in Move fixes the KYB approval process.
+- A-15 (no beneficiary screening) is untouched: delegated batches still pay
+  unscreened, caller-supplied addresses.
+- Sui has no timelock. The 48h delay is a *detection window*, worthless if nobody
+  watches `LimitsProposed`.
+
+---
+
 ## Mainnet cutover — package split & M1/M3 — 2026-08-17
 
 **The structural change.** `move/` split into two packages. `splash_core`

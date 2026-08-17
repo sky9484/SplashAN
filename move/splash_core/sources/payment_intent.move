@@ -20,7 +20,6 @@ use std::type_name;
 use sui::clock::{Self, Clock};
 use sui::coin::{Self, Coin};
 use sui::event;
-use sui::sui::SUI;
 
 // ─── Abort codes ───────────────────────────────────────────────────────────
 const E_NOT_PENDING:           u64 = 400;
@@ -38,6 +37,8 @@ const E_EMPTY_CORRIDOR:        u64 = 411;
 const E_STILL_PENDING:         u64 = 412;
 /// A module other than `audit_anchor` tried to consume a `SettleReceipt`.
 const E_UNAUTHORIZED_RECEIPT_CONSUMER: u64 = 413;
+/// The coin type offered does not match the asset the intent was created for.
+const E_WRONG_SETTLEMENT_ASSET: u64 = 414;
 
 /// The only module permitted to destroy a `SettleReceipt`. Bound by module name
 /// because Move forbids the circular import that naming the type would require —
@@ -64,6 +65,16 @@ public struct PaymentIntent has key {
     currency: vector<u8>,
     corridor: vector<u8>,
     target_currency: String,
+    /// Fully-qualified type of the coin this intent must be settled in, e.g.
+    /// `…::usdc::USDC`. Bound at creation and asserted at confirmation.
+    ///
+    /// Without this, making `confirm_payment_intent` generic over `Coin<T>` —
+    /// which it must be, since hardcoding `Coin<SUI>` settles a USD corridor in
+    /// a volatile asset — would let ANY coin type satisfy an intent. The
+    /// contract compares `coin::value(&payment)` against `amount_usd`, so a
+    /// payer could discharge a 100 USDC obligation with 100_000_000 units of a
+    /// worthless token and the recipient would receive exactly that.
+    settlement_asset: String,
     /// USD→local FX rate scaled by 1e6.
     fx_rate_usd_local: u64,
     created_at: u64,
@@ -118,7 +129,7 @@ public struct IntentCanceled has copy, drop {
 
 /// Create a new intent. `sender` is bound to `tx_context::sender(ctx)` —
 /// no longer a caller-supplied argument (C-03 fix).
-public fun create_payment_intent(
+public fun create_payment_intent<T>(
     recipient: address,
     amount_usd: u64,
     target_currency: String,
@@ -141,9 +152,13 @@ public fun create_payment_intent(
         recipient,
         beneficiary_ref: vector[],
         amount_usd,
-        currency: b"SUI",
+        // Was hardcoded b"SUI". The corridor is USD-denominated, so the
+        // settlement asset is now whatever `T` the caller opened the intent in,
+        // recorded verbatim rather than asserted to be SUI.
+        currency: type_name::with_defining_ids<T>().into_string().into_bytes(),
         corridor: vector[],
         target_currency,
+        settlement_asset: type_name::with_defining_ids<T>().into_string().to_string(),
         fx_rate_usd_local,
         created_at: now,
         created_epoch: ctx.epoch(),
@@ -167,7 +182,7 @@ public fun create_payment_intent(
 
 /// Create an owned intent plus a non-droppable receipt that must be anchored
 /// in the same PTB. The caller can share the returned intent with share_intent.
-public fun create(
+public fun create<T>(
     recipient: address,
     beneficiary_ref: vector<u8>,
     amount: u64,
@@ -200,6 +215,7 @@ public fun create(
         currency,
         corridor,
         target_currency,
+        settlement_asset: type_name::with_defining_ids<T>().into_string().to_string(),
         fx_rate_usd_local,
         created_at: now,
         created_epoch,
@@ -238,9 +254,9 @@ public fun share_intent(intent: PaymentIntent) {
 /// Confirm an intent and execute payment. Only the original sender can call
 /// (H-02 fix). Excess payment is split off and returned to the sender so the
 /// recipient receives exactly `intent.amount_usd` (H-03 fix).
-public fun confirm_payment_intent(
+public fun confirm_payment_intent<T>(
     intent: &mut PaymentIntent,
-    mut payment: Coin<SUI>,
+    mut payment: Coin<T>,
     clock: &Clock,
     ctx: &mut TxContext,
 ): SettleReceipt {
@@ -248,6 +264,15 @@ public fun confirm_payment_intent(
     assert!(caller == intent.sender, E_UNAUTHORIZED);
     assert!(intent.status == STATUS_PENDING, E_NOT_PENDING);
     assert!(clock::timestamp_ms(clock) < intent.expires_at, E_EXPIRED);
+    // The asset is bound to the one the intent was opened in. Generic-without-
+    // binding would be strictly WORSE than the hardcoded `Coin<SUI>` it
+    // replaces: any coin type could discharge the obligation, because the only
+    // amount check is `coin::value(&payment) >= intent.amount_usd` and unit
+    // counts are meaningless across assets.
+    assert!(
+        type_name::with_defining_ids<T>().into_string().to_string() == intent.settlement_asset,
+        E_WRONG_SETTLEMENT_ASSET,
+    );
 
     let provided = coin::value(&payment);
     assert!(provided >= intent.amount_usd, E_INSUFFICIENT_PAYMENT);
@@ -311,6 +336,7 @@ public fun cancel(intent: PaymentIntent, ctx: &mut TxContext) {
         currency: _,
         corridor: _,
         target_currency: _,
+        settlement_asset: _,
         fx_rate_usd_local: _,
         created_at: _,
         created_epoch: _,
@@ -375,6 +401,7 @@ public fun delete_finalized(intent: PaymentIntent) {
         currency: _,
         corridor: _,
         target_currency: _,
+        settlement_asset: _,
         fx_rate_usd_local: _,
         created_at: _,
         created_epoch: _,
@@ -392,6 +419,7 @@ public fun amount_usd(intent: &PaymentIntent): u64          { intent.amount_usd 
 public fun status(intent: &PaymentIntent): u8               { intent.status }
 public fun expires_at(intent: &PaymentIntent): u64          { intent.expires_at }
 public fun target_currency(intent: &PaymentIntent): &String { &intent.target_currency }
+public fun settlement_asset(intent: &PaymentIntent): &String { &intent.settlement_asset }
 
 public fun is_expired(intent: &PaymentIntent, clock: &Clock): bool {
     clock::timestamp_ms(clock) >= intent.expires_at

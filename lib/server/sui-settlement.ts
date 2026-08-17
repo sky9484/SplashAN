@@ -251,9 +251,22 @@ async function assertSettlementPoolFunded(
   }
 }
 
+/**
+ * The attestation capability — and ONLY the attestation capability.
+ *
+ * A-12 fix. This used to fall back to `adminCapId`, which is why the S-10 cap
+ * split was written but not in effect: with `SPLASH_ATTESTATION_CAP_ID` unset
+ * (as `.env.example` shipped it), every attestation silently re-armed the hot
+ * server with the money authority. The fallback was convenient precisely
+ * because it made the split invisible, which is what made it the bug.
+ *
+ * `AttestationCap` exists because `update_peg` fires roughly every 30 seconds —
+ * ~2,880 signatures a day from an internet-facing host. Letting `AdminCap` serve
+ * that role puts the key that can drain the pool on the machine that signs most
+ * often. It now throws instead.
+ */
 function attestationCapObjectId(): string {
-  const configured = optionalConfigId('attestationCapId');
-  return configured || configIdOrThrow('adminCapId', 'SPLASH_ADMIN_CAP_ID');
+  return configIdOrThrow('attestationCapId', 'SPLASH_ATTESTATION_CAP_ID');
 }
 
 /**
@@ -328,6 +341,7 @@ const ABORT_CODES: Record<number, string> = {
   409: 'E_EMPTY_BENEFICIARY_REF — payment_intent::create called without a verified counterparty reference hash.',
   410: 'E_EMPTY_CURRENCY — payment_intent::create called without a currency tag.',
   411: 'E_EMPTY_CORRIDOR — payment_intent::create called without a corridor tag.',
+  414: 'E_WRONG_SETTLEMENT_ASSET — the coin type offered does not match the asset the intent was opened in. The intent binds its settlement asset at creation; check SPLASH_SETTLEMENT_COIN_TYPE and how the payment coin is sourced.',
   412: 'E_STILL_PENDING — payment_intent::delete_finalized called on a pending intent; confirm or cancel it first.',
 
   // ── audit_anchor ─────────────────────────────────────────────────────────
@@ -635,6 +649,35 @@ function custodyPackageIdOrThrow(): string {
   );
 }
 
+/**
+ * The coin type payment intents are opened and settled in.
+ *
+ * `confirm_payment_intent` used to hardcode `Coin<SUI>`, which is wrong for a
+ * USD corridor: SUI moves between intent creation and confirmation, so what the
+ * recipient actually receives drifts from what was quoted. It is now generic —
+ * but the intent BINDS the asset at creation and asserts it at confirmation
+ * (abort 414), because an unbound generic would be worse than the hardcode: any
+ * coin type could discharge the obligation, since the only amount check is
+ * `value(payment) >= amount_usd` and unit counts are meaningless across assets.
+ *
+ * Today both PTBs source the payment with `tx.splitCoins(tx.gas, …)`, and gas is
+ * SUI — so SUI is the honest answer. Configuring a stablecoin here WITHOUT
+ * changing the coin sourcing would build a PTB that opens a USDC intent and pays
+ * it with SUI, which the new assert correctly rejects on chain. Rather than let
+ * that surface as an opaque abort, refuse here with the reason.
+ */
+function settlementCoinType(): string {
+  const configured = (process.env.SPLASH_SETTLEMENT_COIN_TYPE ?? '').trim();
+  if (!configured || configured === SUI_COIN_TYPE) return SUI_COIN_TYPE;
+  throw new Error(
+    `SPLASH_SETTLEMENT_COIN_TYPE is set to ${configured}, but the settlement PTBs still fund the ` +
+      'payment with tx.splitCoins(tx.gas, …), which yields SUI. Wire a coin-object selector for that ' +
+      'type before switching, or the intent will be opened in one asset and paid in another (abort 414).',
+  );
+}
+
+const SUI_COIN_TYPE = '0x2::sui::SUI';
+
 function configuredSmartTreasuryId() {
   const value = getContractConfig().smartTreasurySuiId.trim();
   return value ? requireSuiObjectId(value, 'SPLASH_SMART_TREASURY_SUI_ID') : '';
@@ -664,6 +707,7 @@ export async function createPaymentIntentOnSui(input: {
   tx.setGasBudget(process.env.SUI_COMPOSED_GAS_BUDGET ?? '30000000');
   tx.moveCall({
     target: `${packageId}::payment_intent::create_payment_intent`,
+    typeArguments: [settlementCoinType()],
     arguments: [
       tx.pure.address(recipient),
       tx.pure.u64(amountMist),
@@ -717,6 +761,7 @@ export async function confirmComposedPaymentOnSui(input: {
   // audit_anchor::anchor or the transaction aborts (unused value without drop).
   const [settleReceipt] = tx.moveCall({
     target: `${packageId}::payment_intent::confirm_payment_intent`,
+    typeArguments: [settlementCoinType()],
     arguments: [
       tx.object(input.intentId),
       paymentCoin,
@@ -1014,10 +1059,12 @@ async function planGasCoin(neededMist: number): Promise<{ primaryId: string; mer
 async function updatePegOnSui(): Promise<void> {
   const SPLASH_PACKAGE_ID = optionalConfigId('packageId');
   const SPLASH_PEG_STATE_ID = optionalConfigId('pegStateId');
-  const SPLASH_ATTESTATION_CAP_ID = optionalConfigId('attestationCapId') || optionalConfigId('adminCapId');
+  // A-12: no adminCapId fallback. An unconfigured attestation cap must stop the
+  // peg daemon, not silently promote the hot key to money authority.
+  const SPLASH_ATTESTATION_CAP_ID = optionalConfigId('attestationCapId');
 
   if (!SPLASH_ATTESTATION_CAP_ID) {
-    console.warn('[Sui Peg Update] Neither SPLASH_ATTESTATION_CAP_ID nor SPLASH_ADMIN_CAP_ID is set — skipping auto peg refresh. Settlement may fail with E_PEG_STALE.');
+    console.warn('[Sui Peg Update] SPLASH_ATTESTATION_CAP_ID is not set — skipping auto peg refresh. Settlement may fail with E_PEG_STALE. Mint an AttestationCap (business_account::mint_attestation_cap) rather than pointing this at SPLASH_ADMIN_CAP_ID.');
     return;
   }
   if (!SPLASH_PACKAGE_ID || !SPLASH_PEG_STATE_ID) {

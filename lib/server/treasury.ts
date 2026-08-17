@@ -16,7 +16,8 @@
  * No per-user on-chain objects — omnibus + this ledger only.
  */
 
-import { getTreasuryRate, getUsdyRedemptionPrice, quoteSwap } from './usdy';
+import { deriveYieldMicros, spreadOnGain } from '@/lib/policy/yield-accrual';
+import { getTreasuryRate, getUsdyRedemptionPrice, navIsDecidable, quoteSwap } from './usdy';
 
 export type UserTreasuryLedger = {
   userId: string;
@@ -40,11 +41,17 @@ export type WithdrawalNotice = {
 
 export type YieldSnapshot = {
   date: string;
-  redemptionPriceUsd: number;
-  netApyPct: number;
+  /** `null` when NAV was UNAVAILABLE — never a substituted default. */
+  redemptionPriceUsd: number | null;
+  /** Provenance for the price the accrual used, so a reader can age it. */
+  navStatus: 'LIVE' | 'STALE' | 'UNAVAILABLE';
+  navAsOf: string | null;
+  navSource: string;
   totalTreasuryMicro: number;
   yieldDistributedMicro: number;
   spreadToOperatingMicro: number;
+  /** Set when the run deliberately recorded nothing, with the reason. */
+  skippedReason?: string;
 };
 
 // ─── In-memory store (demo). Swap for a DB + omnibus reconciliation in prod. ────
@@ -52,6 +59,15 @@ export type YieldSnapshot = {
 const ledgers = new Map<string, UserTreasuryLedger>();
 const notices: WithdrawalNotice[] = [];
 let noticeCounter = 0;
+
+/**
+ * Last NAV the accrual actually recorded against, in micro-USD.
+ *
+ * Yield is a price DELTA, so accrual needs the previous observation. `null`
+ * means no baseline yet — the next reading establishes one and records nothing,
+ * which is correct: there is no delta from a price we never saw.
+ */
+let lastAccruedPriceMicros: bigint | null = null;
 
 const DEMO_USER = 'demo-business';
 function seedDemo(): UserTreasuryLedger {
@@ -212,31 +228,101 @@ export function listNotices(userId?: string): WithdrawalNotice[] {
 // ─── Daily yield accrual (called by the accrue-yield cron) ──────────────────────
 
 /**
- * Allocate the floating net yield across all treasury balances pro-rata on the
- * end-of-day principal. Returns a snapshot to anchor on Walrus.
+ * Derive the day's yield from the POSITION, never from a configured APY.
+ *
+ * This used to be:
+ *
+ *     const dailyFactor = rate.netApyPct / 100 / 365;
+ *     ledger.treasuryYieldMicro += floor(principal * dailyFactor);
+ *
+ * — a configured APY writing a balance change. That inverts the only invariant
+ * that matters here:
+ *
+ *     Positions create yield. The ledger RECORDS it. The ledger never CREATES it.
+ *
+ * The old form credited yield that no instrument had earned, on a schedule the
+ * cron controlled, and it did so whether or not the position existed or the
+ * price had moved. It also fetched the redemption price and then ignored it —
+ * the number was displayed in the snapshot while the arithmetic came from the
+ * APY constant.
+ *
+ * USDY accrues through price, so the day's yield IS the price delta on units
+ * held. With no live NAV there is no yield to record, and we record none —
+ * accruing against a stale or invented price is how a ledger drifts away from
+ * the assets that are supposed to back it.
  */
 export async function accrueDailyYield(): Promise<YieldSnapshot> {
-  const rate = getTreasuryRate();
-  const { priceUsd } = await getUsdyRedemptionPrice();
-  const dailyFactor = rate.netApyPct / 100 / 365;
+  const nav = await getUsdyRedemptionPrice();
+
+  // FAIL CLOSED. No decidable NAV, no accrual. A skipped day is recoverable
+  // from the next reading (price deltas compose); a day accrued against a
+  // fabricated $1.00 is silently wrong forever.
+  if (!navIsDecidable(nav) || nav.priceMicros === null) {
+    return {
+      date: new Date().toISOString().slice(0, 10),
+      redemptionPriceUsd: null,
+      navStatus: nav.status,
+      navAsOf: nav.asOf,
+      navSource: nav.source,
+      totalTreasuryMicro: listLedgers().reduce((sum, l) => sum + l.treasuryPrincipalMicro, 0),
+      yieldDistributedMicro: 0,
+      spreadToOperatingMicro: 0,
+      skippedReason: `NAV ${nav.status} — no accrual recorded`,
+    };
+  }
+
+  const previous = lastAccruedPriceMicros;
+  lastAccruedPriceMicros = nav.priceMicros;
+
+  // First observation establishes the baseline. There is no delta to record yet.
+  if (previous === null) {
+    return {
+      date: new Date().toISOString().slice(0, 10),
+      redemptionPriceUsd: Number(nav.priceMicros) / 1_000_000,
+      navStatus: nav.status,
+      navAsOf: nav.asOf,
+      navSource: nav.source,
+      totalTreasuryMicro: listLedgers().reduce((sum, l) => sum + l.treasuryPrincipalMicro, 0),
+      yieldDistributedMicro: 0,
+      spreadToOperatingMicro: 0,
+      skippedReason: 'first NAV observation — baseline established, no delta to record',
+    };
+  }
+
+  // Price can fall. `deriveYieldMicros` returns a negative figure in that case
+  // — a redemption price that moved down is a real loss on the position, and
+  // clamping it at zero would report a floor the instrument does not have.
   let distributed = 0;
   for (const ledger of listLedgers()) {
-    const dayYield = Math.floor(ledger.treasuryPrincipalMicro * dailyFactor);
+    const result = deriveYieldMicros({
+      principalMicro: BigInt(ledger.treasuryPrincipalMicro),
+      priceMicros: nav.priceMicros,
+      previousPriceMicros: previous,
+    });
+    if (!result.accrued) continue;
+    const dayYield = Number(result.yieldMicro);
     ledger.treasuryYieldMicro += dayYield;
     ledger.updatedAt = new Date().toISOString();
     distributed += dayYield;
   }
-  // Disclosed spread retained by operating (illustrative: 0.5% of gross).
-  const spread = Math.floor(distributed * 0.005);
-  const total = listLedgers().reduce((s, l) => s + l.treasuryPrincipalMicro, 0);
+
+  const spread = Number(spreadOnGain(BigInt(Math.trunc(distributed))));
+  const total = listLedgers().reduce((sum, l) => sum + l.treasuryPrincipalMicro, 0);
   return {
     date: new Date().toISOString().slice(0, 10),
-    redemptionPriceUsd: priceUsd,
-    netApyPct: rate.netApyPct,
+    redemptionPriceUsd: Number(nav.priceMicros) / 1_000_000,
+    navStatus: nav.status,
+    navAsOf: nav.asOf,
+    navSource: nav.source,
     totalTreasuryMicro: total,
     yieldDistributedMicro: distributed,
     spreadToOperatingMicro: spread,
   };
+}
+
+/** Test seam — the baseline is process-global and would leak across tests. */
+export function resetAccrualBaselineForTesting() {
+  lastAccruedPriceMicros = null;
 }
 
 // ─── Invariants (daily reconciliation) ──────────────────────────────────────────

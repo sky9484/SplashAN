@@ -71,21 +71,84 @@ export function getTreasuryRate(): TreasuryRate {
 
 // ─── Redemption feed ───────────────────────────────────────────────────────────
 
-export type UsdyRedemption = { priceUsd: number; asOf: string };
+export type NavStatus = 'LIVE' | 'STALE' | 'UNAVAILABLE';
+
+export type NavReading = {
+  status: NavStatus;
+  /** Price in micro-USD. `null` when UNAVAILABLE — never a substituted default. */
+  priceMicros: bigint | null;
+  /** When the SOURCE observed this price, not when we read it. */
+  asOf: string | null;
+  source: string;
+};
+
+/** Beyond this a reading is still returned, but tagged STALE and undecidable. */
+export const NAV_STALE_THRESHOLD_MS = Number(process.env.USDY_NAV_STALE_MS ?? 6 * 60 * 60 * 1000);
 
 /**
- * Latest USDY→USD redemption price. USDY accrues value via price (not rebasing),
- * so daily yield = (todayPrice − yesterdayPrice) × units held.
+ * Latest USDY→USD redemption price. FAILS CLOSED.
  *
- * TODO: replace the env override with a live feed (Ondo price oracle / rWA feed
- * on Sui). Defaults to 1.0 so accrual is a no-op until wired.
+ * This used to return `1.0` whenever the feed was missing. USDY is a
+ * price-accrual token — yield IS the price moving above $1 — so a permanent $1
+ * fallback does not degrade gracefully, it silently asserts "zero yield, ever"
+ * and misvalues every position holding it. Worse, it is indistinguishable from
+ * a real $1.00 reading, so nothing downstream can tell that the number is
+ * invented.
+ *
+ * The contract now: no reading means no valuation. `UNAVAILABLE` propagates,
+ * callers return null, and the UI says "valuation unavailable" rather than
+ * showing a number nobody measured. `STALE` values but tags, and the policy
+ * engine refuses to make an allocation decision on it.
+ *
+ * `asOf` is the SOURCE's observation time. The previous implementation stamped
+ * `new Date()` even on the fabricated value, which made a made-up price look
+ * freshly observed.
  */
-export async function getUsdyRedemptionPrice(): Promise<UsdyRedemption> {
-  const px = Number(process.env.USDY_REDEMPTION_USD);
-  return { priceUsd: Number.isFinite(px) && px > 0 ? px : 1.0, asOf: new Date().toISOString() };
+export async function getUsdyRedemptionPrice(): Promise<NavReading> {
+  const raw = (process.env.USDY_REDEMPTION_USD ?? '').trim();
+  const asOfRaw = (process.env.USDY_REDEMPTION_AS_OF ?? '').trim();
+
+  const px = Number(raw);
+  if (!raw || !Number.isFinite(px) || px <= 0) {
+    return { status: 'UNAVAILABLE', priceMicros: null, asOf: null, source: 'none' };
+  }
+
+  // A price with no observation time cannot be aged, and an unageable price is
+  // exactly the failure this function exists to prevent.
+  const observedAt = asOfRaw ? Date.parse(asOfRaw) : Number.NaN;
+  if (!Number.isFinite(observedAt)) {
+    return {
+      status: 'STALE',
+      priceMicros: BigInt(Math.round(px * 1_000_000)),
+      asOf: null,
+      source: 'env:USDY_REDEMPTION_USD',
+    };
+  }
+
+  const ageMs = Date.now() - observedAt;
+  return {
+    status: ageMs > NAV_STALE_THRESHOLD_MS ? 'STALE' : 'LIVE',
+    priceMicros: BigInt(Math.round(px * 1_000_000)),
+    asOf: new Date(observedAt).toISOString(),
+    source: 'env:USDY_REDEMPTION_USD',
+  };
+}
+
+/** True when a reading may be used to make an allocation decision. */
+export function navIsDecidable(reading: NavReading): boolean {
+  return reading.status === 'LIVE' && reading.priceMicros !== null;
 }
 
 // ─── USDC ↔ USDY swap (Sui DEX) ─────────────────────────────────────────────────
+
+/** Thrown rather than returning a quote built on an unmeasured price. */
+export class NavUnavailableError extends Error {
+  readonly code = 'nav_unavailable';
+  constructor(message: string) {
+    super(message);
+    this.name = 'NavUnavailableError';
+  }
+}
 
 export type SwapVenue = 'cetus' | 'aftermath';
 export type SwapDirection = 'usdc->usdy' | 'usdy->usdc';
@@ -114,7 +177,16 @@ export async function quoteSwap(
   amountInMicro: bigint,
   slippageBps = Number(process.env.USDY_SWAP_SLIPPAGE_BPS ?? 30),
 ): Promise<SwapQuote> {
-  const { priceUsd } = await getUsdyRedemptionPrice();
+  const nav = await getUsdyRedemptionPrice();
+  // A quote priced off a NAV nobody measured is the $1.00-fallback defect one
+  // layer up: the min-out guard would be computed from an invented price, so
+  // the slippage protection it exists to provide would be meaningless.
+  if (!navIsDecidable(nav) || nav.priceMicros === null) {
+    throw new NavUnavailableError(
+      `Cannot quote a ${direction} swap: USDY NAV is ${nav.status}. Refusing to price against a default.`,
+    );
+  }
+  const priceUsd = Number(nav.priceMicros) / 1_000_000;
   // Convert across the peg using redemption price (USDC ≈ $1).
   const grossOut =
     direction === 'usdc->usdy'

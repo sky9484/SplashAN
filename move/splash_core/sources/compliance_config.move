@@ -175,6 +175,25 @@ public fun set_paused(config: &mut ComplianceConfig, cap: &ComplianceCap, paused
     emit_update(config);
 }
 
+/// Break-glass unpause, AdminCap-gated.
+///
+/// MUST ship before the immutable publish. `set_paused` is `ComplianceCap`-only;
+/// `ComplianceCap` is `key` with no `store`, is minted once by `create`, and can
+/// move only via `transfer_cap` called BY ITS HOLDER. There is no recovery path.
+/// In an immutable package, losing that cap while `paused == true` deadlocks
+/// `assert_pegged` — and therefore every settlement path — permanently, with no
+/// way back.
+///
+/// Yes, this weakens the two-key pause: `AdminCap` can now unpause unilaterally.
+/// That is the smaller harm. A permanent, unrecoverable liveness brick is
+/// strictly worse than a cold-multisig quorum being able to resume, and
+/// everything downstream of an unpause is still gated by the peg, the DeepBook
+/// guard, the minimum and the venue whitelist.
+public fun admin_set_paused(_admin: &AdminCap, config: &mut ComplianceConfig, paused: bool) {
+    config.paused = paused;
+    emit_update(config);
+}
+
 public fun assert_active(config: &ComplianceConfig) {
     assert!(!config.paused, E_SETTLEMENT_PAUSED);
 }

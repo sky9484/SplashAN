@@ -64,7 +64,7 @@ not having one.
 Do not publish `splash_core` until every line is checked.
 
 - [x] `sui move build` clean for both packages
-- [x] `sui move test` green for `splash_core` — **10 tests** (was 0 runnable)
+- [x] `sui move test` green for `splash_core` — **14 tests** (was 0 runnable)
 - [ ] `sui move test` for `splash_custody` — **BLOCKED** by the pinned DeepBook
       rev's own test files (`unbound function 'destroy'` in
       `deepbook/tests/vault/vault_tests.move`). Tests are written and will run
@@ -83,13 +83,28 @@ Do not publish `splash_core` until every line is checked.
 - [x] `npx tsc --noEmit` exits 0 · all TS suites green (165 tests)
 - [x] M1 closed — `create` returns `PaymentIntent` only; no `SettleReceipt`
       without a consumed `Coin`; `AnchorWitness` enforces a single consumer
+- [x] M-07 `revoke_verification` and M-08 `admin_set_paused` shipped — both are
+      impossible to add after the UpgradeCap burns
+- [x] M-09 `confirm_payment_intent` is generic over the coin, with the settlement
+      asset bound at creation (abort 414)
+- [ ] **`settle_batch` is UNCALLABLE post-ceremony** — it needs owned objects
+      from two different addresses. Blocked on the delegation design (A-11
+      ruling in SECURITY.md). Phase 1 only; custody does not publish now.
 - [x] M3 closed in `splash_custody` — `deposit` is AdminCap-gated and emits
       `PoolFunded`; batch paths carry the owner binding
 - [x] `'splash-my'` absent from settlement paths
 - [x] `money-path.ts` free of Hata; `splashIsParty` on every step, asserted
-- [ ] **`AdminCap` and `AttestationCap` at different addresses** — cannot be
-      verified from the repo. Run against the live wallet before publish; if
-      they share an address this is **blocking**.
+- [x] The `AttestationCap` -> `AdminCap` fallback is DELETED (A-12). A missing
+      `SPLASH_ATTESTATION_CAP_ID` now throws instead of silently re-arming the
+      hot server with money authority.
+- [ ] **`AdminCap` and `AttestationCap` at different addresses on chain** —
+      cannot be verified from the repo. Run against the live wallet before
+      publish; if they share an address this is **blocking**. The ruling is
+      unambiguous: they may never share, because `update_peg` signs ~2,880 times
+      a day from an internet-facing host.
+- [ ] **Rotate `ComplianceCap` to a third address (C).**
+      `compliance_config::create` transfers it to `ctx.sender()` — the multisig.
+      `transfer_cap(cap, C)` is a required ceremony step missing from the runbook.
 - [x] `UpgradeCap` decision made: **immutable core** (below)
 - [ ] Independent Move review commissioned — deck slide 6 commits to this
 - [ ] `splash_core` published; package ID + object IDs here and in `.env`

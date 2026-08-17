@@ -20,7 +20,12 @@ use std::unit_test::assert_eq;
 use sui::clock;
 use sui::coin::{Self, Coin};
 use sui::sui::SUI;
+
 use sui::test_scenario;
+
+/// A second coin type, used to prove an intent cannot be settled in the wrong
+/// asset. Deliberately worthless — that is the whole point.
+public struct SCAM has drop {}
 
 const SENDER: address = @0xA11CE;
 const RECIPIENT: address = @0xB0B;
@@ -29,7 +34,7 @@ const HASH: vector<u8> = b"0123456789abcdef0123456789abcdef";
 const BLOB: vector<u8> = b"walrus-blob-id";
 
 fun new_intent(c: &clock::Clock, ctx: &mut TxContext): payment_intent::PaymentIntent {
-    payment_intent::create(
+    payment_intent::create<SUI>(
         RECIPIENT,
         b"counterparty:vendor-001",
         1_000,
@@ -238,6 +243,115 @@ fun anchor_rejects_empty_blob() {
     audit_anchor::anchor(receipt, HASH, b"", &c, ctx);
     payment_intent::delete_finalized(intent);
     c.destroy_for_testing();
+    scenario.end();
+}
+
+#[test]
+#[expected_failure(abort_code = 414, location = splash_core::payment_intent)]
+/// An intent opened in SUI cannot be discharged with a different coin type.
+///
+/// This is why `confirm_payment_intent` binds the asset rather than just being
+/// generic. The only amount check is `coin::value(&payment) >= amount_usd`, and
+/// unit counts mean nothing across assets — so an unbound generic would let a
+/// payer settle a 1,000-unit obligation with 1,000 units of a worthless token
+/// and the recipient would receive exactly that. Strictly worse than the
+/// hardcoded `Coin<SUI>` it replaces.
+fun intent_cannot_be_settled_in_the_wrong_asset() {
+    let mut scenario = test_scenario::begin(SENDER);
+    let ctx = scenario.ctx();
+    let mut c = clock::create_for_testing(ctx);
+    c.set_for_testing(1_000_000);
+
+    let mut intent = new_intent(&c, ctx);           // opened in SUI
+    let wrong = coin::mint_for_testing<SCAM>(1_000_000, ctx);  // paid in SCAM
+
+    let receipt = payment_intent::confirm_payment_intent(&mut intent, wrong, &c, ctx);
+    audit_anchor::anchor(receipt, HASH, BLOB, &c, ctx);
+    payment_intent::delete_finalized(intent);
+    c.destroy_for_testing();
+    scenario.end();
+}
+
+#[test]
+/// The asset the intent records is the asset it settles in, and it is readable
+/// on chain so an auditor can confirm the denomination without guessing.
+fun settlement_asset_is_recorded_and_matches() {
+    let mut scenario = test_scenario::begin(SENDER);
+    let ctx = scenario.ctx();
+    let mut c = clock::create_for_testing(ctx);
+    c.set_for_testing(1_000_000);
+
+    let mut intent = new_intent(&c, ctx);
+    let recorded = *payment_intent::settlement_asset(&intent);
+    assert!(std::string::length(&recorded) > 0, 0);
+
+    let payment = coin::mint_for_testing<SUI>(1_000, ctx);
+    let receipt = payment_intent::confirm_payment_intent(&mut intent, payment, &c, ctx);
+    audit_anchor::anchor(receipt, HASH, BLOB, &c, ctx);
+    payment_intent::delete_finalized(intent);
+    c.destroy_for_testing();
+    scenario.end();
+}
+
+#[test]
+/// Verification is reversible. Without this, an account verified on mainnet is
+/// verified forever — `verify_business` asserts `!is_verified` and the package
+/// is IMMUTABLE, so a lapsed or hostile business could never be un-verified.
+fun verification_can_be_revoked_and_regranted() {
+    let mut scenario = test_scenario::begin(SENDER);
+    {
+        let ctx = scenario.ctx();
+        business_account::submit_application(
+            b"SSM-202401012345".to_string(),
+            b"bafy-kyb-cid".to_string(),
+            ctx,
+        );
+    };
+    scenario.next_tx(SENDER);
+    {
+        let mut account = scenario.take_from_sender<business_account::BusinessAccount>();
+        let ctx = scenario.ctx();
+        let admin = business_account::admin_cap_for_testing(ctx);
+
+        business_account::verify_business(&admin, &mut account, 20);
+        assert_eq!(business_account::is_verified(&account), true);
+
+        business_account::revoke_verification(&admin, &mut account);
+        assert_eq!(business_account::is_verified(&account), false);
+        // The stale score goes too — leaving it invites a later reader to treat
+        // an unverified account as still assessed.
+        assert_eq!(business_account::risk_score(&account), 0);
+
+        // And the account can be re-verified after remediation.
+        business_account::verify_business(&admin, &mut account, 35);
+        assert_eq!(business_account::is_verified(&account), true);
+        assert_eq!(business_account::risk_score(&account), 35);
+
+        sui::test_utils::destroy(admin);
+        scenario.return_to_sender(account);
+    };
+    scenario.end();
+}
+
+#[test]
+#[expected_failure(abort_code = 5, location = splash_core::business_account)]
+/// Revoking an account that was never verified is a no-op that should fail
+/// loudly rather than silently emit a BusinessUnverified event for nothing.
+fun revoking_an_unverified_account_aborts() {
+    let mut scenario = test_scenario::begin(SENDER);
+    {
+        let ctx = scenario.ctx();
+        business_account::submit_application(b"SSM-1".to_string(), b"cid".to_string(), ctx);
+    };
+    scenario.next_tx(SENDER);
+    {
+        let mut account = scenario.take_from_sender<business_account::BusinessAccount>();
+        let ctx = scenario.ctx();
+        let admin = business_account::admin_cap_for_testing(ctx);
+        business_account::revoke_verification(&admin, &mut account);
+        sui::test_utils::destroy(admin);
+        scenario.return_to_sender(account);
+    };
     scenario.end();
 }
 
