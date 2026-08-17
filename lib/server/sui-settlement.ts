@@ -311,6 +311,17 @@ const ABORT_CODES: Record<number, string> = {
   104: 'E_INVALID_RECIPIENT — settlement recipient is the zero address.',
   105: 'E_INVALID_AMOUNT — settlement amount or deposit coin value is zero.',
   106: 'E_NOT_ACCOUNT_OWNER — BusinessAccount object was transferred away from its recorded owner; verified status is not transferable (audit S-01).',
+  109: 'E_INSUFFICIENT_CREDIT — the tenant has not funded enough credit in the SettlementPool for this run. Credits are per-tenant (audit A-11): fund with settlement::deposit_for, not a bare deposit.',
+  110: 'E_NOT_ACCOUNT_OWNER — grant_delegation must be signed by the BusinessAccount owner.',
+  111: 'E_NOT_VERIFIED — cannot grant a payout delegation from an unverified BusinessAccount.',
+  112: 'E_DELEGATION_EXPIRED — the payout delegation has passed its TTL (max 30 days). The tenant must re-grant.',
+  113: 'E_DELEGATION_REVOKED — this delegation was revoked by its owner or by an admin.',
+  114: 'E_TTL_TOO_LONG — delegation TTL exceeds the 30-day maximum.',
+  115: 'E_INVALID_OPERATOR — the delegation was granted to a different operator address than the one signing.',
+  116: 'E_WRONG_DELEGATION — the delegation is bound to a different SettlementPool.',
+  117: 'E_EPOCH_INVALIDATED — revoke_all_delegations was called; every delegation minted before it is dead. Tenants must re-grant.',
+  118: 'E_CREDIT_INVARIANT — pool balance and the sum of tenant credits diverged. Settlement refused rather than paying out of an unbacked pool. Investigate before retrying.',
+  119: 'E_FEE_RECIPIENT_FIXED — set_fee_recipient requires the pool to be paused first, so a redirect cannot be slipped between two normal sweeps.',
   107: 'E_BELOW_MINIMUM — the settlement (or batch total) is below the on-chain minimum in ComplianceConfig.min_settlement_amount. Raise the amount, or change the floor with scripts/set-compliance-config.mjs --min-settlement <minor units>.',
 
   // ── peg_monitor ──────────────────────────────────────────────────────────
@@ -321,6 +332,22 @@ const ABORT_CODES: Record<number, string> = {
   304: 'E_INSUFFICIENT_DEPTH — DeepBook cannot fill this settlement amount inside the configured depth window. Common causes, in order: (1) the batch total is BELOW the pool\'s minSize (SUI/DBUSDC testnet minSize = 1 SUI — anything smaller returns a zero quote); (2) the SettlementPool is underfunded (fund it with scripts/fund-settlement-pool.mjs); (3) the book genuinely lacks depth in the [mid*(1-slippage), mid] band. NOTE: the package deployed on testnet still carries the pre-S-11 guard, which requires a PERFECT fill (remaining_base == 0) — unsatisfiable on a lot-quantized book, so batch cannot settle live until the fixed contract is published.',
   305: 'E_SLIPPAGE_EXCEEDED — DeepBook amount-sized execution price exceeds the configured slippage limit.',
   306: 'E_INVALID_MARKET_PRICE — DeepBook returned an invalid zero mid-price.',
+  // ── splash_meter (900-block) ─────────────────────────────────────────────
+  900: 'E_ZERO_AMOUNT — spend meter charged with a zero amount.',
+  901: 'E_PER_TX_CAP — this single settlement exceeds the per-transaction ceiling. Split the run, or the multisig can propose a higher limit with 48h notice.',
+  902: 'E_WINDOW_CAP — the run exceeds the settlement ceiling for this window. It clears as the 24h window advances, or the multisig can propose a higher limit with 48h notice (audit A-11).',
+  903: 'E_METER_PAUSED — a guardian paused this meter. Only the cold AdminCap can resume.',
+  904: 'E_NOT_A_RELAX — propose_relax was called with a value that is not an increase.',
+  905: 'E_RELAX_TOO_LARGE — a limit may rise at most 4x per step, each step with its own 48h notice.',
+  906: 'E_NOT_A_TIGHTEN — tighten was called with a value that would raise a limit. Raises need propose_relax and 48h.',
+  907: 'E_NO_PENDING — no queued relaxation to apply or cancel.',
+  908: 'E_RELAX_NOT_DUE — the 48h notice period has not elapsed.',
+  909: 'E_INVALID_LIMITS — limits must be non-zero and per-tx must not exceed the window cap.',
+  910: 'E_ABOVE_BOOTSTRAP — cannot restore above the limits fixed at the key ceremony.',
+  911: 'E_NOT_PAUSED — unpause called on a meter that is not paused.',
+  920: 'E_WRONG_METER — this GuardianCap watches a different pool.',
+  921: 'E_INVALID_HOLDER — guardian holder cannot be the zero address.',
+
   350: 'E_INVALID_CONFIG — Compliance threshold is outside its bounded safety range.',
   351: 'E_INVALID_CAP — ComplianceCap does not own authority for this ComplianceConfig.',
   352: 'E_SETTLEMENT_PAUSED — Settlement has been paused by the compliance operator.',
@@ -1386,7 +1413,9 @@ export async function recordBatchSettlementOnSui(input: {
   // `SettlementCap` with per-batch limits) is an explicit follow-up decision —
   // see docs/KEY-CEREMONY-RUNBOOK.md. Single transfers are unaffected.
   const SPLASH_ATTESTATION_CAP_ID = attestationCapObjectId();
-  const SPLASH_ADMIN_CAP_ID = configIdOrThrow('adminCapId', 'SPLASH_ADMIN_CAP_ID');
+  // The batch no longer takes an AdminCap. It takes a delegation the TENANT
+  // granted, which the operator owns and can therefore name as an input.
+  const SPLASH_PAYOUT_DELEGATION_ID = configIdOrThrow('payoutDelegationId', 'SPLASH_PAYOUT_DELEGATION_ID');
   // MEASURED, never a constant. Writing a hardcoded 0 here and reading it back
   // via assert_pegged one command later is what made the peg breaker inert.
   const pegAttestation = await resolvePegAttestation();
@@ -1441,16 +1470,21 @@ export async function recordBatchSettlementOnSui(input: {
       }),
     );
     const paymentVector = tx.makeMoveVec({
-      type: `${SPLASH_PACKAGE_ID}::settlement::Payment`,
+      type: `${SPLASH_CUSTODY_PACKAGE_ID}::settlement::Payment`,
       elements: payments,
     });
+    // AdminCap and BusinessAccount are GONE from this call, and that is the
+    // whole point. They were owned by two different addresses (cold multisig and
+    // tenant), and a Sui transaction may only name owned objects belonging to
+    // its sender — so the old `settle_batch` could not be signed by anyone.
+    // The delegation carries the tenant's identity and their rate limit, and the
+    // operator owns it, so one signer suffices.
     tx.moveCall({
-      target: `${SPLASH_CUSTODY_PACKAGE_ID}::settlement::settle_sui_batch`,
+      target: `${SPLASH_CUSTODY_PACKAGE_ID}::settlement::settle_sui_batch_delegated`,
       typeArguments: [DEEPBOOK_QUOTE_TYPE],
       arguments: [
-        tx.object(SPLASH_ADMIN_CAP_ID),
         tx.object(SPLASH_TREASURY_ID),
-        tx.object(SPLASH_BUSINESS_ACCOUNT_ID),
+        tx.object(SPLASH_PAYOUT_DELEGATION_ID),
         tx.object(SPLASH_PEG_STATE_ID),
         tx.object(SPLASH_COMPLIANCE_CONFIG_ID),
         tx.object(DEEPBOOK_POOL_ID),
@@ -1495,18 +1529,19 @@ export async function recordBatchSettlementOnSui(input: {
 
   ptbArgs.push(
     '--make-move-vec',
-    `<${SPLASH_PACKAGE_ID}::settlement::Payment>`,
+    `<${SPLASH_CUSTODY_PACKAGE_ID}::settlement::Payment>`,
     `[${paymentObjects.map((_, index) => `payment_${index}`).join(',')}]`,
     '--assign',
     'payments',
-    // AdminCap gates pooled liquidity; the pool pays recipients in SUI directly.
-    // New package: ComplianceConfig + DeepBook pool + <QuoteAsset> are required.
+    // No AdminCap and no BusinessAccount: they were owned by two different
+    // addresses, which made the old settle_batch unsignable by anyone. The
+    // delegation carries the tenant's identity and rate limit, and the operator
+    // owns it, so one signature is enough.
     '--move-call',
-    `${SPLASH_CUSTODY_PACKAGE_ID}::settlement::settle_sui_batch`,
+    `${SPLASH_CUSTODY_PACKAGE_ID}::settlement::settle_sui_batch_delegated`,
     `<${DEEPBOOK_QUOTE_TYPE}>`,
-    `@${SPLASH_ADMIN_CAP_ID}`,
     `@${SPLASH_TREASURY_ID}`,
-    `@${SPLASH_BUSINESS_ACCOUNT_ID}`,
+    `@${SPLASH_PAYOUT_DELEGATION_ID}`,
     `@${SPLASH_PEG_STATE_ID}`,
     `@${SPLASH_COMPLIANCE_CONFIG_ID}`,
     `@${DEEPBOOK_POOL_ID}`,

@@ -10,6 +10,7 @@ export type ContractConfigField =
   | 'packageId'
   | 'corePackageId'
   | 'custodyPackageId'
+  | 'payoutDelegationId'
   | 'treasuryId'
   | 'adminCapId'
   | 'attestationCapId'
@@ -38,6 +39,7 @@ const FIELD_TO_ENV: Record<ContractConfigField, string> = {
   packageId: 'SPLASH_PACKAGE_ID',
   corePackageId: 'SPLASH_CORE_PACKAGE_ID',
   custodyPackageId: 'SPLASH_CUSTODY_PACKAGE_ID',
+  payoutDelegationId: 'SPLASH_PAYOUT_DELEGATION_ID',
   treasuryId: 'SPLASH_TREASURY_ID',
   adminCapId: 'SPLASH_ADMIN_CAP_ID',
   attestationCapId: 'SPLASH_ATTESTATION_CAP_ID',
@@ -143,6 +145,7 @@ const ID_FIELDS: ContractConfigField[] = [
   // ids escaped the canonical-64-hex check that packageId gets.
   'corePackageId',
   'custodyPackageId',
+  'payoutDelegationId',
   'treasuryId',
   'adminCapId',
   'attestationCapId',

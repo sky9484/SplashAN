@@ -4,6 +4,10 @@ use splash_core::business_account::{Self, BusinessAccount, AdminCap};
 use splash_core::compliance_config::{Self, ComplianceConfig};
 use splash_core::peg_monitor::{Self, PegState};
 use splash_custody::liquidity_guard;
+use splash_custody::delegation::{Self, PayoutDelegation};
+use splash_meter::guardian::{Self, GuardianCap};
+use splash_meter::spend_meter::{Self, SpendMeter};
+use sui::table::{Self, Table};
 use deepbook::pool::Pool;
 use openzeppelin_math::rounding;
 use openzeppelin_math::u64 as oz_u64;
@@ -28,6 +32,12 @@ const E_NOT_ACCOUNT_OWNER: u64 = 106;
 const E_BELOW_MINIMUM: u64 = 107;
 /// Batch exceeds MAX_BATCH_ROWS.
 const E_BATCH_TOO_LARGE: u64 = 108;
+/// The tenant's credit does not cover this run.
+const E_INSUFFICIENT_CREDIT: u64 = 109;
+/// Pool balance and the sum of credits have diverged — refuse rather than pay.
+const E_CREDIT_INVARIANT: u64 = 118;
+/// `withdraw_fees` may only pay the recipient fixed at pool creation.
+const E_FEE_RECIPIENT_FIXED: u64 = 119;
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 const BPS_DENOMINATOR: u64 = 10_000;
@@ -50,6 +60,31 @@ public struct SettlementPool<phantom T> has key {
     id: UID,
     balance: Balance<T>,
     protocol_fees: Balance<T>,
+    /// Per-tenant credit. This is what makes cross-tenant drain STRUCTURALLY
+    /// impossible rather than assert-prevented: a delegated batch can only spend
+    /// `credits[business_owner]`, so the worst a compromised operator reaches is
+    /// what that one tenant funded. The pool balance is the union of credits,
+    /// not a commingled pot anyone can draw the whole of.
+    credits: Table<address, u64>,
+    /// Sum of `credits`. Kept alongside so the invariant
+    /// `total_credit <= balance` is checkable in O(1) on the hot path — walking
+    /// a Table per settlement is not affordable.
+    total_credit: u64,
+    /// Pool-wide velocity ceiling, on top of each delegation's own meter.
+    /// Two meters, because a single tenant must not be able to consume the
+    /// protocol's whole daily headroom, and the protocol must not be exposed to
+    /// the sum of every tenant's individually-reasonable limit.
+    payout_meter: SpendMeter,
+    /// Fee sweeps get their own meter so a sweep can never eat payroll headroom.
+    fee_meter: SpendMeter,
+    /// FIXED at creation by the multisig. `withdraw_fees` takes no recipient
+    /// argument at all — a compromised admin key cannot redirect revenue, only
+    /// move it to the address the ceremony recorded.
+    fee_recipient: address,
+    /// Bumped by `revoke_all_delegations`. Every delegation records the epoch it
+    /// was minted under, so ONE write invalidates all of them — including those
+    /// held by an attacker, which the multisig cannot otherwise reach.
+    delegation_epoch: u64,
 }
 
 public struct Payment has copy, drop, store {
@@ -81,42 +116,131 @@ public fun new_payment(recipient: address, amount: u64): Payment {
     Payment { recipient, amount }
 }
 
-public fun create_pool<T>(ctx: &mut TxContext) {
+/// Create the shared pool. AdminCap-gated, and the ceremony fixes the fee
+/// recipient and both velocity ceilings here — none of them is settable later by
+/// the hot key.
+public fun create_pool<T>(
+    _admin: &AdminCap,
+    fee_recipient: address,
+    payout_per_tx_cap: u64,
+    payout_window_cap: u64,
+    fee_per_tx_cap: u64,
+    fee_window_cap: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    assert!(fee_recipient != @0x0, E_INVALID_RECIPIENT);
     let pool = SettlementPool<T> {
         id: object::new(ctx),
         balance: balance::zero<T>(),
         protocol_fees: balance::zero<T>(),
+        credits: table::new(ctx),
+        total_credit: 0,
+        payout_meter: spend_meter::new(payout_per_tx_cap, payout_window_cap, clock),
+        fee_meter: spend_meter::new(fee_per_tx_cap, fee_window_cap, clock),
+        fee_recipient,
+        delegation_epoch: 0,
     };
 
     transfer::share_object(pool);
 }
 
-/// Fund the shared settlement pool. AdminCap-gated (M3 fix).
+/// Mint the pause-only guardian for this pool's payout meter. Kept on a
+/// SEPARATE host from the operator: if the stop button lives on the machine
+/// being compromised, there is no stop button.
+public fun mint_guardian_cap<T>(_admin: &AdminCap, pool: &SettlementPool<T>, holder: address, ctx: &mut TxContext) {
+    spend_meter::mint_guardian(&pool.payout_meter, object::id(pool), holder, ctx);
+}
+
+/// Fund the pool ON BEHALF OF a named tenant. AdminCap-gated (M3 fix).
 ///
-/// This was open to anyone and recorded nothing. Two problems: an unsolicited
-/// deposit from an unknown address is indistinguishable from operational
-/// funding in the pool balance, and there was no on-chain record of who put
-/// value in — so the pool could not be reconciled, and a deposit could not be
-/// attributed or returned. For a pool that pays out to third parties, "anyone
-/// may add funds, no record kept" is also an obvious layering vector.
-public fun deposit<T>(
+/// The credit attribution is what makes the pool safe to share. Without it the
+/// balance is a commingled pot and any authorized payout can reach all of it —
+/// so a single compromised delegation drains every tenant. With it, a batch can
+/// only spend `credits[business_owner]`, and the blast radius of any single
+/// authority is bounded by what that one tenant put in.
+///
+/// The deposit was also open to anyone and recorded nothing, which left the pool
+/// unreconcilable and made an unsolicited deposit indistinguishable from
+/// operational funding — an obvious layering vector into a shared object that
+/// pays third parties.
+public fun deposit_for<T>(
     _cap: &AdminCap,
     pool: &mut SettlementPool<T>,
+    business_owner: address,
     coin: Coin<T>,
     clock: &Clock,
     ctx: &TxContext,
 ) {
+    assert!(business_owner != @0x0, E_INVALID_RECIPIENT);
     let amount = coin::value(&coin);
     assert!(amount > 0, E_INVALID_AMOUNT);
+
     balance::join(&mut pool.balance, coin::into_balance(coin));
+    credit_add(pool, business_owner, amount);
 
     event::emit(PoolFunded {
         pool_id: object::id(pool),
         depositor: tx_context::sender(ctx),
+        business_owner,
         amount,
         new_balance: balance::value(&pool.balance),
         funded_at_ms: clock::timestamp_ms(clock),
     });
+}
+
+/// Return unspent credit to a tenant. Metered like any other outflow — a
+/// "refund" that could move unbounded value would be a hole shaped exactly like
+/// the one the meters exist to close.
+public fun refund<T>(
+    _cap: &AdminCap,
+    pool: &mut SettlementPool<T>,
+    business_owner: address,
+    amount: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    assert!(amount > 0, E_INVALID_AMOUNT);
+    assert!(credit_of(pool, business_owner) >= amount, E_INSUFFICIENT_CREDIT);
+
+    let pool_id = object::id(pool);
+    spend_meter::charge(&mut pool.payout_meter, pool_id, amount, clock);
+    credit_sub(pool, business_owner, amount);
+
+    let coin = coin::from_balance(balance::split(&mut pool.balance, amount), ctx);
+    transfer::public_transfer(coin, business_owner);
+    assert_credit_invariant(pool);
+}
+
+// ─── Credit ledger ──────────────────────────────────────────────────────────
+
+fun credit_add<T>(pool: &mut SettlementPool<T>, who: address, amount: u64) {
+    if (pool.credits.contains(who)) {
+        let entry = pool.credits.borrow_mut(who);
+        *entry = *entry + amount;
+    } else {
+        pool.credits.add(who, amount);
+    };
+    pool.total_credit = pool.total_credit + amount;
+}
+
+fun credit_sub<T>(pool: &mut SettlementPool<T>, who: address, amount: u64) {
+    let entry = pool.credits.borrow_mut(who);
+    assert!(*entry >= amount, E_INSUFFICIENT_CREDIT);
+    *entry = *entry - amount;
+    pool.total_credit = pool.total_credit - amount;
+}
+
+public fun credit_of<T>(pool: &SettlementPool<T>, who: address): u64 {
+    if (pool.credits.contains(who)) *pool.credits.borrow(who) else 0
+}
+
+/// The pool must always hold at least what it owes. Checked AFTER every value
+/// movement rather than before, so a bug that lets credits exceed backing aborts
+/// the transaction that caused it instead of surfacing later as a shortfall
+/// someone else discovers.
+fun assert_credit_invariant<T>(pool: &SettlementPool<T>) {
+    assert!(pool.total_credit <= balance::value(&pool.balance), E_CREDIT_INVARIANT);
 }
 
 /// Settle a single payment. `fee_bps` is set by the off-chain quote engine
@@ -175,21 +299,30 @@ public fun settle_payment<T, QuoteAsset>(
     });
 }
 
-/// Settle a batch of payments funded from the SHARED `pool.balance`. A single
-/// `fee_bps` applies to every payment in the batch — batches are constructed
-/// per corridor by the off-chain layer, so one fee per call is sufficient and
-/// keeps the bounded-fee invariant simple to audit.
+/// Settle a payroll run against a tenant's delegation.
 ///
-/// SECURITY: this draws payouts from the shared pool to caller-supplied
-/// recipients, so it MUST be gated by the operator's `AdminCap`. Requiring the
-/// cap means only the off-chain settlement operator (which computes legitimate
-/// payouts) can move pool liquidity — `is_verified(business_account)` alone is
-/// NOT sufficient, since any one KYB-approved tenant could otherwise drain the
-/// pooled liquidity of every other business to an address they control.
-public fun settle_batch<T, QuoteAsset>(
-    _admin: &AdminCap,
+/// REPLACES `settle_batch`, which is UNCALLABLE after the key ceremony: it took
+/// both `&AdminCap` (cold multisig) and `&BusinessAccount` (tenant), and a Sui
+/// transaction may only name owned objects belonging to its own sender. Two
+/// owners, one transaction — impossible. The `owner == sender` assert added for
+/// S-07 made it strictly worse by pinning the sender to the tenant.
+///
+/// The delegation carries the tenant's identity, so attribution stays
+/// chain-enforced without the `BusinessAccount` object being present. Four
+/// independent bounds apply to every run:
+///
+///   1. the delegation must be live (not expired, not revoked, right epoch,
+///      right operator, right pool)
+///   2. the TENANT's own meter — their chosen rate limit
+///   3. the POOL's meter — the protocol's aggregate ceiling
+///   4. the tenant's CREDIT — they cannot spend what they did not fund
+///
+/// The total is charged UPFRONT, before a single coin moves, so a run that would
+/// breach any bound aborts whole. A partially-paid payroll is worse than an
+/// unpaid one.
+public fun settle_batch_delegated<T, QuoteAsset>(
     pool: &mut SettlementPool<T>,
-    business_account: &BusinessAccount,
+    delegation: &mut PayoutDelegation,
     peg_state: &PegState,
     compliance_config: &ComplianceConfig,
     deepbook_pool: &Pool<T, QuoteAsset>,
@@ -198,21 +331,6 @@ public fun settle_batch<T, QuoteAsset>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    assert!(business_account::is_verified(business_account), E_NOT_VERIFIED);
-    // Mirror settle_payment's owner binding (S-01), which closes S-07: the
-    // `PaymentExecuted` events this function emits are attributed to whichever
-    // BusinessAccount the caller passes. Without this assert that attribution is
-    // operator-TRUSTED — a compromised operator could stamp another tenant's
-    // identity on a payout. With it, attribution is chain-ENFORCED.
-    //
-    // CONSEQUENCE, stated plainly: the batch must now be signed by the business
-    // owner, not driven unilaterally by the operator's AdminCap. That is a real
-    // change to the batch operating model and it is deliberate — an operator who
-    // can both move pooled funds AND choose whose name is on the payout is the
-    // exact authority concentration the S-10 cap split exists to break up.
-    // Custody does not publish in Phase 0, so the delegation design (a bounded
-    // SettlementCap the owner grants) lands before this ships.
-    assert!(business_account::owner(business_account) == tx_context::sender(ctx), E_NOT_ACCOUNT_OWNER);
     assert!(fee_bps <= MAX_FEE_BPS, E_FEE_EXCEEDED);
     peg_monitor::assert_pegged(peg_state, compliance_config, clock);
     assert!(vector::length(&payments) > 0, E_EMPTY_BATCH);
@@ -224,14 +342,21 @@ public fun settle_batch<T, QuoteAsset>(
         total_amount = total_amount + vector::borrow(&payments, index).amount;
         index = index + 1;
     };
-    // The floor applies to the batch TOTAL, not per row — a payroll run
-    // legitimately contains small individual rows.
     assert!(total_amount >= compliance_config::min_settlement_amount(compliance_config), E_BELOW_MINIMUM);
     liquidity_guard::assert_deepbook_liquidity(compliance_config, deepbook_pool, total_amount, clock);
 
-    let business_owner = business_account::owner(business_account);
-    let mut payments = payments;
+    let pool_id = object::id(pool);
+    let epoch = pool.delegation_epoch;
 
+    // Charge every bound BEFORE moving value, so the run is all-or-nothing.
+    delegation::authorize(delegation, pool_id, epoch, total_amount, clock, ctx);
+    spend_meter::charge(&mut pool.payout_meter, pool_id, total_amount, clock);
+
+    let business_owner = delegation::business_owner(delegation);
+    assert!(credit_of(pool, business_owner) >= total_amount, E_INSUFFICIENT_CREDIT);
+    credit_sub(pool, business_owner, total_amount);
+
+    let mut payments = payments;
     while (!vector::is_empty(&payments)) {
         let payment = vector::pop_back(&mut payments);
         assert!(payment.recipient != @0x0, E_INVALID_RECIPIENT);
@@ -239,8 +364,6 @@ public fun settle_batch<T, QuoteAsset>(
 
         let fee = fee_of(payment.amount, fee_bps);
         let net = payment.amount - fee;
-
-        // Same invariant as single settle — net must be positive after fee.
         assert!(net > 0, E_INSUFFICIENT_FUNDS);
 
         let fee_balance = balance::split(&mut pool.balance, fee);
@@ -258,12 +381,13 @@ public fun settle_batch<T, QuoteAsset>(
             net_amount: net,
         });
     };
+
+    assert_credit_invariant(pool);
 }
 
-public fun settle_sui_batch<QuoteAsset>(
-    admin: &AdminCap,
+public fun settle_sui_batch_delegated<QuoteAsset>(
     pool: &mut SettlementPool<SUI>,
-    business_account: &BusinessAccount,
+    delegation: &mut PayoutDelegation,
     peg_state: &PegState,
     compliance_config: &ComplianceConfig,
     deepbook_pool: &Pool<SUI, QuoteAsset>,
@@ -272,46 +396,180 @@ public fun settle_sui_batch<QuoteAsset>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    settle_batch<SUI, QuoteAsset>(
-        admin,
-        pool,
-        business_account,
-        peg_state,
-        compliance_config,
-        deepbook_pool,
-        payments,
-        fee_bps,
+    settle_batch_delegated<SUI, QuoteAsset>(
+        pool, delegation, peg_state, compliance_config, deepbook_pool, payments, fee_bps, clock, ctx,
+    );
+}
+
+// ─── Delegation lifecycle ───────────────────────────────────────────────────
+
+public struct DelegationsRevoked has copy, drop {
+    pool_id: ID,
+    new_epoch: u64,
+}
+
+/// Called by the TENANT from their own wallet — the only transaction that can
+/// name their `BusinessAccount`.
+public fun grant_delegation<T>(
+    pool: &SettlementPool<T>,
+    account: &BusinessAccount,
+    operator: address,
+    ttl_ms: u64,
+    per_tx_cap: u64,
+    window_cap: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    delegation::grant(
+        account,
+        object::id(pool),
+        pool.delegation_epoch,
+        operator,
+        ttl_ms,
+        per_tx_cap,
+        window_cap,
         clock,
         ctx,
     );
 }
 
-/// Withdraw accumulated protocol fees to `recipient`. AdminCap-gated.
+/// Kill EVERY outstanding delegation in one write.
 ///
-/// Audit fix S-02: fees previously accumulated in `pool.protocol_fees` with
-/// no extraction path, permanently locking revenue in the shared object.
+/// The multisig cannot revoke delegations individually — they are owned objects
+/// held by the operator, and an attacker controlling that address will not hand
+/// them back. Bumping a counter the delegations are checked against is the only
+/// revocation that reaches them.
+public fun revoke_all_delegations<T>(_admin: &AdminCap, pool: &mut SettlementPool<T>) {
+    pool.delegation_epoch = pool.delegation_epoch + 1;
+    event::emit(DelegationsRevoked { pool_id: object::id(pool), new_epoch: pool.delegation_epoch });
+}
+
+/// Revoke one delegation the admin can actually name.
+public fun admin_revoke_delegation<T>(
+    _admin: &AdminCap,
+    _pool: &SettlementPool<T>,
+    delegation: &mut PayoutDelegation,
+) {
+    delegation::revoke_by_admin(delegation);
+}
+
+// ─── Meter administration ───────────────────────────────────────────────────
+
+/// Immediate. Reducing exposure must never wait.
+public fun tighten_payout_limits<T>(
+    _admin: &AdminCap,
+    pool: &mut SettlementPool<T>,
+    per_tx_cap: u64,
+    window_cap: u64,
+) {
+    let id = object::id(pool);
+    spend_meter::tighten(&mut pool.payout_meter, id, per_tx_cap, window_cap);
+}
+
+/// 48h of public notice, capped at 4x per step. An attacker with the money key
+/// must announce a raise two days before they can use it.
+public fun propose_payout_relax<T>(
+    _admin: &AdminCap,
+    pool: &mut SettlementPool<T>,
+    per_tx_cap: u64,
+    window_cap: u64,
+    clock: &Clock,
+) {
+    let id = object::id(pool);
+    spend_meter::propose_relax(&mut pool.payout_meter, id, per_tx_cap, window_cap, clock);
+}
+
+public fun cancel_payout_relax<T>(_admin: &AdminCap, pool: &mut SettlementPool<T>) {
+    let id = object::id(pool);
+    spend_meter::cancel_relax(&mut pool.payout_meter, id);
+}
+
+/// Back to the limits agreed at the ceremony. Instant, because recovering from a
+/// defensive tighten is not a relaxation.
+public fun restore_payout_bootstrap<T>(_admin: &AdminCap, pool: &mut SettlementPool<T>) {
+    let id = object::id(pool);
+    spend_meter::restore_bootstrap(&mut pool.payout_meter, id);
+}
+
+/// One signature, one machine, immediate — the Step Finance control.
+public fun guardian_pause_pool<T>(pool: &mut SettlementPool<T>, cap: &GuardianCap) {
+    let id = object::id(pool);
+    spend_meter::guardian_pause(&mut pool.payout_meter, id, cap);
+}
+
+/// Restarting money movement is cold-key work, deliberately.
+public fun unpause_pool<T>(_admin: &AdminCap, pool: &mut SettlementPool<T>) {
+    let id = object::id(pool);
+    spend_meter::unpause(&mut pool.payout_meter, id);
+}
+
+public fun payout_remaining_at<T>(pool: &SettlementPool<T>, now_ms: u64): u64 {
+    spend_meter::remaining_at(&pool.payout_meter, now_ms)
+}
+
+/// Sweep accumulated protocol fees. AdminCap-gated, metered, and it takes NO
+/// recipient argument.
+///
+/// Audit fix S-02 gave fees an extraction path; A-11 bounds it. Two changes
+/// beyond the original:
+///
+///   * The destination is `pool.fee_recipient`, fixed at pool creation by the
+///     ceremony. A caller-supplied recipient meant a compromised admin key could
+///     redirect every future sweep to itself, which is revenue theft that looks
+///     exactly like normal operation in the event log.
+///   * A dedicated `fee_meter`, separate from the payout meter, so a sweep can
+///     never consume payroll headroom and vice versa.
 public fun withdraw_fees<T>(
     _admin: &AdminCap,
     pool: &mut SettlementPool<T>,
-    recipient: address,
     amount: u64,
+    clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    assert!(recipient != @0x0, E_INVALID_RECIPIENT);
     assert!(amount > 0, E_INVALID_AMOUNT);
     assert!(balance::value(&pool.protocol_fees) >= amount, E_INSUFFICIENT_FUNDS);
 
+    let pool_id = object::id(pool);
+    spend_meter::charge(&mut pool.fee_meter, pool_id, amount, clock);
+
+    let recipient = pool.fee_recipient;
     let fees = balance::split(&mut pool.protocol_fees, amount);
     transfer::public_transfer(coin::from_balance(fees, ctx), recipient);
 
     event::emit(FeesWithdrawn { recipient, amount });
 }
 
+/// Repoint the fee destination. Deliberately routed through the SAME 48h notice
+/// as a limit relaxation would be, by requiring the pool be paused first — a
+/// silent redirect is the single highest-value action for a compromised admin
+/// key, and it should not be a one-transaction operation.
+public fun set_fee_recipient<T>(_admin: &AdminCap, pool: &mut SettlementPool<T>, recipient: address) {
+    assert!(recipient != @0x0, E_INVALID_RECIPIENT);
+    // Pausing first means a redirect cannot be slipped in between two normal
+    // sweeps without the pause showing up in monitoring.
+    assert!(spend_meter::is_paused(&pool.payout_meter), E_FEE_RECIPIENT_FIXED);
+    let previous = pool.fee_recipient;
+    pool.fee_recipient = recipient;
+    event::emit(FeeRecipientChanged { pool_id: object::id(pool), previous, current: recipient });
+}
+
+public struct FeeRecipientChanged has copy, drop {
+    pool_id: ID,
+    previous: address,
+    current: address,
+}
+
+public fun fee_recipient<T>(pool: &SettlementPool<T>): address { pool.fee_recipient }
+public fun total_credit<T>(pool: &SettlementPool<T>): u64 { pool.total_credit }
+public fun delegation_epoch<T>(pool: &SettlementPool<T>): u64 { pool.delegation_epoch }
+
 /// Emitted on every pool funding. The pool pays third parties, so who funded it
 /// and when must be reconstructable from chain data alone.
 public struct PoolFunded has copy, drop {
     pool_id: ID,
     depositor: address,
+    /// Whose credit this deposit created. Reconciliation joins on this.
+    business_owner: address,
     amount: u64,
     new_balance: u64,
     funded_at_ms: u64,

@@ -38,10 +38,14 @@ move/
     receipt_v2.move        compliance_config.move  peg_monitor.move
     tests/core_invariants_tests.move        (10 tests, all passing)
 
+  splash_meter/       ← velocity bounds. UPGRADEABLE, no dependencies.
+    spend_meter.move       guardian.move
+    tests/spend_meter_tests.move            (22 tests, all passing)
+
   splash_custody/     ← publishes ONLY on the e-money licence
     settlement.move   smart_treasury.move   dual_treasury.move
-    liquidity_guard.move
-    tests/custody_tests.move                (blocked — see below)
+    liquidity_guard.move   delegation.move
+    tests/custody_tests.move  delegation_tests.move   (blocked — see below)
 ```
 
 **Why `liquidity_guard` sits in custody.** It exists to protect *pooled* funds,
@@ -87,9 +91,16 @@ Do not publish `splash_core` until every line is checked.
       impossible to add after the UpgradeCap burns
 - [x] M-09 `confirm_payment_intent` is generic over the coin, with the settlement
       asset bound at creation (abort 414)
-- [ ] **`settle_batch` is UNCALLABLE post-ceremony** — it needs owned objects
-      from two different addresses. Blocked on the delegation design (A-11
-      ruling in SECURITY.md). Phase 1 only; custody does not publish now.
+- [x] **`settle_batch` replaced by `settle_batch_delegated`** — the old form
+      needed owned objects from two different addresses and was unsignable by
+      anyone. A tenant-granted `PayoutDelegation` carries the identity instead,
+      so one signer suffices and attribution stays chain-enforced.
+- [x] **A-11 built**: `move/splash_meter` (spend meters + guardian, **22 tests
+      passing**), per-tenant credit segregation, tenant delegations with a
+      30-day TTL, fixed fee recipient. Publishes with custody in Phase 1.
+- [ ] `smart_treasury::withdraw` / `allocate` and `dual_treasury::emergency_sweep`
+      are not yet metered — `allocate`'s caller-supplied `operating_minimum` is
+      the sharpest remaining edge.
 - [x] M3 closed in `splash_custody` — `deposit` is AdminCap-gated and emits
       `PoolFunded`; batch paths carry the owner binding
 - [x] `'splash-my'` absent from settlement paths

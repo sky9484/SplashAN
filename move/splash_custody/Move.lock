@@ -2,8 +2,8 @@
 
 [move]
 version = 3
-manifest_digest = "158AFBB721E3A16D1356632ABC63A1AAA09A820AA34E597D935720DDF18E2B14"
-deps_digest = "CAFAD8A7CF51067FB4358215BECB86BD100DD64E57C2AC8A7AE7D74B688F5965"
+manifest_digest = "D6AC5CAB3F3E35187A305E5BF672939CBE4676C415FE3CD938035593414A61A3"
+deps_digest = "04732BFEF428F74DE262001DC455D76B909EBC394B034A9A15CC095E4BDD9CEF"
 dependencies = [
   { id = "Bridge", name = "Bridge" },
   { id = "MoveStdlib", name = "MoveStdlib" },
@@ -12,6 +12,7 @@ dependencies = [
   { id = "deepbook", name = "deepbook" },
   { id = "openzeppelin_math", name = "openzeppelin_math" },
   { id = "splash_core", name = "splash_core" },
+  { id = "splash_meter", name = "splash_meter" },
 ]
 
 [[move.package]]
@@ -77,8 +78,17 @@ dependencies = [
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
-  { id = "deepbook", name = "deepbook" },
-  { id = "openzeppelin_math", name = "openzeppelin_math" },
+]
+
+[[move.package]]
+id = "splash_meter"
+source = { local = "..\\splash_meter" }
+
+dependencies = [
+  { id = "Bridge", name = "Bridge" },
+  { id = "MoveStdlib", name = "MoveStdlib" },
+  { id = "Sui", name = "Sui" },
+  { id = "SuiSystem", name = "SuiSystem" },
 ]
 
 [[move.package]]

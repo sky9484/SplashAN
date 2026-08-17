@@ -102,6 +102,69 @@ republished and `scripts/set-compliance-config.mjs` runs against the new
 
 ---
 
+## A-11 BUILT — splash_meter + delegation — 2026-08-19
+
+The ruling of 2026-08-18 is implemented. Three packages now:
+
+```
+move/splash_core/     mainnet, IMMUTABLE, no dependencies      14 tests passing
+move/splash_meter/    velocity bounds, UPGRADEABLE, no deps    22 tests passing
+move/splash_custody/  every Balance<T>, publishes on licence   tests blocked*
+```
+
+\* `sui move test` still cannot run in splash_custody — the pinned DeepBook rev
+ships test files that fail to compile against this toolchain. `splash_meter` was
+deliberately made dependency-free so the window arithmetic IS executable, because
+a spend ceiling whose boundary behaviour has never run is a guess rather than a
+control.
+
+### What was built
+
+| Piece | Property |
+|---|---|
+| `spend_meter::SpendMeter` | 24 hourly buckets over a 24h window, rolled forward lazily by the spender's own transaction — Sui has no cron, so any design needing one silently stops working when nobody calls it. |
+| Asymmetric limit changes | Tightening is instant. Relaxing costs 48h of public `LimitsProposed` notice and is capped at 4x per step, so a compromised key must announce a raise two days before it can use it. Tightening cancels a queued raise, or the tighten would be theatre. |
+| Bootstrap restore | Returning to the ceremony-agreed limits is instant, because recovering from a defensive tighten is not a relaxation — otherwise the 48h cost is exactly the pressure that makes operators avoid tightening at all. |
+| `guardian::GuardianCap` | Pause only. Never resume, never spend, never name a recipient. A stolen guardian is a denial of service by construction, which is what makes it safe on an always-on watcher host. Resuming is cold-key work. |
+| `settlement.credits` | Per-tenant credit `Table` inside the pool. Cross-tenant drain becomes structurally impossible rather than assert-prevented: a batch can only spend `credits[business_owner]`. |
+| `delegation::PayoutDelegation` | The tenant grants it from their own wallet and it lands with the operator. TTL <= 30 days, revocable by owner, by admin, or pool-wide via an epoch bump. |
+| Fixed `fee_recipient` | `withdraw_fees` takes no recipient argument. Repointing requires the pool be paused first, so a redirect cannot be slipped between two normal sweeps. |
+
+### Why the delegation replaces `&BusinessAccount` rather than joining it
+
+`settle_batch` is deleted, not fixed. It took `&AdminCap` (cold multisig) and
+`&BusinessAccount` (tenant), and a Sui transaction may only name owned objects
+belonging to its own sender — two owners, one transaction, impossible. The
+delegation carries the tenant's identity, so attribution stays chain-enforced
+(closing S-07) while the run becomes signable by one party.
+
+Four independent bounds apply to every batch, all charged UPFRONT before a single
+coin moves so a breach aborts the run whole rather than half-paying a payroll:
+the delegation must be live; the tenant's own meter; the pool's meter; and the
+tenant's credit.
+
+### One design note worth recording
+
+`public(package)` does not cross package boundaries, so the meter's mutators are
+`public`. That is safe for a reason worth stating: a `SpendMeter` is a `store`
+FIELD, not an object, and Move makes struct fields private to their defining
+module. `&mut pool.payout_meter` can only be borrowed inside `settlement.move`,
+which gates every borrow behind `AdminCap`, a live delegation, or a
+`GuardianCap`. **The mutable reference is the capability.** The same argument
+gates guardian minting, via a `&SpendMeter` argument.
+
+### Still open
+
+- `smart_treasury::withdraw` / `allocate` and `dual_treasury::emergency_sweep`
+  are NOT yet metered. `allocate`'s caller-supplied `operating_minimum` remains
+  the sharpest edge — pass 0 and the floor evaporates.
+- Custody tests are written (`delegation_tests.move`) but unrunnable until the
+  DeepBook pin moves.
+- A-15 (no beneficiary screening) is untouched: delegated batches still pay
+  unscreened, caller-supplied addresses.
+
+---
+
 ## A-11 / A-12 design ruling — 2026-08-18
 
 Three rival designs were argued by independent advocates, each cross-examined by
