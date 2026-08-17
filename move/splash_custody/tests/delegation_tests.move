@@ -1,15 +1,14 @@
 /// Delegation and credit-segregation tests.
 ///
-/// ⚠️ NOT YET RUNNABLE. `sui move test` cannot execute in splash_custody: the
-/// pinned DeepBook rev ships test files that fail to compile against this
-/// toolchain (`unbound function 'destroy'` in deepbook's own vault_tests.move),
-/// which aborts the test build before these are reached. They are written
-/// against the real API and run the moment the pin moves — see STATUS.md.
+/// These now RUN. The DeepBook pin moved to 7b48e61b — the commit before
+/// DeepBook's own tests adopted `std::unit_test::destroy`, which the Move stdlib
+/// shipped with Sui CLI 1.59.1 does not export. Every later rev aborted the test
+/// build before this file was reached. See `Move.toml` for the verification done
+/// before moving.
 ///
 /// The properties below are the ones that decide whether A-11 is actually
-/// closed. The window arithmetic they depend on IS executable, in
-/// `splash_meter/tests/spend_meter_tests.move` (22 tests, passing), which is
-/// deliberately dependency-free for exactly this reason.
+/// closed: credit segregation, operator binding, epoch revocation, TTL expiry,
+/// and the fixed fee recipient.
 #[test_only]
 module splash_custody::delegation_tests;
 
@@ -72,16 +71,161 @@ fun credits_are_segregated_per_tenant() {
     scenario.end();
 }
 
+/// Grant a real delegation from a verified tenant, then hand back the pool.
+fun grant_for(scenario: &mut test_scenario::Scenario, tenant: address, ttl_ms: u64) {
+    scenario.next_tx(tenant);
+    {
+        let ctx = scenario.ctx();
+        business_account::submit_application(b"SSM-1".to_string(), b"cid".to_string(), ctx);
+    };
+    scenario.next_tx(tenant);
+    {
+        let mut account = scenario.take_from_sender<business_account::BusinessAccount>();
+        let ctx = scenario.ctx();
+        let admin = business_account::admin_cap_for_testing(ctx);
+        business_account::verify_business(&admin, &mut account, 10);
+        sui::test_utils::destroy(admin);
+        scenario.return_to_sender(account);
+    };
+    scenario.next_tx(tenant);
+    {
+        let pool = scenario.take_shared<settlement::SettlementPool<SUI>>();
+        let account = scenario.take_from_sender<business_account::BusinessAccount>();
+        let ctx = scenario.ctx();
+        let mut c = clock::create_for_testing(ctx);
+        c.set_for_testing(1_000 * DAY);
+        settlement::grant_delegation(&pool, &account, OPERATOR, ttl_ms, PER_TX, WINDOW, &c, ctx);
+        c.destroy_for_testing();
+        scenario.return_to_sender(account);
+        test_scenario::return_shared(pool);
+    };
+}
+
 #[test]
-/// A delegation is bound to the operator address it was granted to. Possession
-/// of the object is NOT authority — a stolen delegation used from another
-/// address aborts.
-fun a_delegation_is_bound_to_its_operator() {
-    // Covered by `delegation::authorize`'s
-    // `assert!(delegation.operator == tx_context::sender(ctx), E_INVALID_OPERATOR)`.
-    // Written here so the property is enumerated with the others; the executable
-    // form lands when the DeepBook pin moves and a full settle can run.
-    assert!(delegation::max_ttl_ms() == 2_592_000_000, 0);
+#[expected_failure(abort_code = 115, location = splash_custody::delegation)]
+/// A delegation is bound to the operator address it was granted to. POSSESSION
+/// IS NOT AUTHORITY — a stolen delegation object used from any other address
+/// aborts, so exfiltrating the object alone buys nothing.
+fun a_stolen_delegation_is_useless_from_another_address() {
+    let mut scenario = test_scenario::begin(OPERATOR);
+    {
+        let ctx = scenario.ctx();
+        let mut c = clock::create_for_testing(ctx);
+        c.set_for_testing(1_000 * DAY);
+        let admin = business_account::admin_cap_for_testing(ctx);
+        settlement::create_pool<SUI>(&admin, FEE_SINK, PER_TX, WINDOW, PER_TX, WINDOW, &c, ctx);
+        sui::test_utils::destroy(admin);
+        c.destroy_for_testing();
+    };
+    grant_for(&mut scenario, TENANT_A, 7 * DAY);
+
+    // A different address takes the delegation and tries to use it.
+    scenario.next_tx(@0xBADBAD);
+    {
+        let pool = scenario.take_shared<settlement::SettlementPool<SUI>>();
+        let mut d = scenario.take_from_address<delegation::PayoutDelegation>(OPERATOR);
+        let ctx = scenario.ctx();
+        let mut c = clock::create_for_testing(ctx);
+        c.set_for_testing(1_000 * DAY);
+        delegation::authorize(&mut d, object::id(&pool), 0, 1_000, &c, ctx);
+        c.destroy_for_testing();
+        test_scenario::return_to_address(OPERATOR, d);
+        test_scenario::return_shared(pool);
+    };
+    scenario.end();
+}
+
+#[test]
+#[expected_failure(abort_code = 117, location = splash_custody::delegation)]
+/// `revoke_all_delegations` reaches delegations the multisig CANNOT name.
+///
+/// They are owned objects sitting at the operator's address, and an attacker
+/// controlling that address will not hand them back. Bumping the pool epoch is
+/// the only revocation that touches them — this proves a delegation minted
+/// before the bump is dead afterwards.
+fun an_epoch_bump_kills_a_delegation_the_admin_cannot_reach() {
+    let mut scenario = test_scenario::begin(OPERATOR);
+    {
+        let ctx = scenario.ctx();
+        let mut c = clock::create_for_testing(ctx);
+        c.set_for_testing(1_000 * DAY);
+        let admin = business_account::admin_cap_for_testing(ctx);
+        settlement::create_pool<SUI>(&admin, FEE_SINK, PER_TX, WINDOW, PER_TX, WINDOW, &c, ctx);
+        sui::test_utils::destroy(admin);
+        c.destroy_for_testing();
+    };
+    grant_for(&mut scenario, TENANT_A, 7 * DAY);
+
+    scenario.next_tx(OPERATOR);
+    {
+        let mut pool = scenario.take_shared<settlement::SettlementPool<SUI>>();
+        let mut d = scenario.take_from_sender<delegation::PayoutDelegation>();
+        let ctx = scenario.ctx();
+        let admin = business_account::admin_cap_for_testing(ctx);
+        settlement::revoke_all_delegations(&admin, &mut pool);
+        sui::test_utils::destroy(admin);
+
+        let mut c = clock::create_for_testing(ctx);
+        c.set_for_testing(1_000 * DAY);
+        // Epoch 1 on the pool, epoch 0 on the delegation.
+        delegation::authorize(&mut d, object::id(&pool), settlement::delegation_epoch(&pool), 1_000, &c, ctx);
+        c.destroy_for_testing();
+        scenario.return_to_sender(d);
+        test_scenario::return_shared(pool);
+    };
+    scenario.end();
+}
+
+#[test]
+#[expected_failure(abort_code = 112, location = splash_custody::delegation)]
+/// The TTL is a dead-man switch: a tenant who stops re-granting stops being
+/// payable, so an abandoned integration decays closed rather than staying open.
+fun an_expired_delegation_cannot_authorize() {
+    let mut scenario = test_scenario::begin(OPERATOR);
+    {
+        let ctx = scenario.ctx();
+        let mut c = clock::create_for_testing(ctx);
+        c.set_for_testing(1_000 * DAY);
+        let admin = business_account::admin_cap_for_testing(ctx);
+        settlement::create_pool<SUI>(&admin, FEE_SINK, PER_TX, WINDOW, PER_TX, WINDOW, &c, ctx);
+        sui::test_utils::destroy(admin);
+        c.destroy_for_testing();
+    };
+    grant_for(&mut scenario, TENANT_A, DAY);
+
+    scenario.next_tx(OPERATOR);
+    {
+        let pool = scenario.take_shared<settlement::SettlementPool<SUI>>();
+        let mut d = scenario.take_from_sender<delegation::PayoutDelegation>();
+        let ctx = scenario.ctx();
+        let mut c = clock::create_for_testing(ctx);
+        // Two days after a one-day grant.
+        c.set_for_testing(1_002 * DAY);
+        delegation::authorize(&mut d, object::id(&pool), 0, 1_000, &c, ctx);
+        c.destroy_for_testing();
+        scenario.return_to_sender(d);
+        test_scenario::return_shared(pool);
+    };
+    scenario.end();
+}
+
+#[test]
+#[expected_failure(abort_code = 114, location = splash_custody::delegation)]
+/// A TTL beyond 30 days is refused at grant time, so the dead-man switch cannot
+/// be set so far out that it never fires.
+fun a_delegation_cannot_outlive_thirty_days() {
+    let mut scenario = test_scenario::begin(OPERATOR);
+    {
+        let ctx = scenario.ctx();
+        let mut c = clock::create_for_testing(ctx);
+        c.set_for_testing(1_000 * DAY);
+        let admin = business_account::admin_cap_for_testing(ctx);
+        settlement::create_pool<SUI>(&admin, FEE_SINK, PER_TX, WINDOW, PER_TX, WINDOW, &c, ctx);
+        sui::test_utils::destroy(admin);
+        c.destroy_for_testing();
+    };
+    grant_for(&mut scenario, TENANT_A, 31 * DAY);
+    scenario.end();
 }
 
 #[test]

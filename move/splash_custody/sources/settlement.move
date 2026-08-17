@@ -5,7 +5,7 @@ use splash_core::compliance_config::{Self, ComplianceConfig};
 use splash_core::peg_monitor::{Self, PegState};
 use splash_custody::liquidity_guard;
 use splash_custody::delegation::{Self, PayoutDelegation};
-use splash_meter::guardian::{Self, GuardianCap};
+use splash_meter::guardian::GuardianCap;
 use splash_meter::spend_meter::{Self, SpendMeter};
 use sui::table::{Self, Table};
 use deepbook::pool::Pool;

@@ -112,11 +112,15 @@ move/splash_meter/    velocity bounds, UPGRADEABLE, no deps    22 tests passing
 move/splash_custody/  every Balance<T>, publishes on licence   tests blocked*
 ```
 
-\* `sui move test` still cannot run in splash_custody — the pinned DeepBook rev
-ships test files that fail to compile against this toolchain. `splash_meter` was
-deliberately made dependency-free so the window arithmetic IS executable, because
-a spend ceiling whose boundary behaviour has never run is a guess rather than a
-control.
+\* **Resolved 2026-08-19.** All three suites now run — 14 + 22 + 16. The DeepBook
+pin moved to `7b48e61b`, the commit immediately before DeepBook's own tests
+adopted `std::unit_test::destroy`; the Move stdlib shipped with Sui CLI 1.59.1
+exports only `assert_eq` and `assert_ref_eq` from that module, so every later rev
+aborted the whole test build before our modules were reached. Verified before
+moving: `FLOAT_SCALING` is `1_000_000_000` in both revs (this is the constant
+`DEEPBOOK_PRICE_SCALING` must match, and a wrong value there is the Cetus failure
+mode), the three view functions the guard calls have byte-identical signatures,
+and neither rev sets `published-at` so no on-chain address changed.
 
 ### What was built
 
@@ -172,11 +176,11 @@ mint its own pause-only `GuardianCap`.
 
 ### Still open
 
-- Custody tests are written (`custody_tests.move`, `delegation_tests.move`) but
-  unrunnable until the DeepBook pin moves. The window arithmetic they rely on IS
-  executable, in `splash_meter` (22 tests).
 - A-15 (no beneficiary screening) is untouched: delegated batches still pay
   unscreened, caller-supplied addresses.
+- The DeepBook pin is held ~7 months behind `main` purely by the CLI's stdlib.
+  Upgrading the Sui CLI lifts the constraint and is needed for gRPC publishing
+  anyway, so both should move together.
 
 ---
 

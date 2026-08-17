@@ -45,7 +45,7 @@ move/
   splash_custody/     ← publishes ONLY on the e-money licence
     settlement.move   smart_treasury.move   dual_treasury.move
     liquidity_guard.move   delegation.move
-    tests/custody_tests.move  delegation_tests.move   (blocked — see below)
+    tests/custody_tests.move  delegation_tests.move   (16 tests, all passing)
 ```
 
 **Why `liquidity_guard` sits in custody.** It exists to protect *pooled* funds,
@@ -69,11 +69,15 @@ Do not publish `splash_core` until every line is checked.
 
 - [x] `sui move build` clean for both packages
 - [x] `sui move test` green for `splash_core` — **14 tests** (was 0 runnable)
-- [ ] `sui move test` for `splash_custody` — **BLOCKED** by the pinned DeepBook
-      rev's own test files (`unbound function 'destroy'` in
-      `deepbook/tests/vault/vault_tests.move`). Tests are written and will run
-      when the pin moves. Not a mainnet blocker: custody does not publish in
-      Phase 0.
+- [x] `sui move test` green for `splash_custody` — **16 tests** (was blocked).
+      The DeepBook pin moved to `7b48e61b`, the commit before DeepBook's tests
+      adopted `std::unit_test::destroy`, which the Move stdlib shipped with Sui
+      CLI 1.59.1 does not export. Verified before moving: `FLOAT_SCALING` is
+      still `1_000_000_000`, the three view functions the guard calls have
+      byte-identical signatures, and neither rev sets `published-at`.
+- [ ] **Move the DeepBook pin forward again once the Sui CLI is upgraded.** A
+      newer stdlib exports `destroy`, which lifts the constraint entirely. The
+      CLI also needs upgrading for gRPC publishing, so these land together.
 - [x] No value-bearing field in `splash_core` — `scripts/check-core-no-balance.mjs`,
       run by `.github/workflows/core-invariant.yml` on every push and PR, and by
       `npm run lint` locally. The checker parses struct BODIES out of

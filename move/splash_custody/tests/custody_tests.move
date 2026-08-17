@@ -1,14 +1,7 @@
 /// Custody-side tests.
 ///
-/// NOT YET RUNNABLE. `sui move test` cannot execute in this package: the pinned
-/// DeepBook rev ships test files that fail to compile against the current
-/// toolchain (`unbound function 'destroy'` in deepbook's own vault_tests.move),
-/// which aborts the test build before these are reached.
-///
-/// `splash_meter` was deliberately made dependency-free so the arithmetic these
-/// depend on IS executable — see `splash_meter/tests/spend_meter_tests.move`
-/// (22 tests, passing). What remains unverified here is the wiring, not the
-/// window logic.
+/// Runnable since the DeepBook pin moved to 7b48e61b — see `Move.toml` for why
+/// that rev and what was verified before moving.
 #[test_only]
 module splash_custody::custody_tests;
 

@@ -19,7 +19,30 @@ authors = ["Splash Finance"]
 splash_core = { local = "../splash_core" }
 # Velocity bounds (A-11). Publishes UPGRADEABLE so ceilings stay tunable.
 splash_meter = { local = "../splash_meter" }
-deepbook = { git = "https://github.com/MystenLabs/deepbookv3.git", subdir = "packages/deepbook", rev = "daa5a9514908968f11be1d0388f673e0ee1a5059" }
+# DeepBook pin — chosen so `sui move test` RUNS in this package.
+#
+# `sui move test` compiles a git dependency's own test files. DeepBook adopted
+# `std::unit_test::destroy` in its tests on 2025-11-20 (commit 53d34351,
+# "Deposit/withdraw test changes" #686), and the Move stdlib shipped with Sui CLI
+# 1.59.1 exports only `assert_eq`/`assert_ref_eq` from that module. So every rev
+# after that date aborts the whole test build before splash_custody's own modules
+# are reached — which is why this package had unrunnable tests, and why
+# splash_meter was deliberately made dependency-free.
+#
+# 7b48e61b is the commit immediately before that change. Verified against the
+# previous pin (daa5a951, 2026-06-18) before moving:
+#   * FLOAT_SCALING is 1_000_000_000 in both — this is the constant
+#     `liquidity_guard::DEEPBOOK_PRICE_SCALING` must match, and a wrong value
+#     here is the Cetus failure mode.
+#   * get_quote_quantity_out_input_fee, mid_price and get_level2_range have
+#     byte-identical signatures in both.
+#   * Neither rev sets `published-at`, so no on-chain address changes.
+# The guard only READS those three views, so the older rev is sufficient for
+# everything splash_custody compiles against.
+#
+# Revisit when the CLI is upgraded: a newer stdlib exports `destroy` and the pin
+# can move forward again.
+deepbook = { git = "https://github.com/MystenLabs/deepbookv3.git", subdir = "packages/deepbook", rev = "7b48e61b1ce695c94b553fdbb98ddb9b6fa5ad25" }
 openzeppelin_math = { git = "https://github.com/OpenZeppelin/contracts-sui.git", subdir = "math/core", rev = "a9703fe834a56990ccbcee3a1cf0802e7cd3b8d9" }
 
 [addresses]
