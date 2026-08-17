@@ -380,17 +380,21 @@ const ABORT_CODES: Record<number, string> = {
   600: 'E_USDT_TTL_EXCEEDED — USDT settlement attempted past USDT_MAX_HOLD_MS (30 minutes). Sweep expected.',
   601: 'E_USDT_BUFFER_EMPTY — dual_treasury::emergency_sweep called with zero balance.',
   602: 'E_USDT_SWEEP_TOO_EARLY — emergency_sweep called before USDT_SWEEP_TRIGGER_MS (27 minutes).',
-  603: 'E_USDT_INSUFFICIENT_KYC_TIER — settle_usdt called with kyc_tier below min_kyc_tier.',
+  603: 'E_USDT_INSUFFICIENT_KYC_TIER — settle_usdt called with a kyc_tier below the buffer’s STORED min_kyc_tier. The threshold used to be a caller-supplied parameter next to kyc_tier, which made the gate caller-versus-caller (audit A-11).',
   604: 'E_USDT_INSUFFICIENT_BALANCE — settle_usdt requested more than the buffer holds.',
   605: 'E_USDT_ACTIVE_BUFFER — deposit attempted while the USDT buffer still holds an active intake.',
   606: 'E_USDT_ZERO_AMOUNT — dual_treasury deposit or settlement amount is zero.',
   607: 'E_USDT_INVALID_RECIPIENT — dual_treasury recipient is the zero address.',
+  608: 'E_USDT_REQUIRES_PAUSE — lowering the buffer’s stored KYC floor requires the buffer to be paused first.',
 
   // ── smart_treasury ───────────────────────────────────────────────────────
   700: 'E_INSUFFICIENT_BALANCE — smart_treasury::withdraw requested more than the treasury holds.',
   701: 'E_ZERO_AMOUNT — smart_treasury deposit/withdraw called with amount = 0.',
   702: 'E_RECIPIENT_INVALID — smart_treasury::withdraw recipient is the zero address.',
-  703: 'E_OPERATING_FLOOR — smart_treasury::allocate would breach the corridor operating minimum.',
+  703: 'E_OPERATING_FLOOR — the withdrawal would breach the treasury operating floor. The floor is STORED on the treasury (audit A-11); allocate, which took it as a caller-supplied argument, is deleted.',
+  704: 'E_RECIPIENT_NOT_ALLOWED — smart_treasury withdrawal destination is not on the treasury allowlist. Add it with allow_recipient (AdminCap).',
+  705: 'E_REQUIRES_PAUSE — lowering the treasury operating floor requires the treasury to be paused first, so a floor reduction cannot be slipped between two normal withdrawals.',
+  706: 'E_LAST_RECIPIENT — refused to empty the withdrawal allowlist; that bricks the treasury rather than securing it. Use the pause switch.',
 
   // ── receipt_v2 ───────────────────────────────────────────────────────────
   800: 'E_EMPTY_RECEIPT_ID — receipt_v2::create_receipt called with empty receipt_id.',

@@ -33,12 +33,24 @@ if (signer.toSuiAddress().toLowerCase() !== operatorAddress.toLowerCase()) {
 const client = new SuiGrpcClient({ network: 'testnet', baseUrl: rpcUrl });
 const tx = new Transaction();
 tx.setGasBudget(Number(process.env.SUI_BOOTSTRAP_GAS_BUDGET ?? '50000000'));
+// init_treasury gained four parameters with the A-11 metering. The floor and
+// the withdrawal allowlist are STORED on the treasury rather than passed per
+// call, because `allocate` used to take its floor as an argument — pass 0 and
+// the guard evaporated. The caps are the same shape as the settlement pool's.
+const treasuryFloor = process.env.SPLASH_TREASURY_OPERATING_FLOOR ?? '0';
+const treasuryPayee = (process.env.SPLASH_TREASURY_PAYOUT_ADDRESS ?? operatorAddress).trim();
+const treasuryPerTx = process.env.SPLASH_TREASURY_PER_TX_CAP ?? '50000000000';
+const treasuryWindow = process.env.SPLASH_TREASURY_WINDOW_CAP ?? '50000000000';
 tx.moveCall({
   target: `${packageId}::smart_treasury::init_treasury`,
   typeArguments: [coinType],
   arguments: [
     tx.object(adminCapId),
     tx.pure.string('splash-testnet-sui-reserve'),
+    tx.pure.u64(treasuryFloor),
+    tx.pure.vector('address', [treasuryPayee]),
+    tx.pure.u64(treasuryPerTx),
+    tx.pure.u64(treasuryWindow),
     tx.object('0x6'),
   ],
 });

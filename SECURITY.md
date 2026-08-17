@@ -153,13 +153,28 @@ which gates every borrow behind `AdminCap`, a live delegation, or a
 `GuardianCap`. **The mutable reference is the capability.** The same argument
 gates guardian minting, via a `&SpendMeter` argument.
 
+### Treasury metering — completed 2026-08-19
+
+Both treasuries now carry the same bounds as the settlement pool, and three
+caller-supplied guards were moved into storage:
+
+| Was | Now |
+|---|---|
+| `smart_treasury::allocate(.., operating_minimum: u64, ..)` — the floor was an ARGUMENT, so `assert!(balance - amount >= operating_minimum)` compared caller against caller. Passing `0` erased it. | **`allocate` deleted.** The floor is a stored field on the treasury; `withdraw` enforces it. Lowering it requires a pause first, so a quiet reduction between two normal withdrawals is not available. |
+| `smart_treasury::withdraw(.., recipient: address, ..)` — any destination. | Destination must be on the treasury's allowlist. The last entry cannot be removed (that bricks rather than secures). |
+| `smart_treasury::redeem` | Deleted — it was a bare alias for `withdraw`. Two entry points to a treasury, one with a defeatable guard, is worse than one that is correct. |
+| `dual_treasury::emergency_sweep(.., recipient: address, ..)` — caller-chosen destination for the WHOLE balance, on the path reachable precisely when things are already going wrong. | Destination fixed at buffer creation. In an event log a redirected sweep is indistinguishable from a legitimate one, which is what made this the worst of the three. |
+| `dual_treasury::settle_usdt(.., kyc_tier: u8, min_kyc_tier: u8, ..)` — **both sides of the compliance comparison came from the caller.** `kyc_tier: 5, min_kyc_tier: 0` always passes. | The threshold is stored on the buffer, so the assert compares a caller-supplied claim against a stored policy. Lowering it requires a pause. |
+
+All three value paths (`smart_treasury::withdraw`, `dual_treasury::settle_usdt`,
+`dual_treasury::emergency_sweep`) now charge a `SpendMeter`, and each object can
+mint its own pause-only `GuardianCap`.
+
 ### Still open
 
-- `smart_treasury::withdraw` / `allocate` and `dual_treasury::emergency_sweep`
-  are NOT yet metered. `allocate`'s caller-supplied `operating_minimum` remains
-  the sharpest edge — pass 0 and the floor evaporates.
-- Custody tests are written (`delegation_tests.move`) but unrunnable until the
-  DeepBook pin moves.
+- Custody tests are written (`custody_tests.move`, `delegation_tests.move`) but
+  unrunnable until the DeepBook pin moves. The window arithmetic they rely on IS
+  executable, in `splash_meter` (22 tests).
 - A-15 (no beneficiary screening) is untouched: delegated batches still pay
   unscreened, caller-supplied addresses.
 

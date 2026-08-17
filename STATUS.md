@@ -98,9 +98,10 @@ Do not publish `splash_core` until every line is checked.
 - [x] **A-11 built**: `move/splash_meter` (spend meters + guardian, **22 tests
       passing**), per-tenant credit segregation, tenant delegations with a
       30-day TTL, fixed fee recipient. Publishes with custody in Phase 1.
-- [ ] `smart_treasury::withdraw` / `allocate` and `dual_treasury::emergency_sweep`
-      are not yet metered — `allocate`'s caller-supplied `operating_minimum` is
-      the sharpest remaining edge.
+- [x] **Both treasuries metered.** `allocate` and `redeem` deleted; the
+      operating floor, the withdrawal allowlist, the USDT sweep destination and
+      the KYC threshold are all STORED rather than caller-supplied. Every value
+      path charges a meter and can be paused by a guardian.
 - [x] M3 closed in `splash_custody` — `deposit` is AdminCap-gated and emits
       `PoolFunded`; batch paths carry the owner binding
 - [x] `'splash-my'` absent from settlement paths
