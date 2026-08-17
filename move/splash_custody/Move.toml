@@ -40,8 +40,16 @@ splash_meter = { local = "../splash_meter" }
 # The guard only READS those three views, so the older rev is sufficient for
 # everything splash_custody compiles against.
 #
-# Revisit when the CLI is upgraded: a newer stdlib exports `destroy` and the pin
-# can move forward again.
+# TO MOVE THIS PIN FORWARD you need Sui CLI >= 1.61.1. Not "latest" — that exact
+# floor. `std::unit_test::destroy` was added by sui commit d95572e1c1
+# ("[framework] move `test_utils::destroy` to `unit_test`", #24078, 2025-11-11)
+# and first shipped in testnet-v1.61.1 / mainnet-v1.61.2. The CLI on this box is
+# 1.59.1, which is two minors short — verified by `git tag --contains d95572e1c1`
+# against the sui repo, which returns zero 1.59.x tags.
+#
+# Do NOT move the pin before the toolchain moves: every rev after 53d34351 makes
+# `sui move test` fail for anyone still on an older CLI, which is the state this
+# pin was chosen to escape.
 deepbook = { git = "https://github.com/MystenLabs/deepbookv3.git", subdir = "packages/deepbook", rev = "7b48e61b1ce695c94b553fdbb98ddb9b6fa5ad25" }
 openzeppelin_math = { git = "https://github.com/OpenZeppelin/contracts-sui.git", subdir = "math/core", rev = "a9703fe834a56990ccbcee3a1cf0802e7cd3b8d9" }
 

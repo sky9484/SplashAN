@@ -75,9 +75,31 @@ Do not publish `splash_core` until every line is checked.
       CLI 1.59.1 does not export. Verified before moving: `FLOAT_SCALING` is
       still `1_000_000_000`, the three view functions the guard calls have
       byte-identical signatures, and neither rev sets `published-at`.
-- [ ] **Move the DeepBook pin forward again once the Sui CLI is upgraded.** A
-      newer stdlib exports `destroy`, which lifts the constraint entirely. The
-      CLI also needs upgrading for gRPC publishing, so these land together.
+- [ ] **Upgrade the Sui CLI to >= 1.61.1, then move the DeepBook pin forward.**
+      Needs an ELEVATED shell — Chocolatey writes to `C:\ProgramData` and the
+      normal shell gets `Access to the path ... is denied`:
+
+      ```
+      choco upgrade sui -y
+      ```
+
+      Rollback if anything regresses: `choco install sui --version=1.59.1 --force -y`
+
+      **Why 1.61.1 exactly.** `std::unit_test::destroy` was added by sui commit
+      `d95572e1c1` (#24078, 2025-11-11) and first shipped in `testnet-v1.61.1` /
+      `mainnet-v1.61.2`. DeepBook's own tests use it from `53d34351` (2025-11-20)
+      onward. `git tag --contains d95572e1c1` returns zero `1.59.x` tags, so the
+      installed 1.59.1 cannot compile them — which is the whole reason the pin
+      sits where it does.
+
+      After upgrading, re-run all three suites BEFORE moving the pin (a newer
+      Move compiler can change what builds), then move the pin and re-verify:
+      `FLOAT_SCALING == 1_000_000_000` and the three view signatures the
+      liquidity guard calls. Do not assume a version bump left them alone —
+      a wrong scaling constant is the Cetus failure mode.
+
+      The CLI is also needed at >= 1.76 for gRPC publishing (1.59.1 gets
+      `Request rejected`), so the September ceremony needs this regardless.
 - [x] No value-bearing field in `splash_core` — `scripts/check-core-no-balance.mjs`,
       run by `.github/workflows/core-invariant.yml` on every push and PR, and by
       `npm run lint` locally. The checker parses struct BODIES out of
