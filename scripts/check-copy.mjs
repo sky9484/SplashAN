@@ -86,6 +86,13 @@ const allowedHexes = new Set([
   '#d9fff6', '#e0b05a', '#e7eef0', '#eaf6f1', '#eaf7f8', '#ede8e4', '#eef4f5',
   '#efc46f', '#f4efe4', '#f4f8fa', '#f8fcfd', '#ffd9c9', '#ffe6a4', '#fffaf6',
   '#fffdf9',
+  // Google's brand mark, in components/auth/ZkLoginButton.tsx. These four are
+  // fixed by Google's identity guidelines and are not Splash palette: they
+  // cannot become tokens, because a token implies we may change them. Inline
+  // rather than an <img> so the sign-in button needs no network request to
+  // render, and listed here rather than exempting the file, so any OTHER
+  // arbitrary hex added to it still fails.
+  '#4285f4', '#34a853', '#fbbc05', '#ea4335',
 ]);
 const hexPattern = /#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{4}|[0-9a-fA-F]{3})(?![0-9a-fA-F])/g;
 function hexViolations(text) {

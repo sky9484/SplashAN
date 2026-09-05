@@ -8076,3 +8076,71 @@ button.iso-product-row {
   .fintech-dashboard-shell .dash-block-interactive,
   .fintech-dashboard-shell .dash-block-interactive:hover { transition: none; transform: none; }
 }
+
+/* ─── zkLogin sign-in ─────────────────────────────────────────────────────
+   The Google button and its divider. Sized to the password submit beside it
+   so neither reads as the primary path: proving identity with a provider and
+   proving it with a password are the same act, and the page should not push
+   one over the other. */
+.iso-auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 22px 0 18px;
+  color: var(--iso-text-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+}
+
+.iso-auth-divider::before,
+.iso-auth-divider::after {
+  flex: 1;
+  height: 1px;
+  background: var(--iso-line);
+  content: "";
+}
+
+.iso-auth-oauth {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  border: 1px solid rgba(12, 62, 72, .22);
+  border-radius: 10px;
+  padding: 13px 18px;
+  color: var(--iso-ink);
+  background: #fff;
+  font-size: 14.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color .15s ease, background .15s ease;
+}
+
+.iso-auth-oauth:hover:not(:disabled) {
+  border-color: rgba(12, 62, 72, .4);
+  background: #fffdf9;
+}
+
+.iso-auth-oauth:disabled { opacity: .6; cursor: default; }
+
+/* The one line on this page that says what signing in does and does not do.
+   It is not decoration: a provider button invites the assumption that access
+   follows from authentication, and here it does not. */
+.iso-auth-oauth-note {
+  margin-top: 10px;
+  color: var(--iso-text-muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.iso-auth-callback {
+  display: grid;
+  gap: 14px;
+  place-content: center;
+  min-height: 60vh;
+  padding: 40px 24px;
+  text-align: center;
+}

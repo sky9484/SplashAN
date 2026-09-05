@@ -1,3 +1,4 @@
+import { evaluateIdle } from '@/lib/auth/idle-timeout';
 import 'server-only';
 
 import { randomBytes } from 'crypto';
@@ -110,13 +111,32 @@ export function sessionForAccount(account: { email: string; name?: string }): Cu
   return sessionFromIdentity({ email });
 }
 
+/**
+ * The current session, or null.
+ *
+ * Enforces the fifteen-minute idle timeout on read. A session past it is
+ * treated as absent rather than refreshed: the point of an idle window is
+ * that an unattended browser stops being authenticated, and reading a
+ * session is exactly the moment to decide that.
+ *
+ * Re-stamping happens in setCustomerSessionCookie on the routes that write a
+ * response. A read alone does not extend the window, so a page that only
+ * polls cannot keep an abandoned session alive forever.
+ */
 export async function getCustomerSession(): Promise<CustomerSession | null> {
   const secret = resolveSecret();
   if (!secret) return null;
 
   const cookieStore = await cookies();
   const token = cookieStore.get(CUSTOMER_SESSION_COOKIE)?.value;
-  return readCustomerSessionToken(token, secret);
+  const session = readCustomerSessionToken(token, secret);
+  if (!session) return null;
+
+  const lastSeen = session.lastSeenAt ? Date.parse(session.lastSeenAt) : undefined;
+  const verdict = evaluateIdle(Number.isNaN(lastSeen as number) ? undefined : lastSeen);
+  if (verdict.state === 'expired') return null;
+
+  return session;
 }
 
 export async function requireCustomerSession(): Promise<
