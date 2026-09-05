@@ -1,7 +1,7 @@
-# Splash live demo run sheet
+# Splash product walkthrough
 
 Covers, in order: **1) Transfer · 2) Batch payout · 3) 0xWal · 4) Invoice loop · 5) Treasury.**
-Login: `splash@demo` / `splash@123`.
+Login: whatever `CUSTOMER_EMAIL` / `CUSTOMER_PASSWORD` are set to in your `.env.local`. In development, unset falls back to the values in `lib/auth/customer-session.ts`; production refuses to start without real ones.
 Branch: `w9/type-color-discipline` (the polished surfaces — PR #3).
 
 ---
