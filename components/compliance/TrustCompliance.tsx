@@ -6,26 +6,42 @@ import { FileLock2, Landmark, ShieldCheck, Vault } from 'lucide-react';
  * planned — never implied as held. The mandatory not-yet-licensed line is
  * rendered by this component so no page can crop it away.
  */
-const PARTNER_ROWS = [
+/**
+ * Roles, not names.
+ *
+ * This table used to name four counterparties — a payout partner, an FX
+ * venue, a custody provider and a custody option — as partners with roles
+ * of record. None of them is signed.
+ * unsigned counterparty on a public compliance page is the claim, whatever
+ * the "Relationship" column says beside it: a reader takes the row as
+ * evidence the arrangement exists, and the named firm finds a statement
+ * made on its behalf without its agreement.
+ *
+ * The argument this section makes — rent the licence, prove the corridor,
+ * then bring it in-house — does not need the names. It needs the shape of
+ * the arrangement, which is what these rows state. Each name goes into the
+ * row it belongs to on the day its agreement is signed, and not before.
+ */
+const ROLE_ROWS = [
   {
-    partner: 'Coins.ph',
-    role: 'Payout partner of record — BSP-licensed local disbursement in the Philippines',
-    status: 'Partner rail',
+    role: "Payout of record",
+    body: "A locally licensed disbursement partner holds the licence and the client relationship in the destination market. Splash instructs; the partner pays out.",
+    status: "Not yet signed",
   },
   {
-    partner: 'Hata Global',
-    role: 'Labuan-regulated liquidity and FX venue for USD legs',
-    status: 'Partner rail',
+    role: "Collection of record",
+    body: "A licensed provider holds incoming USD. This is the one role with a named provider anywhere on this page, because it is the one that is live.",
+    status: "Airwallex · live on the testnet corridor",
   },
   {
-    partner: 'BitGo',
-    role: '2-of-3 key governance for operating assets',
-    status: 'Custody governance',
+    role: "FX and liquidity",
+    body: "A regulated venue prices and fills the USD leg, sourced per corridor as volume justifies a dedicated agreement.",
+    status: "Not yet signed",
   },
   {
-    partner: 'CoKeeps / Gambit',
-    role: 'Client-asset custody options as corridor volume grows',
-    status: 'Custody options',
+    role: "Client-asset custody",
+    body: "Client funds sit with a licensed custodian, never with Splash. splash_core structurally cannot hold a value-bearing field, and CI enforces that on every push.",
+    status: "Not yet signed",
   },
 ];
 
@@ -39,7 +55,7 @@ const LICENSE_PATH = [
 const CONTROLS = [
   { label: 'Human approval', body: 'Every payment is prepared by 0xWal and released only by a human on the Action Queue — maker-checker, with dual approval above your threshold.' },
   { label: 'Corridor gating', body: 'Corridors arm and pause under explicit controls; settlement halts on a peg deviation or compliance flag before any value moves.' },
-  { label: 'Partner custody', body: 'Licensed partners are the system of record for client funds, with 2-of-3 key governance on Splash-side controls.' },
+  { label: "Partner custody", body: "Licensed partners are the system of record for client funds. Splash-side control is maker-checker — 0xWal prepares, a named human releases — and splash_core holds no client value, which is a property CI enforces rather than a key policy asserted in prose." },
 ];
 
 export default function TrustCompliance() {
@@ -58,22 +74,23 @@ export default function TrustCompliance() {
         <h2><Landmark aria-hidden="true" /> Rent the license, then own it</h2>
         <p>
           The honest sequence for a new corridor: run on partners who already hold the licenses,
-          prove volume and controls, then bring the licenses in-house. Who does what today:
+          prove volume and controls, then bring the licenses in-house. The roles that needs, and
+          where each stands today. A counterparty is named once its agreement is signed:
         </p>
         <div className="trust-table-wrap">
           <table className="trust-table">
             <thead>
               <tr>
-                <th>Partner</th>
-                <th>Role of record</th>
-                <th>Relationship</th>
+                <th>Role</th>
+                <th>What it means</th>
+                <th>Status</th>
               </tr>
             </thead>
             <tbody>
-              {PARTNER_ROWS.map((row) => (
-                <tr key={row.partner}>
-                  <th scope="row">{row.partner}</th>
-                  <td>{row.role}</td>
+              {ROLE_ROWS.map((row) => (
+                <tr key={row.role}>
+                  <th scope="row">{row.role}</th>
+                  <td>{row.body}</td>
                   <td><span className="trust-chip">{row.status}</span></td>
                 </tr>
               ))}

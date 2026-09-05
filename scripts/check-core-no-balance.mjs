@@ -2,7 +2,7 @@
 /**
  * THE CORE INVARIANT — splash_core cannot hold client funds.
  *
- * Splash operates under Labuan MFCA and is not licensed to hold client money.
+ * Splash is not licensed to hold client money, and holds none.
  * The weak way to honour that is a runtime gate: a `LicenceState` object and an
  * `assert_custody_permitted` in every custodial function. That works until
  * someone forgets the assert, and it forces an auditor to trace every call site
@@ -196,8 +196,8 @@ async function main() {
       console.error(`    holds ${v.type}`);
       console.error(`    -> ${v.why}\n`);
     }
-    console.error('  splash_core publishes to mainnet under the Labuan MFCA licence, which does');
-    console.error('  NOT permit holding client funds. Move this struct to move/splash_custody,');
+    console.error('  splash_core publishes to mainnet, and Splash holds no licence that would');
+    console.error('  permit holding client funds. Move this struct to move/splash_custody,');
     console.error('  which publishes only when the e-money licence is granted.\n');
     console.error('  Do not add an exception to this script. The check passing IS the');
     console.error('  regulatory claim.\n');

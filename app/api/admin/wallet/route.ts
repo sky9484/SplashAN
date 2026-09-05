@@ -1,3 +1,4 @@
+import { faucetUrl, suiVisionAccountUrl } from '@/lib/explorer';
 import { NextResponse } from 'next/server';
 
 import { getAdminSession } from '@/lib/server/admin-auth';
@@ -15,10 +16,7 @@ export async function GET() {
   try {
     const wallet = await getOperatorWalletInfo();
     const network = process.env.SUI_NETWORK ?? 'testnet';
-    const faucetUrl =
-      network === 'testnet'
-        ? `https://faucet.testnet.sui.io/?address=${wallet.address}`
-        : null;
+    const faucet = faucetUrl(wallet.address);
 
     return NextResponse.json({
       address: wallet.address,
@@ -26,8 +24,8 @@ export async function GET() {
       totalMist: wallet.totalMist,
       coinCount: wallet.coinCount,
       network,
-      faucetUrl,
-      suiVisionUrl: `https://${network}.suivision.xyz/account/${wallet.address}`,
+      faucetUrl: faucet,
+      suiVisionUrl: suiVisionAccountUrl(wallet.address),
     });
   } catch (error) {
     return NextResponse.json(

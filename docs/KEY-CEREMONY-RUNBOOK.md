@@ -12,32 +12,78 @@ attacker the ability to write attestations, not to move funds.
 
 ## 0 · What changed in the code (already committed)
 
-`AttestationCap` is a new capability in `business_account.move`, minted by `AdminCap`:
+**Phase 6 changed this ceremony.** There are now FOUR capabilities, not two,
+and the cold key is no longer `AdminCap`. Read this section before following
+any step below.
+
+| Cap | Holds what authority | Where it lives |
+|---|---|---|
+| `TreasuryCap` | The ONLY capability through which value leaves a custodial object — five functions, enforced by `scripts/check-treasury-cap.mjs` | Cold 2-of-3. Never online. |
+| `AdminCap` | Governance: KYB verify/revoke, compliance-side account freeze, per-account 24h ceilings, limit and allowlist changes, guardian minting, anchor-cap rotation, `compliance_config::create` and every relaxation | Governance multisig. Moves no value. |
+| `AnchorCap` | Non-financial attestations: peg pushes, audit anchors, receipts | Hot operator server. |
+| `ComplianceCap` | Tighten, pause, remove a venue. Subtractive by type — enforced by `scripts/check-compliance-subtractive.mjs` | Compliance custodian. |
+
+All three of `AdminCap`, `TreasuryCap` and `AnchorCap` are minted by
+`business_account::init` at publish, to the publisher. The ceremony is about
+moving them apart, not about creating them.
+
+**Phase 7 added break-glass.** `AnchorCap` and `ComplianceCap` carry a
+generation checked against the shared `CapRegistry` on every use, so a
+capability can be revoked:
+
+| Situation | Command | Effect |
+|---|---|---|
+| Routine handover, old cap in hand | `business_account::rotate_anchor_cap` | Custody moves. Generation carried, nothing revoked. |
+| Cap LOST | `business_account::break_glass_anchor_cap` | Generation bumps, one replacement minted. No old cap needed. |
+| Cap STOLEN | same | The thief's object stops working. They are not consulted. |
+| Compliance cap compromised | `compliance_config::break_glass_compliance_cap` | Same, for `ComplianceCap`. |
+
+Break-glass is immediate — no notice period. The reasoning is in
+`cap_registry`'s module comment; the short version is that the generation
+already makes a duplicate capability impossible, so a delay would protect
+nothing and would hand a thief a cancellation window.
+
+**Operational cost, and it is real**: the moment a break-glass lands, the
+operator server's cap is dead and anchoring fails until the new object id is
+deployed. Have `SPLASH_ANCHOR_CAP_ID` ready to update before you sign. Alert on
+`CapabilityRevoked` — it is the loudest event this package emits, and it means
+an operational capability was killed.
+
+`AdminCap` and `TreasuryCap` have NO generation and no break-glass. They are
+`store` capabilities held by multisig addresses, and `AdminCap` is the key that
+arms every break-glass above, so it cannot be the subject of one. Losing a
+quorum of those is what the ceremony below exists to make very unlikely.
+
+`AnchorCap` gates:
 
 | Function | Before | After |
 |---|---|---|
-| `peg_monitor::update_peg` | `&AdminCap` | **`&AttestationCap`** |
-| `audit_anchor::anchor_audit_hash` | `&AdminCap` | **`&AttestationCap`** |
-| `receipt_v2::create_receipt` | `&AdminCap` | **`&AttestationCap`** |
-| `smart_treasury::emit_rebalance` | `&AdminCap` | **`&AttestationCap`** |
+| `peg_monitor::update_peg` | `&AdminCap` | **`&AnchorCap`** |
+| `audit_anchor::anchor_audit_hash` | `&AdminCap` | **`&AnchorCap`** |
+| `receipt_v2::create_receipt` | `&AdminCap` | **`&AnchorCap`** |
+| `smart_treasury::emit_rebalance` | `&AdminCap` | **`&AnchorCap`** |
 
-Everything that moves value keeps `AdminCap` — all 14 of them: `verify_business`,
-`settlement::settle_batch` / `settle_sui_batch` / `withdraw_fees`,
-`smart_treasury::init_treasury` / `withdraw` / `allocate` / `redeem`,
-`dual_treasury::create_buffer` / `create_and_share_buffer` / `deposit` / `settle_usdt` /
-`emergency_sweep`, `compliance_config::create`. `peg_monitor::init_peg_state` stays on
-`AdminCap` as a one-time bootstrap.
+Everything through which value LEAVES a custodial object is `TreasuryCap`, and
+there are exactly five: `settlement::refund`, `settlement::withdraw_fees`,
+`smart_treasury::withdraw`, `dual_treasury::settle_usdt` and
+`dual_treasury::emergency_sweep`. Deposits stay on `AdminCap` — putting money in
+is not the risk. Everything else (pool and treasury creation, allowlists,
+floors, limit changes, pauses, guardian minting, `compliance_config::create`,
+`peg_monitor::init_peg_state`) is governance and stays on `AdminCap`, which can
+no longer split a balance at all.
 
-`AttestationCap` is deliberately **`key` only, no `store`** — it cannot be
+`AnchorCap` is deliberately **`key` only, no `store`** — it cannot be
 `public_transfer`red out of the module, so every custody change goes through
-`mint_attestation_cap` / `destroy_attestation_cap` and emits an event. `AdminCap` keeps
+`rotate_anchor_cap` / `destroy_anchor_cap` and emits an event. `AdminCap` keeps
 `store` precisely so it *can* be moved to a multisig address.
 
-**The app already tolerates both worlds.** `attestationCapObjectId()` in
-`lib/server/sui-settlement.ts` uses `SPLASH_ATTESTATION_CAP_ID` when set and falls back to
-`SPLASH_ADMIN_CAP_ID` when not. The argument position is identical in both ABIs, so the
-current immutable deployment keeps working until you publish — verified live: the full
-`scripts/e2e-testnet.mjs` run passes today against `0xec3b06…` with the fallback active.
+**The runtime fallback is gone (A-12).** `anchorCapObjectId()` in
+`lib/server/sui-settlement.ts` requires `SPLASH_ANCHOR_CAP_ID`; unset, the peg
+refresh is skipped with a warning rather than quietly borrowing the money key.
+The deployed immutable package predates all of this and cannot be migrated —
+Phase 6 is a breaking ABI change (`submit_application` takes a `&Clock`,
+`BusinessAccount` is shared, `mint_attestation_cap` is gone), so it needs a
+fresh publish and fresh object ids for everything below.
 
 ---
 
@@ -48,7 +94,7 @@ payouts.**
 
 `settlement::settle_sui_batch` pays recipients out of the shared `SettlementPool` and is
 therefore `AdminCap`-gated (correctly — otherwise any hot key could drain the pool). But
-the batch PTB *also* pushes a peg reading, which is now `AttestationCap`-gated. So that
+the batch PTB *also* pushes a peg reading, which is now `AnchorCap`-gated. So that
 one transaction needs **both** caps, and one of them is deliberately offline.
 
 Single transfers are unaffected: `settle_payment` takes no capability, so that path stays
@@ -104,7 +150,7 @@ sui client publish --gas-budget 500000000
 ```
 
 **Do NOT publish `splash_custody`.** It holds every `Balance<T>` in the system, and the
-Labuan MFCA licence does not permit holding client funds. Leaving it unpublished is the
+Splash holds no licence permitting it to hold client funds. Leaving it unpublished is the
 control: there is no flag to flip, because the bytecode does not exist on chain. It
 publishes when the e-money licence is granted — see `STATUS.md`.
 
@@ -156,12 +202,12 @@ Nothing carries over. Re-create and record ids for:
 `SmartTreasury` is only reachable with the OLD `AdminCap` against the OLD package —
 withdraw it *before* you retire that key.
 
-### 3.4 Mint the AttestationCap to the hot server
+### 3.4 Move the AnchorCap to the hot server
 ```bash
 sui client call --package <NEW_PACKAGE_ID> --module business_account \
-  --function mint_attestation_cap --args <OPERATOR_SERVER_ADDRESS> --gas-budget 20000000
+  --function rotate_anchor_cap --args <ADMIN_CAP_ID> <CURRENT_ANCHOR_CAP_ID> <OPERATOR_SERVER_ADDRESS> --gas-budget 20000000
 ```
-Record the `AttestationCapMinted` event's `attestation_cap_id`.
+Record the `AnchorCapRotated` event's `anchor_cap_id`.
 
 ### 3.5 Move AdminCap to the cold multisig — LAST
 Do this only after 3.3 and 3.4 succeed, because every bootstrap step above needs
@@ -177,7 +223,7 @@ production. An unrehearsed multisig is an untested backup.
 ```
 SPLASH_PACKAGE_ID=<new>
 SPLASH_ADMIN_CAP_ID=<new>            # now owned by the multisig
-SPLASH_ATTESTATION_CAP_ID=<from 3.4> # hot server
+SPLASH_ANCHOR_CAP_ID=<from 3.4> # hot server
 SPLASH_PEG_STATE_ID=<new>
 SPLASH_TREASURY_ID=<new SettlementPool<SUI>>
 SPLASH_SMART_TREASURY_SUI_ID=<new>
@@ -193,13 +239,13 @@ node --use-system-ca --env-file=.env.local scripts/e2e-testnet.mjs
 ```
 Expect peg refresh, payment intent, and composed confirm to pass with
 `IntentConfirmed + SettlementAnchored + TreasuryDeposited + AuditAnchored`. The peg and
-anchor calls now run on the AttestationCap — if they abort, the cap id is wrong.
+anchor calls now run on the AnchorCap — if they abort, the cap id is wrong.
 
 ---
 
 ## 4 · Residual risks (state them honestly)
 
-- **A stolen `AttestationCap` can forge attestations** — audit anchors, receipts, peg
+- **A stolen `AnchorCap` can forge attestations** — audit anchors, receipts, peg
   readings. It cannot move a coin. Containment is off-chain: reject anchors bearing the
   retired cap id. `destroy_attestation_cap` lets the *holder* burn it for rotation, but it
   cannot claw back a cap a thief holds.

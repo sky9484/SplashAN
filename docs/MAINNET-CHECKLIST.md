@@ -39,10 +39,10 @@ Order of work: W1 → W2 → (W3 ∥ W4) → W5 → W6 → W7 → W8; W10 alongs
 ## W3 — partner rails
 - [ ] Stripe `stripe-signature` + Airwallex HMAC verification; webhook_events
       inbox with unique constraint; async processing
-- [ ] Hata error taxonomy + tier routing tests (SC spot / Labuan / OTC)
-- [ ] Coins.ph adapter to PDAX parity; corridor failover router; status polling
+- [ ] FX venue error taxonomy + tier routing tests (SC spot / Labuan / OTC)
+- [ ] Second PH payout adapter to PDAX parity; corridor failover router; status polling
 - [ ] Credential separation: sandbox vs prod namespaces; mixed-mode boot refusal
-- [ ] K3 load test: 50-payout batch vs Coins.ph sandbox (needs API access — 0xSky)
+- [ ] K3 load test: 50-payout batch vs a payout-partner sandbox (needs API access)
 
 ## W4 — compliance rails (largest gap)
 - [ ] KYT pipeline behind provider interface + stub: screen at beneficiary
@@ -50,7 +50,7 @@ Order of work: W1 → W2 → (W3 ∥ W4) → W5 → W6 → W7 → W8; W10 alongs
       risk ≥ threshold → COMPLIANCE_HOLD lane; fail closed
 - [ ] KYB tier → server-enforced limits in lib/policy/evaluate.ts; middleware
       assertion on every money route
-- [ ] Sanctions name screening + travel-rule data package (PDAX/Coins.ph formats)
+- [ ] Sanctions name screening + travel-rule data package (per payout-partner format)
 - [ ] Append-only compliance artifacts, Walrus-anchored
 - [ ] Swap Elliptic into the interface when contract signs (0xSky procurement)
 
@@ -110,5 +110,5 @@ Order of work: W1 → W2 → (W3 ∥ W4) → W5 → W6 → W7 → W8; W10 alongs
 - [ ] Send OtterSec inquiry (calendar is the August risk)
 - [ ] Provision DO Postgres + DATABASE_URL
 - [ ] Elliptic contract status
-- [ ] Coins.ph sandbox access
+- [ ] Second PH payout partner: agreement signed, then sandbox access
 - [ ] Review/merge PR #3 (W9) and PR #4 (W1 PR-A)

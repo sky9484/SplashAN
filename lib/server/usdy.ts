@@ -1,3 +1,4 @@
+import { MICRO_DECIMALS, applyBps, applyRate, divideByRate, formatRate, type Rate } from '../money.ts';
 /**
  * Ondo USDY — the yield instrument behind Smart Treasury.
  *
@@ -160,8 +161,23 @@ export type SwapQuote = {
   /** Minimum acceptable output after the slippage guard. */
   minAmountOutMicro: string;
   slippageBps: number;
-  redemptionPriceUsd: number;
+  /** Exact decimal string. A price is not a float here. */
+  redemptionPriceUsd: string;
 };
+
+/**
+ * The NAV as a rate. priceMicros is USD per USDY at micro scale, which is a
+ * scaled integer already; this just names it so nothing divides it into a
+ * float on the way to a comparison.
+ */
+export function navRate(priceMicros: bigint): Rate {
+  return { scaled: priceMicros, scale: MICRO_DECIMALS };
+}
+
+/** The NAV as an exact decimal string, for display and JSON. */
+export function navPriceUsd(priceMicros: bigint): string {
+  return formatRate(navRate(priceMicros));
+}
 
 export function getSwapVenue(): SwapVenue {
   return process.env.USDY_SWAP_VENUE === 'aftermath' ? 'aftermath' : 'cetus';
@@ -186,19 +202,30 @@ export async function quoteSwap(
       `Cannot quote a ${direction} swap: USDY NAV is ${nav.status}. Refusing to price against a default.`,
     );
   }
-  const priceUsd = Number(nav.priceMicros) / 1_000_000;
-  // Convert across the peg using redemption price (USDC ≈ $1).
-  const grossOut =
+  // priceMicros is already an integer at micro scale — a rate, exactly. It
+  // used to be divided into a double and multiplied back out, so the min-out
+  // guard that exists to stop a sandwich was itself computed on rounding
+  // noise. Integer throughout now.
+  const rate = navRate(nav.priceMicros);
+
+  // USDC buys USDY at the redemption price, so one direction divides and the
+  // other multiplies. Round the gross DOWN either way: a quote that
+  // overstates the output would set a min-out the swap cannot meet.
+  const grossOutMicro =
     direction === 'usdc->usdy'
-      ? Number(amountInMicro) / priceUsd
-      : Number(amountInMicro) * priceUsd;
-  const minOut = BigInt(Math.floor(grossOut * (1 - slippageBps / 10_000)));
+      ? divideByRate(amountInMicro, rate, 'floor', MICRO_DECIMALS)
+      : applyRate(amountInMicro, rate, 'floor', MICRO_DECIMALS);
+
+  // gross × (1 − slippage). Floor again, so the guard is never looser than
+  // asked for.
+  const keptBps = 10_000 - Math.trunc(slippageBps);
+  const minOut = keptBps <= 0 ? 0n : applyBps(grossOutMicro, keptBps, 'floor');
   return {
     direction,
     venue: getSwapVenue(),
     amountInMicro: amountInMicro.toString(),
     minAmountOutMicro: minOut.toString(),
     slippageBps,
-    redemptionPriceUsd: priceUsd,
+    redemptionPriceUsd: formatRate(rate),
   };
 }

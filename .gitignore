@@ -69,3 +69,10 @@ next-env.d.ts
 
 # Machine-local skill symlinks (npx skills creates them per-machine)
 /.claude/skills/
+
+
+# Local scratch: dev-server logs and the design-exploration previews.
+# Neither belongs in the published tree.
+*.log
+.dev-*.log
+/public/_previews/

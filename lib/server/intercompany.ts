@@ -1,3 +1,4 @@
+import { MICRO_DECIMALS, formatMinor, parseMinor } from '../money.ts';
 // lib/server/intercompany.ts
 // Tracks intercompany USD transfers from Splash US → Splash Labuan
 // and Labuan settlement confirmations for audit trail.
@@ -79,34 +80,56 @@ export function listIntercompanyTransfers(): IntercompanyRecord[] {
  * Daily reconciliation: sum USD in, USDC settled.
  * Returns discrepancy if any.
  */
+/**
+ * Daily reconciliation: USD paid in against USDC settled out, and the gap
+ * between them.
+ *
+ * The gap is the point of the function — it should be fees and nothing else,
+ * so anything unexplained is a signal. Summing the legs as floats put float
+ * error into that signal: a hundred rows of "0.10" summed as doubles is
+ * 9.999999999999998, and a discrepancy of 2e-15 is indistinguishable from a
+ * real one-microunit break at a glance. Both legs are integer micro units
+ * now, so a non-zero discrepancy means something actually did not balance.
+ *
+ * Totals are returned as both minor units and formatted strings: the bigint
+ * is what a caller should compare or accumulate, the string is what it should
+ * display, and neither invites a float back in.
+ */
 export function getDailyReconciliation(dateStr?: string): {
   date: string;
-  totalUsdIn: number;
-  totalUsdcSettled: number;
+  totalUsdInMicro: bigint;
+  totalUsdcSettledMicro: bigint;
+  totalUsdIn: string;
+  totalUsdcSettled: string;
   transferCount: number;
-  discrepancy: number;
+  discrepancyMicro: bigint;
+  discrepancy: string;
 } {
   const targetDate = dateStr ?? new Date().toISOString().split('T')[0];
-  let totalUsd = 0;
-  let totalUsdc = 0;
+  let totalUsdMicro = 0n;
+  let totalUsdcMicro = 0n;
   let count = 0;
 
   for (const record of intercompanyStore.values()) {
     if (record.createdAt.startsWith(targetDate)) {
-      totalUsd += Number.parseFloat(record.amountUsd) || 0;
-      totalUsdc += Number.parseFloat(record.amountUsdc) || 0;
+      totalUsdMicro += parseMinor(record.amountUsd, MICRO_DECIMALS);
+      totalUsdcMicro += parseMinor(record.amountUsdc, MICRO_DECIMALS);
       count++;
     }
   }
 
-  // Discrepancy = USD out minus USDC in (should be near zero, difference is fees)
-  const discrepancy = Math.abs(totalUsd - totalUsdc);
+  // USD out minus USDC in. Near zero by design; the remainder is fees.
+  const delta = totalUsdMicro - totalUsdcMicro;
+  const discrepancyMicro = delta < 0n ? -delta : delta;
 
   return {
     date: targetDate,
-    totalUsdIn: totalUsd,
-    totalUsdcSettled: totalUsdc,
+    totalUsdInMicro: totalUsdMicro,
+    totalUsdcSettledMicro: totalUsdcMicro,
+    totalUsdIn: formatMinor(totalUsdMicro, MICRO_DECIMALS),
+    totalUsdcSettled: formatMinor(totalUsdcMicro, MICRO_DECIMALS),
     transferCount: count,
-    discrepancy,
+    discrepancyMicro,
+    discrepancy: formatMinor(discrepancyMicro, MICRO_DECIMALS),
   };
 }

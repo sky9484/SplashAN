@@ -2,7 +2,8 @@
 #
 # THE INVARIANT: no struct in this package holds a `Balance<T>`.
 #
-# Splash operates under Labuan MFCA and cannot hold client funds. That is not
+# Splash holds no licence permitting it to hold client funds, and does not
+# hold them. That is not
 # enforced here by a runtime flag or an assert someone could forget to call —
 # it is enforced by the ABSENCE of any field capable of accumulating value.
 # Client value exists only as a `Coin<T>` parameter that enters and leaves

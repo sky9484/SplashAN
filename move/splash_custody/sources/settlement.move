@@ -1,6 +1,6 @@
 module splash_custody::settlement;
 
-use splash_core::business_account::{Self, BusinessAccount, AdminCap};
+use splash_core::business_account::{Self, BusinessAccount, AdminCap, TreasuryCap};
 use splash_core::compliance_config::{Self, ComplianceConfig};
 use splash_core::peg_monitor::{Self, PegState};
 use splash_custody::liquidity_guard;
@@ -193,7 +193,7 @@ public fun deposit_for<T>(
 /// "refund" that could move unbounded value would be a hole shaped exactly like
 /// the one the meters exist to close.
 public fun refund<T>(
-    _cap: &AdminCap,
+    _treasury: &TreasuryCap,
     pool: &mut SettlementPool<T>,
     business_owner: address,
     amount: u64,
@@ -520,7 +520,7 @@ public fun payout_remaining_at<T>(pool: &SettlementPool<T>, now_ms: u64): u64 {
 ///   * A dedicated `fee_meter`, separate from the payout meter, so a sweep can
 ///     never consume payroll headroom and vice versa.
 public fun withdraw_fees<T>(
-    _admin: &AdminCap,
+    _treasury: &TreasuryCap,
     pool: &mut SettlementPool<T>,
     amount: u64,
     clock: &Clock,

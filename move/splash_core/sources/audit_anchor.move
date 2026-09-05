@@ -6,7 +6,7 @@
 /// against itself (M-02).
 ///
 /// Design:
-///   * Anchors are AttestationCap-gated. Off-chain indexers can trust that any
+///   * Anchors are AnchorCap-gated. Off-chain indexers can trust that any
 ///     `AuditAnchor` shared object in the package came from the protocol.
 ///   * Each anchor records the anchorer + business account it relates to
 ///     so tenant-level audit trails are filterable.
@@ -15,7 +15,8 @@
 ///     the verification leaves a trace (instead of being a no-op view).
 module splash_core::audit_anchor;
 
-use splash_core::business_account::AttestationCap;
+use splash_core::business_account::{Self, AnchorCap};
+use splash_core::cap_registry::CapRegistry;
 use splash_core::payment_intent::{Self, SettleReceipt};
 use std::string::String;
 use sui::clock::{Self, Clock};
@@ -88,12 +89,13 @@ public struct SettlementAnchored has copy, drop {
     anchorer: address,
 }
 
-/// Anchor an audit hash. AttestationCap-gated (M-01 fix; cap split S-10).
+/// Anchor an audit hash. AnchorCap-gated (M-01 fix; cap split S-10).
 ///
 /// Writing an anchor is a routine, non-financial attestation, so it runs on the
-/// hot operator key's `AttestationCap` rather than the cold-multisig `AdminCap`.
+/// hot operator key's `AnchorCap` rather than the cold-multisig `AdminCap`.
 public fun anchor_audit_hash(
-    _cap: &AttestationCap,
+    cap: &AnchorCap,
+    registry: &CapRegistry,
     audit_hash: String,
     anchor_id: String,
     backing_blob: String,
@@ -101,6 +103,9 @@ public fun anchor_audit_hash(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
+    // A revoked cap writes nothing. Without this the break-glass would be a
+    // notice, not a control.
+    business_account::assert_anchor_cap(registry, cap);
     // Length-check via byte access so we don't accidentally accept the
     // empty string as a "valid" hash.
     assert!(std::string::length(&audit_hash) > 0, E_EMPTY_HASH);

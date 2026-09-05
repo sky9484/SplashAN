@@ -1,4 +1,11 @@
-export type ClaimStatus = 'live' | 'testnet-verified' | 'modeled' | 'simulated';
+/**
+ * `not-licensed` exists because a regulatory position is not a model. The
+ * Labuan claim carried status 'modeled', which reads as a product surface
+ * that has been reasoned about rather than a fact about what a regulator has
+ * granted. A reader can falsify this one against the Labuan FSA register,
+ * which is what a status is for.
+ */
+export type ClaimStatus = 'live' | 'testnet-verified' | 'modeled' | 'simulated' | 'not-licensed';
 
 export type Claim = {
   claim: string;
@@ -23,9 +30,9 @@ export const claims = {
     status: 'modeled',
   },
   labuanApplication: {
-    claim: 'Labuan FSA licence application in progress.',
-    evidence: 'Compliance status tracked in operating settings and SECURITY.md truth pass.',
-    status: 'modeled',
+    claim: 'No licence held. A Labuan FSA money-broking application is in preparation with counsel.',
+    evidence: 'Not on the Labuan FSA register — verifiable there. Preparation tracked in operating settings; SECURITY.md records the truth pass.',
+    status: 'not-licensed',
   },
   sumsub: {
     claim: 'Sumsub KYB workflow is wired for business verification intake.',

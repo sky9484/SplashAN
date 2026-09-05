@@ -67,7 +67,13 @@ export function buildSubmitBusinessApplicationTx(input: Required<Pick<KybApplica
   tx.moveCall({
     // business_account is a splash_core module.
     target: `${cfg.corePackageId || cfg.packageId}::business_account::submit_application`,
-    arguments: [tx.pure.string(input.ssmNumber), tx.pure.string(input.kybCid)],
+    arguments: [
+      tx.pure.string(input.ssmNumber),
+      tx.pure.string(input.kybCid),
+      // Phase 6: the account carries a 24h payout window, whose first bucket
+      // is stamped at creation. `0x6` is the shared Clock.
+      tx.object('0x6'),
+    ],
   })
 
   return tx

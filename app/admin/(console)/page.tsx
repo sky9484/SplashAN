@@ -1,3 +1,4 @@
+import { faucetUrl, suiVisionAccountUrl } from '@/lib/explorer';
 import Link from 'next/link';
 import { headers } from 'next/headers';
 import { AlertTriangle, CheckCircle2, ClipboardCheck, Headphones, ShieldCheck, Wallet } from 'lucide-react';
@@ -89,7 +90,7 @@ export default async function AdminOverviewPage() {
               <h2 className="font-black text-[#1f4350]">Operator wallet</h2>
               <p className="text-xs text-[#326273]/60">This is the address the server&apos;s Sui CLI uses to pay for gas and fund settlements.</p>
             </div>
-            <span className={`ml-auto rounded-full px-3 py-1 text-xs font-bold ${wallet.totalMist < 100_000_000 ? 'bg-red-100 text-red-700' : wallet.totalMist < 1_000_000_000 ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
+            <span className={`ml-auto rounded-full px-3 py-1 text-xs font-bold ${BigInt(wallet.totalMist) < 100_000_000n ? 'bg-red-100 text-red-700' : BigInt(wallet.totalMist) < 1_000_000_000n ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
               {wallet.totalSui} SUI
             </span>
           </div>
@@ -98,16 +99,16 @@ export default async function AdminOverviewPage() {
           </div>
           <div className="mt-3 flex flex-wrap gap-3 text-xs">
             <a
-              href={`https://${process.env.SUI_NETWORK ?? 'testnet'}.suivision.xyz/account/${wallet.address}`}
+              href={suiVisionAccountUrl(wallet.address)}
               target="_blank"
               rel="noopener noreferrer"
               className="rounded-lg border border-[#5C9EAD]/40 px-3 py-1.5 font-semibold text-[#326273] hover:border-[#5C9EAD]"
             >
               View on Sui Explorer
             </a>
-            {(process.env.SUI_NETWORK ?? 'testnet') === 'testnet' && (
+            {faucetUrl(wallet.address) && (
               <a
-                href={`https://faucet.testnet.sui.io/?address=${wallet.address}`}
+                href={faucetUrl(wallet.address) as string}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="rounded-lg bg-[#5C9EAD] px-3 py-1.5 font-semibold text-white hover:bg-[#4A8B9A]"

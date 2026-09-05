@@ -1,4 +1,4 @@
-import { CheckCircle2, FlaskConical, Radio, Sigma } from 'lucide-react';
+import { CheckCircle2, FlaskConical, Radio, ShieldOff, Sigma } from 'lucide-react';
 
 import type { ClaimStatus } from '@/content/claims';
 
@@ -14,6 +14,7 @@ const labels: Record<ClaimStatus, string> = {
   'testnet-verified': 'testnet-verified',
   modeled: 'modeled',
   simulated: 'simulated',
+  'not-licensed': 'not licensed',
 };
 
 const icons = {
@@ -21,10 +22,12 @@ const icons = {
   'testnet-verified': CheckCircle2,
   modeled: Sigma,
   simulated: FlaskConical,
+  'not-licensed': ShieldOff,
 } satisfies Record<ClaimStatus, typeof Radio>;
 
 function stateClass(state: ClaimStatus) {
   if (state === 'testnet-verified') return styles.testnetVerified;
+  if (state === 'not-licensed') return styles.notLicensed;
   return styles[state];
 }
 

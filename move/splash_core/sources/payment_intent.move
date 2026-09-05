@@ -15,6 +15,7 @@
 ///   * Named abort codes registered in `lib/server/sui-settlement.ts`.
 module splash_core::payment_intent;
 
+use splash_core::business_account::{Self, BusinessAccount, PayoutApproval};
 use std::string::String;
 use std::type_name;
 use sui::clock::{Self, Clock};
@@ -39,6 +40,18 @@ const E_STILL_PENDING:         u64 = 412;
 const E_UNAUTHORIZED_RECEIPT_CONSUMER: u64 = 413;
 /// The coin type offered does not match the asset the intent was created for.
 const E_WRONG_SETTLEMENT_ASSET: u64 = 414;
+/// This intent is bound to a business account, so it settles only through
+/// `confirm_with_approval`. `confirm_payment_intent` would bypass the
+/// approver, the freeze flags and the 24h ceiling.
+const E_APPROVAL_REQUIRED: u64 = 415;
+/// `confirm_with_approval` on an intent that is not bound to any account.
+const E_NOT_ACCOUNT_BOUND: u64 = 416;
+/// The account passed is not the account the intent was opened against.
+const E_WRONG_BUSINESS_ACCOUNT: u64 = 417;
+/// The initiator is neither an owner nor an approver of the account.
+const E_NOT_A_MEMBER: u64 = 418;
+/// The account is frozen, or not KYB-verified.
+const E_ACCOUNT_NOT_PAYABLE: u64 = 419;
 
 /// The only module permitted to destroy a `SettleReceipt`. Bound by module name
 /// because Move forbids the circular import that naming the type would require —
@@ -57,6 +70,14 @@ const STATUS_CANCELED:  u8 = 3;
 
 public struct PaymentIntent has key {
     id: UID,
+    /// The business account this intent draws authority from, if any.
+    ///
+    /// `none` is a plain intent: one address paying another out of its own
+    /// coin, authorised by being the sender. `some` binds it to a tenant, and
+    /// then settlement REQUIRES an approval from that tenant's approver set —
+    /// `confirm_payment_intent` refuses a bound intent outright, so the
+    /// unapproved path is not a fallback, it is a different product.
+    account: Option<ID>,
     sender: address,
     recipient: address,
     /// Hash/reference of the verified counterparty record. Never raw PII.
@@ -148,6 +169,7 @@ public fun create_payment_intent<T>(
 
     let intent = PaymentIntent {
         id: object::new(ctx),
+        account: option::none(),
         sender,
         recipient,
         beneficiary_ref: vector[],
@@ -169,6 +191,73 @@ public fun create_payment_intent<T>(
     event::emit(IntentCreated {
         intent_id: object::uid_to_address(&intent.id),
         sender,
+        recipient,
+        amount_usd,
+        target_currency: intent.target_currency,
+        fx_rate_usd_local,
+        created_at: now,
+        expires_at,
+    });
+
+    transfer::share_object(intent);
+}
+
+/// Create an intent that draws its authority from a business account.
+///
+/// The initiator must be an owner or an approver of that account — a shared
+/// object anyone can name would otherwise let a stranger open intents in a
+/// tenant's name, and even though they could never be approved, the tenant's
+/// event stream would fill with payments they did not propose.
+///
+/// Verification and both freeze flags are checked HERE as well as at approval
+/// and at settlement. That is deliberate redundancy on the cheapest step: a
+/// frozen account should not accumulate a queue of intents waiting for the
+/// thaw.
+public fun create_payment_intent_for_account<T>(
+    account: &BusinessAccount,
+    recipient: address,
+    amount_usd: u64,
+    target_currency: String,
+    fx_rate_usd_local: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    let maker = tx_context::sender(ctx);
+    assert!(
+        business_account::is_owner(account, maker) || business_account::is_approver(account, maker),
+        E_NOT_A_MEMBER,
+    );
+    assert!(business_account::is_verified(account), E_ACCOUNT_NOT_PAYABLE);
+    assert!(!business_account::is_frozen(account), E_ACCOUNT_NOT_PAYABLE);
+    assert!(amount_usd > 0, E_INVALID_AMOUNT);
+    assert!(recipient != @0x0, E_INVALID_RECIPIENT);
+    assert!(std::string::length(&target_currency) > 0, E_EMPTY_TARGET_CURRENCY);
+    assert!(fx_rate_usd_local > 0, E_INVALID_FX_RATE);
+
+    let now = clock::timestamp_ms(clock);
+    let expires_at = now + EXPIRATION_WINDOW_MS;
+
+    let intent = PaymentIntent {
+        id: object::new(ctx),
+        account: option::some(object::id(account)),
+        sender: maker,
+        recipient,
+        beneficiary_ref: vector[],
+        amount_usd,
+        currency: type_name::with_defining_ids<T>().into_string().into_bytes(),
+        corridor: vector[],
+        target_currency,
+        settlement_asset: type_name::with_defining_ids<T>().into_string().to_string(),
+        fx_rate_usd_local,
+        created_at: now,
+        created_epoch: ctx.epoch(),
+        expires_at,
+        status: STATUS_PENDING,
+    };
+
+    event::emit(IntentCreated {
+        intent_id: object::uid_to_address(&intent.id),
+        sender: maker,
         recipient,
         amount_usd,
         target_currency: intent.target_currency,
@@ -208,6 +297,7 @@ public fun create<T>(
 
     let intent = PaymentIntent {
         id: object::new(ctx),
+        account: option::none(),
         sender,
         recipient,
         beneficiary_ref,
@@ -251,10 +341,94 @@ public fun share_intent(intent: PaymentIntent) {
     transfer::share_object(intent);
 }
 
-/// Confirm an intent and execute payment. Only the original sender can call
-/// (H-02 fix). Excess payment is split off and returned to the sender so the
-/// recipient receives exactly `intent.amount_usd` (H-03 fix).
+/// Confirm an UNBOUND intent — one address paying another out of its own coin.
+/// Only the original sender can call (H-02 fix). Excess payment is split off
+/// and returned to the sender so the recipient receives exactly
+/// `intent.amount_usd` (H-03 fix).
+///
+/// An intent bound to a business account is refused here. That refusal is what
+/// makes the Phase 6 authority real rather than advisory: without it, every
+/// approver check, freeze flag and daily ceiling would be one function call
+/// away from being skipped, and a control with a documented bypass is not a
+/// control.
 public fun confirm_payment_intent<T>(
+    intent: &mut PaymentIntent,
+    payment: Coin<T>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): SettleReceipt {
+    assert!(intent.account.is_none(), E_APPROVAL_REQUIRED);
+    settle(intent, payment, clock, ctx)
+}
+
+/// Approve a payout, as an approver of the account the intent is bound to.
+///
+/// Everything the approval binds to is read off the intent: its id, its
+/// amount, and the maker — so an approver cannot be handed a transaction that
+/// approves one invoice while naming another's number, and cannot mis-address
+/// the approval to someone who was not the intent's opener. The four-eyes
+/// check, the approver-set check, verification and the freeze flags are in
+/// `business_account::mint_approval`, which owns those sets.
+///
+/// The intent's own state is checked here, where it is visible: approving a
+/// cancelled or expired intent produces an approval that can never settle, and
+/// silently minting one is worse than refusing.
+public fun approve_payout(
+    intent: &PaymentIntent,
+    account: &BusinessAccount,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    assert!(intent.account.is_some(), E_NOT_ACCOUNT_BOUND);
+    assert!(*intent.account.borrow() == object::id(account), E_WRONG_BUSINESS_ACCOUNT);
+    assert!(intent.status == STATUS_PENDING, E_NOT_PENDING);
+    assert!(clock::timestamp_ms(clock) < intent.expires_at, E_EXPIRED);
+
+    business_account::mint_approval(
+        account,
+        object::id(intent),
+        intent.sender,
+        intent.amount_usd,
+        clock,
+        ctx,
+    );
+}
+
+/// Confirm an intent bound to a business account, releasing an approval.
+///
+/// The approval carries its own account, intent, amount and authority epoch,
+/// and `business_account::consume_approval` checks every one of them plus the
+/// freeze flags, KYB status and the 24h ceiling. This function's own job is
+/// narrow: prove the caller is the maker the intent was opened by, and prove
+/// the account passed is the account the intent named.
+public fun confirm_with_approval<T>(
+    intent: &mut PaymentIntent,
+    account: &mut BusinessAccount,
+    approval: PayoutApproval,
+    payment: Coin<T>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): SettleReceipt {
+    assert!(intent.account.is_some(), E_NOT_ACCOUNT_BOUND);
+    assert!(*intent.account.borrow() == object::id(account), E_WRONG_BUSINESS_ACCOUNT);
+    // The maker. Asserted here as well as in `settle`, because the approval is
+    // transferred to an address named by the APPROVER, and an approver naming
+    // the wrong address must not be able to hand release authority to someone
+    // the intent never authorised.
+    assert!(tx_context::sender(ctx) == intent.sender, E_UNAUTHORIZED);
+
+    business_account::consume_approval(
+        account,
+        approval,
+        object::id(intent),
+        intent.amount_usd,
+        clock,
+    );
+
+    settle(intent, payment, clock, ctx)
+}
+
+fun settle<T>(
     intent: &mut PaymentIntent,
     mut payment: Coin<T>,
     clock: &Clock,
@@ -329,6 +503,7 @@ public fun cancel(intent: PaymentIntent, ctx: &mut TxContext) {
 
     let PaymentIntent {
         id,
+        account: _,
         sender: _,
         recipient: _,
         beneficiary_ref: _,
@@ -394,6 +569,7 @@ public fun delete_finalized(intent: PaymentIntent) {
 
     let PaymentIntent {
         id,
+        account: _,
         sender: _,
         recipient: _,
         beneficiary_ref: _,
@@ -413,6 +589,8 @@ public fun delete_finalized(intent: PaymentIntent) {
 
 // ─── Views ─────────────────────────────────────────────────────────────────
 
+public fun account(intent: &PaymentIntent): Option<ID>      { intent.account }
+public fun is_account_bound(intent: &PaymentIntent): bool   { intent.account.is_some() }
 public fun sender(intent: &PaymentIntent): address          { intent.sender }
 public fun recipient(intent: &PaymentIntent): address       { intent.recipient }
 public fun amount_usd(intent: &PaymentIntent): u64          { intent.amount_usd }

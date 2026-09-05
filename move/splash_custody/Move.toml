@@ -1,7 +1,7 @@
 # splash_custody — publishes ONLY when the Labuan e-money licence is granted.
 #
 # Every struct that holds a `Balance<T>` lives here: `SettlementPool`,
-# `SmartTreasury`, `UsdtBuffer`. Under the Phase 0 MFCA licence this package is
+# `SmartTreasury`, `UsdtBuffer`. With no e-money licence held, this package is
 # NOT PUBLISHED, so these functions do not exist on chain — there is no flag to
 # flip and no assert to bypass, because there is no bytecode.
 #

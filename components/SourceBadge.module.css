@@ -35,3 +35,11 @@
   background: var(--pending-bg);
   color: var(--pending);
 }
+
+/* Not a pending state and not a failure: a standing fact about what is not
+   held. Given its own colour so it cannot be read as "in progress". */
+.notLicensed {
+  border-color: color-mix(in srgb, var(--foreground) 22%, transparent);
+  background: color-mix(in srgb, var(--foreground) 7%, transparent);
+  color: var(--foreground);
+}

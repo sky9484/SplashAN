@@ -13,7 +13,8 @@ export type ContractConfigField =
   | 'payoutDelegationId'
   | 'treasuryId'
   | 'adminCapId'
-  | 'attestationCapId'
+  | 'anchorCapId'
+  | 'capRegistryId'
   | 'pegStateId'
   | 'complianceConfigId'
   | 'complianceCapId'
@@ -42,7 +43,8 @@ const FIELD_TO_ENV: Record<ContractConfigField, string> = {
   payoutDelegationId: 'SPLASH_PAYOUT_DELEGATION_ID',
   treasuryId: 'SPLASH_TREASURY_ID',
   adminCapId: 'SPLASH_ADMIN_CAP_ID',
-  attestationCapId: 'SPLASH_ATTESTATION_CAP_ID',
+  anchorCapId: 'SPLASH_ANCHOR_CAP_ID',
+  capRegistryId: 'SPLASH_CAP_REGISTRY_ID',
   pegStateId: 'SPLASH_PEG_STATE_ID',
   complianceConfigId: 'SPLASH_COMPLIANCE_CONFIG_ID',
   complianceCapId: 'SPLASH_COMPLIANCE_CAP_ID',
@@ -148,7 +150,7 @@ const ID_FIELDS: ContractConfigField[] = [
   'payoutDelegationId',
   'treasuryId',
   'adminCapId',
-  'attestationCapId',
+  'anchorCapId',
   'pegStateId',
   'complianceConfigId',
   'complianceCapId',

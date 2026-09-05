@@ -195,5 +195,6 @@ function mockConversion(usdAmount: number): LabuanConversionResult {
 // than a code defect. Use `convertUsdToUsdc` / `getUsdToUsdcRate` /
 // `usdCentsToUsdcMicro`.
 //
-// `getHataQuote` and the Hata* type aliases are gone for the same reason: Hata is
-// not a party to the money path (see content/money-path.ts).
+// The quote helpers named after a specific FX venue are gone for the same
+// reason: that firm is not a party to the money path (see content/money-path.ts),
+// and naming it in an identifier is still naming it.

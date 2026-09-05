@@ -59,7 +59,7 @@ export default function ComplianceControlForm({ initial }: { initial: Compliance
                 className="min-w-0 flex-1 bg-transparent py-2.5 font-mono outline-none"
                 type="number"
                 min={1}
-                value={values[key] ?? ''}
+                value={values[key] === undefined || values[key] === null ? '' : String(values[key])}
                 onChange={(event) => {
                   const raw = event.target.value;
                   // Empty means "leave the on-chain value alone". Coercing it to

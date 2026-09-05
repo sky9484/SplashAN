@@ -1,3 +1,4 @@
+import { MICRO_DECIMALS, MIST_DECIMALS, formatMinor, parseMinor, sumMinor } from '../money.ts';
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { promisify } from 'node:util';
@@ -98,9 +99,9 @@ function parseCliGasCoins(stdout: string): OperatorGasCoin[] {
   if (jsonStart === -1) throw new Error(`'sui client gas --json' returned no JSON. stdout: ${stdout.substring(0, 200)}`);
   const coins = JSON.parse(stdout.slice(jsonStart)) as Array<{ gasCoinId: string; mistBalance: number | string }>;
   return coins
-    .map((coin) => ({ id: coin.gasCoinId, balance: Number(coin.mistBalance) }))
-    .filter((coin) => Number.isFinite(coin.balance) && coin.balance > 0)
-    .sort((a, b) => b.balance - a.balance);
+    .map((coin) => ({ id: coin.gasCoinId, balance: toMist(coin.mistBalance) }))
+    .filter((coin) => coin.balance > 0n)
+    .sort((a, b) => (b.balance > a.balance ? 1 : b.balance < a.balance ? -1 : 0));
 }
 
 async function getCliReadiness(): Promise<CliReadiness> {
@@ -196,16 +197,16 @@ function optionalConfigId(field: ContractConfigField): string {
 }
 
 /**
- * Object id for the AttestationCap-gated calls — audit anchors, receipts, and
+ * Object id for the AnchorCap-gated calls — audit anchors, receipts, and
  * peg updates.
  *
  * The capability split (spec §5) moves those three off the money-authority
- * `AdminCap` and onto a hot `AttestationCap`, so a stolen server key can write
+ * `AdminCap` and onto a hot `AnchorCap`, so a stolen server key can write
  * attestations but cannot move a coin. The package currently deployed on
  * testnet is IMMUTABLE and still expects an `AdminCap` in that argument
  * position, so:
  *
- *   - `SPLASH_ATTESTATION_CAP_ID` set   → post-republish, pass the new cap.
+ *   - `SPLASH_ANCHOR_CAP_ID` set   → post-republish, pass the new cap.
  *   - unset                             → pass the AdminCap id, exactly as
  *                                         today, so the live deployment keeps
  *                                         working until Sebastian republishes.
@@ -226,11 +227,11 @@ async function assertSettlementPoolFunded(
   poolId: string,
   rows: Array<{ amount?: string }>,
 ): Promise<void> {
-  const requiredMicro = rows.reduce(
-    (sum, row) => sum + moneyToMicro(Number.parseFloat(row.amount ?? '0')),
-    0,
-  );
-  if (requiredMicro <= 0) return;
+  // Each row is a decimal string. Parsing to a double and rounding to micro
+  // per row, then summing the doubles, is how a hundred-row batch ends up a
+  // unit short of the sum the ledger computed from the same rows.
+  const requiredMicro = sumMinor(rows.map((row) => parseMinor(row.amount ?? '0', MICRO_DECIMALS, 'half-up')));
+  if (requiredMicro <= 0n) return;
 
   let balance: bigint;
   try {
@@ -242,31 +243,44 @@ async function assertSettlementPoolFunded(
     return;
   }
 
-  if (balance < BigInt(requiredMicro)) {
+  if (balance < requiredMicro) {
     throw new Error(
-      `SettlementPool ${poolId.slice(0, 12)}… holds ${Number(balance) / 1e9} SUI but this batch needs ` +
-      `${requiredMicro / 1e9} SUI. Batch payouts are paid FROM the pool, not from the operator wallet — ` +
+      `SettlementPool ${poolId.slice(0, 12)}… holds ${formatMinor(balance, MIST_DECIMALS)} SUI but this batch needs ` +
+      `${formatMinor(requiredMicro, MIST_DECIMALS)} SUI. Batch payouts are paid FROM the pool, not from the operator wallet — ` +
       'fund it first: node --use-system-ca --env-file=.env.local scripts/fund-settlement-pool.mjs <SUI>',
     );
   }
 }
 
 /**
+ * The shared `CapRegistry` (Phase 7). Required by every call that USES a
+ * revocable capability.
+ *
+ * Deliberately throwing rather than optional: without it the PTB cannot be
+ * built at all, which is the correct failure. An "optional registry" would mean
+ * a code path where a revoked capability still works, and that path would be
+ * the one running in production the day someone needs the revocation.
+ */
+function capRegistryObjectId(): string {
+  return configIdOrThrow('capRegistryId', 'SPLASH_CAP_REGISTRY_ID');
+}
+
+/**
  * The attestation capability — and ONLY the attestation capability.
  *
  * A-12 fix. This used to fall back to `adminCapId`, which is why the S-10 cap
- * split was written but not in effect: with `SPLASH_ATTESTATION_CAP_ID` unset
+ * split was written but not in effect: with `SPLASH_ANCHOR_CAP_ID` unset
  * (as `.env.example` shipped it), every attestation silently re-armed the hot
  * server with the money authority. The fallback was convenient precisely
  * because it made the split invisible, which is what made it the bug.
  *
- * `AttestationCap` exists because `update_peg` fires roughly every 30 seconds —
+ * `AnchorCap` exists because `update_peg` fires roughly every 30 seconds —
  * ~2,880 signatures a day from an internet-facing host. Letting `AdminCap` serve
  * that role puts the key that can drain the pool on the machine that signs most
  * often. It now throws instead.
  */
-function attestationCapObjectId(): string {
-  return configIdOrThrow('attestationCapId', 'SPLASH_ATTESTATION_CAP_ID');
+function anchorCapObjectId(): string {
+  return configIdOrThrow('anchorCapId', 'SPLASH_ANCHOR_CAP_ID');
 }
 
 /**
@@ -311,6 +325,7 @@ const ABORT_CODES: Record<number, string> = {
   104: 'E_INVALID_RECIPIENT — settlement recipient is the zero address.',
   105: 'E_INVALID_AMOUNT — settlement amount or deposit coin value is zero.',
   106: 'E_NOT_ACCOUNT_OWNER — BusinessAccount object was transferred away from its recorded owner; verified status is not transferable (audit S-01).',
+  108: 'E_BATCH_TOO_LARGE — settle_batch exceeded MAX_BATCH_ROWS (256). Above roughly 1,023 rows Sui’s per-transaction event and command ceilings make the call unexecutable at any gas budget; 256 keeps it well inside them.',
   109: 'E_INSUFFICIENT_CREDIT — the tenant has not funded enough credit in the SettlementPool for this run. Credits are per-tenant (audit A-11): fund with settlement::deposit_for, not a bare deposit.',
   110: 'E_NOT_ACCOUNT_OWNER — grant_delegation must be signed by the BusinessAccount owner.',
   111: 'E_NOT_VERIFIED — cannot grant a payout delegation from an unverified BusinessAccount.',
@@ -329,7 +344,7 @@ const ABORT_CODES: Record<number, string> = {
   301: 'E_PEG_BROKEN_USDT — USDT deviation > 30 bps. Update peg with valid data.',
   302: 'E_PEG_STALE — Peg price update is older than 60 seconds OR no real update_peg has fired since init. The app refreshes it automatically; verify SPLASH_ADMIN_CAP_ID and SPLASH_PEG_STATE_ID if this appears.',
   303: 'E_TIMESTAMP_REGRESSION — peg_monitor::update_peg called with a Clock timestamp older than the stored one. Indicates a clock bug or replay.',
-  304: 'E_INSUFFICIENT_DEPTH — DeepBook cannot fill this settlement amount inside the configured depth window. Common causes, in order: (1) the batch total is BELOW the pool\'s minSize (SUI/DBUSDC testnet minSize = 1 SUI — anything smaller returns a zero quote); (2) the SettlementPool is underfunded (fund it with scripts/fund-settlement-pool.mjs); (3) the book genuinely lacks depth in the [mid*(1-slippage), mid] band. NOTE: the package deployed on testnet still carries the pre-S-11 guard, which requires a PERFECT fill (remaining_base == 0) — unsatisfiable on a lot-quantized book, so batch cannot settle live until the fixed contract is published.',
+  304: 'E_INSUFFICIENT_DEPTH — DeepBook cannot fill this settlement amount inside the configured depth window. Common causes, in order: (1) the batch total is BELOW the pool\’s minSize (SUI/DBUSDC testnet minSize = 1 SUI — anything smaller returns a zero quote); (2) the SettlementPool is underfunded (fund it with scripts/fund-settlement-pool.mjs); (3) the book genuinely lacks depth in the [mid*(1-slippage), mid] band. NOTE: the package deployed on testnet still carries the pre-S-11 guard, which requires a PERFECT fill (remaining_base == 0) — unsatisfiable on a lot-quantized book, so batch cannot settle live until the fixed contract is published.',
   305: 'E_SLIPPAGE_EXCEEDED — DeepBook amount-sized execution price exceeds the configured slippage limit.',
   306: 'E_INVALID_MARKET_PRICE — DeepBook returned an invalid zero mid-price.',
   // ── splash_meter (900-block) ─────────────────────────────────────────────
@@ -353,7 +368,8 @@ const ABORT_CODES: Record<number, string> = {
   352: 'E_SETTLEMENT_PAUSED — Settlement has been paused by the compliance operator.',
   353: 'E_POOL_NOT_ALLOWED — the DeepBook pool passed to the liquidity guard is not on ComplianceConfig.allowed_deepbook_pools (audit S-12). Add it with scripts/set-compliance-config.mjs --allow-pool <id>, and check DEEPBOOK_POOL_ID points at the venue you whitelisted.',
   354: 'E_TOO_MANY_POOLS — the DeepBook whitelist is already at compliance_config::max_allowed_pools(). Remove a venue before adding another.',
-  355: 'E_POOL_LIST_EMPTY — refused to leave the DeepBook whitelist empty (that would abort every settlement). Add the replacement venue first, then remove the old one; use set_paused for an intentional halt.',
+  355: 'E_POOL_LIST_EMPTY — refused to leave the DeepBook whitelist empty (that would abort every settlement). Add the replacement venue first, then remove the old one; use compliance_config::pause for an intentional halt.',
+  356: 'E_NOT_A_TIGHTENING — compliance_config::tighten was passed a value that loosens a control. ComplianceCap is subtractive by type; relaxations are AdminCap (admin_set_parameters) from the cold multisig.',
 
   // ── payment_intent ───────────────────────────────────────────────────────
   400: 'E_NOT_PENDING — payment_intent confirm/cancel called on an intent that is not in STATUS_PENDING.',
@@ -368,6 +384,7 @@ const ABORT_CODES: Record<number, string> = {
   409: 'E_EMPTY_BENEFICIARY_REF — payment_intent::create called without a verified counterparty reference hash.',
   410: 'E_EMPTY_CURRENCY — payment_intent::create called without a currency tag.',
   411: 'E_EMPTY_CORRIDOR — payment_intent::create called without a corridor tag.',
+  413: 'E_UNAUTHORIZED_RECEIPT_CONSUMER — a module other than audit_anchor tried to unpack a SettleReceipt. Only the anchoring path can construct the witness, which is what makes “every settlement is anchored” a type-system guarantee.',
   414: 'E_WRONG_SETTLEMENT_ASSET — the coin type offered does not match the asset the intent was opened in. The intent binds its settlement asset at creation; check SPLASH_SETTLEMENT_COIN_TYPE and how the payment coin is sourced.',
   412: 'E_STILL_PENDING — payment_intent::delete_finalized called on a pending intent; confirm or cancel it first.',
 
@@ -395,6 +412,48 @@ const ABORT_CODES: Record<number, string> = {
   704: 'E_RECIPIENT_NOT_ALLOWED — smart_treasury withdrawal destination is not on the treasury allowlist. Add it with allow_recipient (AdminCap).',
   705: 'E_REQUIRES_PAUSE — lowering the treasury operating floor requires the treasury to be paused first, so a floor reduction cannot be slipped between two normal withdrawals.',
   706: 'E_LAST_RECIPIENT — refused to empty the withdrawal allowlist; that bricks the treasury rather than securing it. Use the pause switch.',
+
+  // ── business_account (Phase 6 authority) ─────────────────────────────────
+  4: 'E_INVALID_HOLDER — business_account::rotate_anchor_cap called with holder = 0x0.',
+  5: 'E_NOT_VERIFIED_YET — revoke_verification called on an account that was never verified.',
+  20: 'E_NOT_AN_OWNER — the signer is not an owner of this business account. Membership is read from the account’s own `owners` set on every call; being a Splash admin does not substitute.',
+  21: 'E_NOT_AN_APPROVER — the signer is not in this account’s approver set. Owners are not approvers by default: separation of duties is set membership, not seniority.',
+  22: 'E_FROZEN — the account is stopped. Two independent flags: an owner freeze, which any owner can lift, and a compliance freeze, which only the AdminCap can. Membership cannot change while either is set.',
+  23: 'E_NOT_FROZEN — unfreeze called on an account that is not frozen by that authority. An owner cannot clear a compliance freeze by lifting their own.',
+  24: 'E_LAST_OWNER — refused to remove the only owner. An account with no owners has no path back except a recovery party, which is optional.',
+  25: 'E_ALREADY_A_MEMBER — that address is already an owner or approver, or a pending recovery has already been performed by the owners themselves.',
+  26: 'E_NOT_A_MEMBER — that address is not in the set you are removing it from.',
+  27: 'E_NOT_RECOVERY_PARTY — only the nominated recovery party can request, execute or cancel a recovery.',
+  28: 'E_INVALID_ADDRESS — an owner, approver, recovery party or maker was given as 0x0.',
+  29: 'E_SELF_APPROVAL — the approver is the maker. Four eyes is enforced on chain: whoever initiated a payment cannot release it.',
+  30: 'E_STALE_AUTHORITY — the approval was minted under an authority set that has since changed. Every membership change, freeze, recovery and KYB withdrawal bumps the account’s authority epoch, so a revoked approver’s approval is dead even though the object still exists — and re-granting the same address does not revive it. Ask for a fresh approval.',
+  31: 'E_WRONG_ACCOUNT — the approval belongs to a different business account than the one passed.',
+  32: 'E_APPROVAL_EXPIRED — the approval is past its fifteen-minute TTL.',
+  33: 'E_AMOUNT_MISMATCH — the approval’s amount does not match the intent’s, or an approval was requested for zero.',
+  34: 'E_TOO_MANY_MEMBERS — the owner or approver set is at its cap (16). An unbounded set is a gas cliff and an object-size risk.',
+  35: 'E_RECOVERY_IS_INSIDER — the recovery party cannot also be an owner or approver. A recovery party drawn from the same people is not a recovery path.',
+  36: 'E_NOT_VERIFIED — the business account is not KYB-verified, so no payout can be approved or released from it.',
+  37: 'E_NO_RECOVERY_PARTY — no recovery party has been nominated on this account.',
+  38: 'E_RECOVERY_PENDING — a recovery is already running. It cannot be replaced, and the nominee cannot be changed mid-notice.',
+  39: 'E_NO_PENDING_RECOVERY — there is no recovery to cancel or execute; an owner may already have cancelled it.',
+  40: 'E_RECOVERY_NOT_DUE — the 72-hour recovery notice has not elapsed. The delay is what makes it a defence rather than a countdown: any owner can cancel during it.',
+  41: 'E_WRONG_INTENT — the approval was minted for a different payment intent.',
+
+  415: 'E_APPROVAL_REQUIRED — this intent is bound to a business account, so it settles only through confirm_with_approval. confirm_payment_intent would bypass the approver, the freeze flags and the 24h ceiling.',
+  416: 'E_NOT_ACCOUNT_BOUND — confirm_with_approval or approve_payout called on an intent that is not bound to any business account.',
+  417: 'E_WRONG_BUSINESS_ACCOUNT — the account passed is not the account the intent was opened against.',
+  418: 'E_NOT_A_MEMBER — the signer is neither an owner nor an approver of the account, so cannot open an intent in its name.',
+  419: 'E_ACCOUNT_NOT_PAYABLE — the account is frozen or not KYB-verified.',
+
+  // ── cap_registry (break-glass revocation) ────────────────────────────────
+  210: 'E_STALE_GENERATION — the capability presented is from a superseded generation. It was revoked by a break-glass rotation and is permanently dead; a replacement was minted to whoever the rotation named. Check the CapabilityRevoked event and update the configured object id.',
+  211: 'E_UNKNOWN_KIND — cap_registry was asked about a capability kind it does not track. Only AnchorCap (0) and ComplianceCap (1) carry generations.',
+  212: 'E_INVALID_HOLDER — a break-glass rotation named 0x0 as the new holder, which would mint the replacement capability to nobody and leave the kind unusable.',
+
+  // ── daily_limit (per-account 24h ceiling) ────────────────────────────────
+  200: 'E_ZERO_AMOUNT — daily_limit::charge called with a zero payout.',
+  201: 'E_CAP_EXCEEDED — the payout would push this business account past its 24h ceiling, or the ceiling was lowered below what it has already spent inside the window. Read business_account::daily_remaining before retrying; the allowance returns as the window slides.',
+  202: 'E_INVALID_CAP — business_account::set_daily_cap called with zero. A zero ceiling is a brick, not a limit.',
 
   // ── receipt_v2 ───────────────────────────────────────────────────────────
   800: 'E_EMPTY_RECEIPT_ID — receipt_v2::create_receipt called with empty receipt_id.',
@@ -489,7 +548,7 @@ async function runSuiCommand(args: string[], maxBuffer = 1024 * 1024 * 10) {
   }
 }
 
-type OperatorGasCoin = { id: string; balance: number };
+type OperatorGasCoin = { id: string; balance: bigint };
 
 type SuiExecutionError = {
   message: string;
@@ -659,7 +718,9 @@ function corePackageIdOrThrow(): string {
 /**
  * Resolve the CUSTODY package, or explain why it does not exist.
  *
- * Under the Labuan MFCA licence Splash cannot hold client funds, so
+ * Splash cannot hold client funds — enforced structurally rather than by a
+ * licence condition, and a precondition for operating before an e-money
+ * licence exists. So
  * splash_custody — every struct that holds a `Balance<T>` — is NOT PUBLISHED.
  * This is not a feature flag: the bytecode is absent, so there is nothing to
  * flip and nothing to bypass. The error names the licence rather than reporting
@@ -774,7 +835,7 @@ export async function confirmComposedPaymentOnSui(input: {
 }): Promise<ComposedSettlementResult> {
   await requireSdkExecution();
   const packageId = corePackageIdOrThrow();
-  const attestationCapId = attestationCapObjectId();
+  const anchorCapId = anchorCapObjectId();
   const businessAccountId = configIdOrThrow('businessAccountId', 'SPLASH_BUSINESS_ACCOUNT_ID');
   const smartTreasuryId = configuredSmartTreasuryId();
   const paymentMist = Math.max(1, Math.floor(input.paymentMist));
@@ -836,7 +897,8 @@ export async function confirmComposedPaymentOnSui(input: {
   tx.moveCall({
     target: `${packageId}::audit_anchor::anchor_audit_hash`,
     arguments: [
-      tx.object(attestationCapId),
+      tx.object(anchorCapId),
+      tx.object(capRegistryObjectId()),
       tx.pure.string(input.auditHash),
       tx.pure.string(input.anchorId),
       tx.pure.string(input.backingBlobId),
@@ -900,14 +962,15 @@ export async function anchorAuditHashOnSui(input: {
 }) {
   await requireSdkExecution();
   const packageId = corePackageIdOrThrow();
-  const attestationCapId = attestationCapObjectId();
+  const anchorCapId = anchorCapObjectId();
   const businessAccountId = configIdOrThrow('businessAccountId', 'SPLASH_BUSINESS_ACCOUNT_ID');
   const tx = new Transaction();
   tx.setGasBudget(process.env.SUI_AUDIT_ANCHOR_GAS_BUDGET ?? '20000000');
   tx.moveCall({
     target: `${packageId}::audit_anchor::anchor_audit_hash`,
     arguments: [
-      tx.object(attestationCapId),
+      tx.object(anchorCapId),
+      tx.object(capRegistryObjectId()),
       tx.pure.string(input.auditHash),
       tx.pure.string(input.anchorId),
       tx.pure.string(input.backingBlobId),
@@ -970,7 +1033,7 @@ export async function refreshPegOnSui(input: { usdcPrice: number; usdtPrice: num
   await requireSdkExecution();
   const packageId = corePackageIdOrThrow();
   const pegStateId = configIdOrThrow('pegStateId', 'SPLASH_PEG_STATE_ID');
-  const attestationCapId = attestationCapObjectId();
+  const anchorCapId = anchorCapObjectId();
   const usdcDeviationPpm = Math.max(0, Math.round(Math.abs(input.usdcPrice - 1) * 1_000_000));
   const usdtDeviationPpm = Math.max(0, Math.round(Math.abs(input.usdtPrice - 1) * 1_000_000));
 
@@ -980,7 +1043,8 @@ export async function refreshPegOnSui(input: { usdcPrice: number; usdtPrice: num
     target: `${packageId}::peg_monitor::update_peg`,
     arguments: [
       tx.object(pegStateId),
-      tx.object(attestationCapId),
+      tx.object(anchorCapId),
+      tx.object(capRegistryObjectId()),
       tx.pure.u64(usdcDeviationPpm),
       tx.pure.u64(usdtDeviationPpm),
       tx.object('0x6'),
@@ -997,7 +1061,9 @@ export async function refreshPegOnSui(input: { usdcPrice: number; usdtPrice: num
 
 export async function getOperatorWalletInfo(): Promise<{
   address: string;
-  totalMist: number;
+  /** u64 MIST as a decimal string — beyond Number.MAX_SAFE_INTEGER above
+   *  ~9M SUI, and a wallet total is not worth rounding. */
+  totalMist: string;
   totalSui: string;
   coinCount: number;
 }> {
@@ -1005,11 +1071,11 @@ export async function getOperatorWalletInfo(): Promise<{
   if (signer) {
     const address = signer.toSuiAddress();
     const coins = await listSdkGasCoins(address);
-    const totalMist = coins.reduce((sum, coin) => sum + coin.balance, 0);
+    const totalMist = coins.reduce((sum, coin) => sum + coin.balance, 0n);
     return {
       address,
-      totalMist,
-      totalSui: (totalMist / 1_000_000_000).toFixed(6),
+      totalMist: totalMist.toString(),
+      totalSui: formatMinor(totalMist, MIST_DECIMALS),
       coinCount: coins.length,
     };
   }
@@ -1017,18 +1083,18 @@ export async function getOperatorWalletInfo(): Promise<{
   const cli = await getCliReadiness();
   if (cli.ready) {
     const coins = await listOperatorGasCoins();
-    const totalMist = coins.reduce((sum, coin) => sum + coin.balance, 0);
+    const totalMist = coins.reduce((sum, coin) => sum + coin.balance, 0n);
     return {
       address: cli.address,
-      totalMist,
-      totalSui: (totalMist / 1_000_000_000).toFixed(6),
+      totalMist: totalMist.toString(),
+      totalSui: formatMinor(totalMist, MIST_DECIMALS),
       coinCount: coins.length,
     };
   }
 
   return {
     address: configuredOperatorAddress() || '0x0000000000000000000000000000000000000000000000000000000000000000',
-    totalMist: 0,
+    totalMist: '0',
     totalSui: '0.000000',
     coinCount: 0,
   };
@@ -1047,13 +1113,13 @@ async function listSdkGasCoins(address: string): Promise<OperatorGasCoin[]> {
     const page = await suiClient.listCoins({ owner: address, cursor, coinType: '0x2::sui::SUI' });
     coins.push(
       ...page.objects
-        .map((coin) => ({ id: coin.objectId, balance: Number(coin.balance) }))
-        .filter((coin) => Number.isFinite(coin.balance) && coin.balance > 0),
+        .map((coin) => ({ id: coin.objectId, balance: toMist(coin.balance) }))
+        .filter((coin) => coin.balance > 0n),
     );
     cursor = page.hasNextPage ? page.cursor : null;
   } while (cursor);
 
-  return coins.sort((a, b) => b.balance - a.balance);
+  return coins.sort((a, b) => (b.balance > a.balance ? 1 : b.balance < a.balance ? -1 : 0));
 }
 
 /**
@@ -1068,8 +1134,8 @@ async function planGasCoin(neededMist: number): Promise<{ primaryId: string; mer
     throw new Error('Operator wallet has no SUI coins. Fund the operator address.');
   }
 
-  const total = coins.reduce((sum, coin) => sum + coin.balance, 0);
-  if (total < neededMist) {
+  const total = coins.reduce((sum, coin) => sum + coin.balance, 0n);
+  if (total < BigInt(neededMist)) {
     throw new Error(`Operator wallet has ${total} MIST but transfer needs ${neededMist} MIST (payment + gas). Top up the operator wallet.`);
   }
 
@@ -1092,10 +1158,15 @@ async function updatePegOnSui(): Promise<void> {
   const SPLASH_PEG_STATE_ID = optionalConfigId('pegStateId');
   // A-12: no adminCapId fallback. An unconfigured attestation cap must stop the
   // peg daemon, not silently promote the hot key to money authority.
-  const SPLASH_ATTESTATION_CAP_ID = optionalConfigId('attestationCapId');
+  const SPLASH_ANCHOR_CAP_ID = optionalConfigId('anchorCapId');
+  const SPLASH_CAP_REGISTRY_ID = optionalConfigId('capRegistryId');
 
-  if (!SPLASH_ATTESTATION_CAP_ID) {
-    console.warn('[Sui Peg Update] SPLASH_ATTESTATION_CAP_ID is not set — skipping auto peg refresh. Settlement may fail with E_PEG_STALE. Mint an AttestationCap (business_account::mint_attestation_cap) rather than pointing this at SPLASH_ADMIN_CAP_ID.');
+  if (!SPLASH_ANCHOR_CAP_ID) {
+    console.warn('[Sui Peg Update] SPLASH_ANCHOR_CAP_ID is not set — skipping auto peg refresh. Settlement may fail with E_PEG_STALE. Point it at the AnchorCap minted by the package publish (business_account::init), rotated with business_account::rotate_anchor_cap — never at SPLASH_ADMIN_CAP_ID.');
+    return;
+  }
+  if (!SPLASH_CAP_REGISTRY_ID) {
+    console.warn('[Sui Peg Update] SPLASH_CAP_REGISTRY_ID is not set — skipping auto peg refresh. Since Phase 7 the anchor cap is checked against the shared CapRegistry on every use, so the call cannot be built without it. This is the correct failure: a code path that pushed a peg reading WITHOUT the revocation check is a path where a revoked capability still works.');
     return;
   }
   if (!SPLASH_PACKAGE_ID || !SPLASH_PEG_STATE_ID) {
@@ -1124,7 +1195,7 @@ async function updatePegOnSui(): Promise<void> {
     '--package', SPLASH_PACKAGE_ID,
     '--module', 'peg_monitor',
     '--function', 'update_peg',
-    '--args', SPLASH_PEG_STATE_ID, SPLASH_ATTESTATION_CAP_ID, usdcDeviationPpm, usdtDeviationPpm, '0x6',
+    '--args', SPLASH_PEG_STATE_ID, SPLASH_ANCHOR_CAP_ID, SPLASH_CAP_REGISTRY_ID, usdcDeviationPpm, usdtDeviationPpm, '0x6',
     '--gas-budget', process.env.SUI_PEG_UPDATE_GAS_BUDGET ?? '10000000',
     '--json',
   ], 1024 * 1024 * 5);
@@ -1160,8 +1231,22 @@ type SuiCliCallOutput = {
   };
 };
 
-function moneyToMicro(value: number) {
-  return Math.max(0, Math.round(value * 1_000_000));
+/**
+ * A SUI/MIST quantity from an unknown source. The SDK returns balances as
+ * strings; the CLI returns them as either. Both are integers already, so
+ * this only widens them — it never parses a decimal.
+ */
+function toMist(value: string | number | bigint): bigint {
+  if (typeof value === 'bigint') return value;
+  if (typeof value === 'number') {
+    if (!Number.isSafeInteger(value)) return 0n;
+    return BigInt(value);
+  }
+  try {
+    return BigInt(value.trim());
+  } catch {
+    return 0n;
+  }
 }
 
 function requireSuiAddress(value: string, label: string) {
@@ -1222,7 +1307,8 @@ export async function recordSingleTransferOnSui(input: {
   // Peg refresh is bundled into the same PTB below — no separate tx, no staleness race.
   // settle_payment takes no capability, so the only cap this PTB needs is the
   // attestation cap for the peg push — this path stays fully hot after the split.
-  const SPLASH_ATTESTATION_CAP_ID = attestationCapObjectId();
+  const SPLASH_ANCHOR_CAP_ID = anchorCapObjectId();
+  const SPLASH_CAP_REGISTRY_ID = capRegistryObjectId();
   // MEASURED, never a constant. Writing a hardcoded 0 here and reading it back
   // via assert_pegged one command later is what made the peg breaker inert.
   const pegAttestation = await resolvePegAttestation();
@@ -1246,7 +1332,8 @@ export async function recordSingleTransferOnSui(input: {
         target: `${SPLASH_PACKAGE_ID}::peg_monitor::update_peg`,
         arguments: [
           tx.object(SPLASH_PEG_STATE_ID),
-          tx.object(SPLASH_ATTESTATION_CAP_ID),
+          tx.object(SPLASH_ANCHOR_CAP_ID),
+          tx.object(SPLASH_CAP_REGISTRY_ID),
           tx.pure.u64(usdcDeviationPpm),
           tx.pure.u64(usdtDeviationPpm),
           tx.object('0x6'),
@@ -1298,7 +1385,8 @@ export async function recordSingleTransferOnSui(input: {
       '--move-call',
       `${SPLASH_PACKAGE_ID}::peg_monitor::update_peg`,
       `@${SPLASH_PEG_STATE_ID}`,
-      `@${SPLASH_ATTESTATION_CAP_ID}`,
+      `@${SPLASH_ANCHOR_CAP_ID}`,
+      `@${SPLASH_CAP_REGISTRY_ID}`,
       usdcDeviationPpm,
       usdtDeviationPpm,
       '@0x6',
@@ -1393,7 +1481,9 @@ export async function recordBatchSettlementOnSui(input: {
   const SPLASH_CUSTODY_PACKAGE_ID = custodyPackageIdOrThrow();
   const SPLASH_TREASURY_ID = configIdOrThrow('treasuryId', 'SPLASH_TREASURY_ID');
   const SPLASH_PEG_STATE_ID = configIdOrThrow('pegStateId', 'SPLASH_PEG_STATE_ID');
-  const SPLASH_BUSINESS_ACCOUNT_ID = configIdOrThrow('businessAccountId', 'SPLASH_BUSINESS_ACCOUNT_ID');
+  // Called for its side effect, not its value: it throws a named error if the
+  // id is unconfigured, which is the whole point of the pre-flight above.
+  configIdOrThrow('businessAccountId', 'SPLASH_BUSINESS_ACCOUNT_ID');
   // 2026-07-19 package (0xec3b06…): settle_sui_batch pays recipients from the
   // SUI SettlementPool but now ALSO requires the ComplianceConfig object, a
   // DeepBook Pool<SUI, QuoteAsset> reference for the liquidity guard, and the
@@ -1416,7 +1506,8 @@ export async function recordBatchSettlementOnSui(input: {
   // driven by the hot server alone. Resolving that (a bounded, hot
   // `SettlementCap` with per-batch limits) is an explicit follow-up decision —
   // see docs/KEY-CEREMONY-RUNBOOK.md. Single transfers are unaffected.
-  const SPLASH_ATTESTATION_CAP_ID = attestationCapObjectId();
+  const SPLASH_ANCHOR_CAP_ID = anchorCapObjectId();
+  const SPLASH_CAP_REGISTRY_ID = capRegistryObjectId();
   // The batch no longer takes an AdminCap. It takes a delegation the TENANT
   // granted, which the operator owns and can therefore name as an input.
   const SPLASH_PAYOUT_DELEGATION_ID = configIdOrThrow('payoutDelegationId', 'SPLASH_PAYOUT_DELEGATION_ID');
@@ -1443,7 +1534,7 @@ export async function recordBatchSettlementOnSui(input: {
   await assertSettlementPoolFunded(SPLASH_TREASURY_ID, input.rows);
 
   const paymentObjects = input.rows.map((row) => {
-    const amount = moneyToMicro(Number.parseFloat(row.amount ?? '0'));
+    const amount = parseMinor(row.amount ?? '0', MICRO_DECIMALS, 'half-up');
     const recipient = requireSuiAddress(resolvePayoutRecipient(row.address, `Batch recipient ${row.name ?? row.address ?? ''}`.trim()), `Batch recipient ${row.name ?? row.address ?? ''}`.trim());
     return { recipient, amount };
   });
@@ -1460,7 +1551,8 @@ export async function recordBatchSettlementOnSui(input: {
         target: `${SPLASH_PACKAGE_ID}::peg_monitor::update_peg`,
         arguments: [
           tx.object(SPLASH_PEG_STATE_ID),
-          tx.object(SPLASH_ATTESTATION_CAP_ID),
+          tx.object(SPLASH_ANCHOR_CAP_ID),
+          tx.object(SPLASH_CAP_REGISTRY_ID),
           tx.pure.u64(usdcDeviationPpm),
           tx.pure.u64(usdtDeviationPpm),
           tx.object('0x6'),
@@ -1513,7 +1605,8 @@ export async function recordBatchSettlementOnSui(input: {
       '--move-call',
       `${SPLASH_PACKAGE_ID}::peg_monitor::update_peg`,
       `@${SPLASH_PEG_STATE_ID}`,
-      `@${SPLASH_ATTESTATION_CAP_ID}`,
+      `@${SPLASH_ANCHOR_CAP_ID}`,
+      `@${SPLASH_CAP_REGISTRY_ID}`,
       usdcDeviationPpm,
       usdtDeviationPpm,
       '@0x6',
@@ -1604,7 +1697,7 @@ export type ComplianceControls = {
   minDepthBaseUnits: number;
   /// Gross settlement floor in the settled coin's minor units. `null` when the
   /// deployed package predates it (see the ABI straddle below).
-  minSettlementAmount: number | null;
+  minSettlementAmount: bigint | null;
   /// DeepBook venues the on-chain liquidity guard will accept (audit S-12).
   /// Empty array means the deployed package predates the whitelist — NOT that
   /// every pool is allowed.
@@ -1641,8 +1734,10 @@ export async function readComplianceControls(): Promise<ComplianceControls> {
       maxStalenessMs: Number(fields.max_staleness_ms),
       maxSlippageBps: Number(fields.max_slippage_bps),
       minDepthBaseUnits: Number(fields.min_depth_base_units),
+      // A settlement floor is an amount, so it is read as one. The other
+      // fields here are bounds and durations, which are counts.
       minSettlementAmount:
-        fields.min_settlement_amount === undefined ? null : Number(fields.min_settlement_amount),
+        fields.min_settlement_amount === undefined ? null : BigInt(String(fields.min_settlement_amount)),
       allowedDeepbookPools: whitelist ?? [],
       poolWhitelistEnforced: whitelist !== null,
       paused: fields.paused === true || fields.paused === 'true',
@@ -1700,7 +1795,15 @@ export async function assertDeepbookPoolWhitelisted(): Promise<void> {
 }
 
 export async function updateComplianceControls(
-  input: Omit<ComplianceControls, 'configured' | 'allowedDeepbookPools' | 'poolWhitelistEnforced'>,
+  input: {
+    maxDeviationPpm: number;
+    maxStalenessMs: number;
+    maxSlippageBps: number;
+    minDepthBaseUnits: number;
+    /** A settlement floor in base units. Bounded by the API schema. */
+    minSettlementAmount: number | null;
+    paused: boolean;
+  },
 ) {
   const packageId = corePackageIdOrThrow();
   const configId = configIdOrThrow('complianceConfigId', 'SPLASH_COMPLIANCE_CONFIG_ID');
@@ -1713,27 +1816,76 @@ export async function updateComplianceControls(
   // an arity mismatch is a hard MoveCall failure, not a graceful degrade.
   const onChain = await readComplianceControls();
   const supportsMinSettlement = onChain.minSettlementAmount !== null;
-  const minSettlement = input.minSettlementAmount ?? onChain.minSettlementAmount;
-  if (supportsMinSettlement && !(typeof minSettlement === 'number' && minSettlement > 0)) {
+  const minSettlement =
+    input.minSettlementAmount !== undefined && input.minSettlementAmount !== null
+      ? BigInt(input.minSettlementAmount)
+      : onChain.minSettlementAmount;
+  if (supportsMinSettlement && !(minSettlement !== null && minSettlement > 0n)) {
     throw new Error('minSettlementAmount must be greater than zero — a zero floor disables the minimum on chain.');
+  }
+
+  // Phase 6: ComplianceCap is subtractive BY TYPE. `tighten` aborts on any
+  // argument that loosens a control, and there is no ComplianceCap unpause at
+  // all — both directions of loosening are AdminCap, which lives on the cold
+  // multisig and which this server does not hold.
+  //
+  // So refuse here, with the exact command, rather than building a PTB that
+  // aborts on chain. A 356 in a wallet is a worse explanation than a sentence.
+  const loosenings: string[] = [];
+  if (input.maxDeviationPpm > onChain.maxDeviationPpm) {
+    loosenings.push(`maxDeviationPpm ${onChain.maxDeviationPpm} -> ${input.maxDeviationPpm} (tolerating more peg drift)`);
+  }
+  if (input.maxStalenessMs > onChain.maxStalenessMs) {
+    loosenings.push(`maxStalenessMs ${onChain.maxStalenessMs} -> ${input.maxStalenessMs} (tolerating older readings)`);
+  }
+  if (input.maxSlippageBps > onChain.maxSlippageBps) {
+    loosenings.push(`maxSlippageBps ${onChain.maxSlippageBps} -> ${input.maxSlippageBps} (tolerating more slippage)`);
+  }
+  if (input.minDepthBaseUnits < onChain.minDepthBaseUnits) {
+    loosenings.push(`minDepthBaseUnits ${onChain.minDepthBaseUnits} -> ${input.minDepthBaseUnits} (requiring less depth)`);
+  }
+  if (supportsMinSettlement && minSettlement !== null && onChain.minSettlementAmount !== null && minSettlement < onChain.minSettlementAmount) {
+    loosenings.push(`minSettlementAmount ${onChain.minSettlementAmount} -> ${minSettlement} (letting smaller settlements through)`);
+  }
+  if (onChain.paused && !input.paused) {
+    loosenings.push('resuming settlement');
+  }
+
+  if (loosenings.length > 0) {
+    throw new Error(
+      'The compliance capability can only make controls stricter. This change loosens: ' +
+        `${loosenings.join('; ')}. Loosening is AdminCap — run it from the cold multisig:
+` +
+        `  sui client call --package ${packageId} --module compliance_config ` +
+        `--function admin_set_parameters --args <ADMIN_CAP_ID> ${configId} ` +
+        `${input.maxDeviationPpm} ${input.maxStalenessMs} ${input.maxSlippageBps} ${input.minDepthBaseUnits}` +
+        `${supportsMinSettlement && minSettlement !== null ? ` ${minSettlement}` : ''}` +
+        (onChain.paused && !input.paused
+          ? `
+  sui client call --package ${packageId} --module compliance_config --function admin_set_paused --args <ADMIN_CAP_ID> ${configId} false`
+          : ''),
+    );
   }
 
   const tx = new Transaction();
   tx.moveCall({
-    target: `${packageId}::compliance_config::update`,
+    target: `${packageId}::compliance_config::tighten`,
     arguments: [
       tx.object(configId),
       tx.object(capId),
+      tx.object(capRegistryObjectId()),
       tx.pure.u64(input.maxDeviationPpm),
       tx.pure.u64(input.maxStalenessMs),
       tx.pure.u64(input.maxSlippageBps),
       tx.pure.u64(input.minDepthBaseUnits),
-      ...(supportsMinSettlement ? [tx.pure.u64(minSettlement as number)] : []),
+      ...(supportsMinSettlement && minSettlement !== null ? [tx.pure.u64(minSettlement)] : []),
     ],
   });
-  tx.moveCall({
-    target: `${packageId}::compliance_config::set_paused`,
-    arguments: [tx.object(configId), tx.object(capId), tx.pure.bool(input.paused)],
-  });
+  if (input.paused && !onChain.paused) {
+    tx.moveCall({
+      target: `${packageId}::compliance_config::pause`,
+      arguments: [tx.object(configId), tx.object(capId), tx.object(capRegistryObjectId())],
+    });
+  }
   return executeSdkTransaction(tx);
 }

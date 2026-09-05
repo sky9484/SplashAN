@@ -29,6 +29,16 @@ export type CustomerSession = {
   orgId?: string;
   issuedAt: string;
   expiresAt: string;
+  /**
+   * Server-stamped last activity, for the fifteen-minute idle timeout.
+   *
+   * Written by the server and covered by the cookie HMAC, so a client cannot
+   * extend its own session by editing it: the value it sends back is the one
+   * the server last signed. Optional because sessions minted before idle
+   * tracking existed have none, and those are stamped on first use rather
+   * than logged out en masse by a deploy.
+   */
+  lastSeenAt?: string;
 };
 
 export function isCustomerWorkspaceRole(value: unknown): value is CustomerWorkspaceRole {
@@ -42,9 +52,10 @@ type CustomerTokenPayload = CustomerSession & {
 };
 
 export const CUSTOMER_SESSION_COOKIE = 'splash_customer_session';
-export const FALLBACK_CUSTOMER_EMAIL = 'splash@demo';
-export const FALLBACK_CUSTOMER_PASSWORD = 'splash@123';
-export const FALLBACK_CUSTOMER_ORGANIZATION = 'Splash Demo Ltd';
+/* FALLBACK_CUSTOMER_EMAIL and FALLBACK_CUSTOMER_PASSWORD are gone. They were
+   a working login for anyone with the source, guarded only by a NODE_ENV
+   check; accounts live in the database now. */
+export const FALLBACK_CUSTOMER_ORGANIZATION = 'Splash Workspace';
 
 export function timingSafeStrEqual(a: string, b: string): boolean {
   const aBuffer = Buffer.from(a);
@@ -80,6 +91,7 @@ export function createCustomerSessionFromIdentity(input: {
   userRole?: CustomerWorkspaceRole;
   suiAddress?: string;
   orgId?: string;
+  lastSeenAt?: Date;
 }): CustomerSession {
   const now = input.now ?? new Date();
   const expiresAt = new Date(now.getTime() + (input.ttlSeconds ?? 60 * 60 * 12) * 1000);
@@ -94,6 +106,7 @@ export function createCustomerSessionFromIdentity(input: {
     ...(input.userRole ? { userRole: input.userRole } : {}),
     ...(input.suiAddress ? { suiAddress: input.suiAddress } : {}),
     ...(input.orgId ? { orgId: input.orgId } : {}),
+    lastSeenAt: (input.lastSeenAt ?? now).toISOString(),
     issuedAt: now.toISOString(),
     expiresAt: expiresAt.toISOString(),
   };

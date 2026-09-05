@@ -1,7 +1,7 @@
 'use client';
 
 import Papa from 'papaparse';
-import * as XLSX from 'xlsx';
+import readXlsxFile, { type Row as SheetRow } from 'read-excel-file/universal';
 
 /** A normalized batch row in the shape the batch desk (`/dashboard/batch`)
  *  already understands. Parsing happens entirely in the browser — recipient
@@ -79,6 +79,30 @@ function toParsedBatch(fileName: string, records: Array<Record<string, unknown>>
   return { fileName, rows, corridor };
 }
 
+/** First row is the header; every later row becomes one record keyed by
+ *  it. Empty cells are "" rather than absent so every alias lookup finds a
+ *  key, and a Date lands as YYYY-MM-DD — downstream stringifies every value,
+ *  and the default Date string is neither sortable nor what a spreadsheet
+ *  showed. Rows with no header above a cell are trimmed to the header
+ *  width; rows that are entirely empty are dropped, as papaparse does for
+ *  CSV via skipEmptyLines. */
+function sheetToRecords(rows: SheetRow[]): Record<string, unknown>[] {
+  const [header = [], ...body] = rows;
+  const keys = header.map((h) => (h == null ? '' : String(h)).trim());
+  const records: Record<string, unknown>[] = [];
+  for (const row of body) {
+    if (row.every((cell) => cell == null || String(cell).trim() === '')) continue;
+    const record: Record<string, unknown> = {};
+    keys.forEach((key, i) => {
+      if (!key) return;
+      const cell = row[i];
+      record[key] = cell == null ? '' : cell instanceof Date ? cell.toISOString().slice(0, 10) : cell;
+    });
+    records.push(record);
+  }
+  return records;
+}
+
 export async function parseBatchFile(file: File): Promise<ParsedBatch> {
   const ext = file.name.split('.').pop()?.toLowerCase();
 
@@ -93,15 +117,17 @@ export async function parseBatchFile(file: File): Promise<ParsedBatch> {
     });
   }
 
-  if (ext === 'xlsx' || ext === 'xls') {
-    const buffer = await file.arrayBuffer();
-    const workbook = XLSX.read(buffer, { type: 'array' });
-    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-    const records = XLSX.utils.sheet_to_json<Record<string, unknown>>(firstSheet, { defval: '' });
-    return toParsedBatch(file.name, records);
+  if (ext === 'xlsx') {
+    // read-excel-file/universal: pure-JS unzip and XML, takes a Blob or an
+    // ArrayBuffer, no DOMParser, no Node built-ins — so the same code path
+    // runs in the browser and under `node --test`. It reads .xlsx only; the
+    // legacy BIFF .xls format went with SheetJS, which was the one library
+    // that could read it and the one that installed from a vendor CDN.
+    const [first] = await readXlsxFile(await file.arrayBuffer());
+    return toParsedBatch(file.name, sheetToRecords(first?.data ?? []));
   }
 
-  throw new Error('Unsupported file type. Upload a .csv, .xlsx, or .xls batch file.');
+  throw new Error('Unsupported file type. Upload a .csv or .xlsx batch file.');
 }
 
 const DRAFT_KEY = 'splash.batchDraft';
