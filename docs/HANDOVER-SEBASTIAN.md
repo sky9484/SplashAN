@@ -286,7 +286,7 @@ the day you need the revocation.
 ── State of the tree ──
 
 Phases 0 through 7 are complete. 107 Move tests (68 / 23 / 16), 304 Node tests
-across eleven suites, six CI guards, `tsc` clean, production build clean, and
+across eleven suites, five Move-invariant CI guards, `tsc` clean, production build clean, and
 `npm run lint` now prints nothing but its guards passing — the three warnings
 that were carried as "pre-existing, left alone deliberately" are gone, because
 a clean-except-three build is one people stop reading.

@@ -24,7 +24,9 @@ message; nothing is squashed.
 | **Membership admin** (not a numbered phase) | `/admin/memberships` — the operator surface for the grant Phase 3 removed. One grant path, no default role, no account creation from the form, and the two money-moving roles say so at the point of granting. `scripts/dev-db.mjs` runs it locally without a cluster |
 
 **304 tests across eleven suites**, plus **107 Move tests** (68 `splash_core` +
-23 `splash_meter` + 16 `splash_custody`) on Sui CLI 1.77.2. Six CI guards. Lint, `tsc` and the production build are clean.
+23 `splash_meter` + 16 `splash_custody`) on Sui CLI 1.77.2. Five Move-invariant
+CI guards in `npm run lint` (`check:core`, `check:compliance`, `check:treasury`,
+`check:generations`, `check:aborts`), plus `check:copy` and `check:env`. Lint, `tsc` and the production build are clean.
 
 ---
 
