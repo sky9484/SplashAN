@@ -30,32 +30,50 @@ export const dynamic = 'force-dynamic';
 type ChatTurn = { role: 'user' | 'assistant'; content: string };
 type ChatRequest = { message?: string; history?: ChatTurn[] };
 
-// ─── Grounded domain knowledge (used when Claude is not configured) ────────────
+// ─── Grounded domain knowledge (used when Claude is not configured) ───────────
+//
+// ONE RULE, and `tests/copilot-scope.test.mjs` enforces it: a canned reply may
+// state a PRODUCT fact and must never state an ACCOUNT fact.
+//
+//   Product fact — "the PHP corridor fee is 0.80%". True for everyone, checkable
+//   against the pricing table, wrong only if the product changes.
+//   Account fact — "your KYB is Tier 1 approved", "your daily limit is 43% used",
+//   "your IDR volume is up 18%". True only if it was READ from this account,
+//   and none of these were.
+//
+// What was here before crossed that line in the worst possible place: asked
+// "what is my KYB status", the assistant answered "Compliance: all clear ✓ ·
+// KYB Tier 1 approved · AML: no flags" from a hardcoded string — to an account
+// that had completed no KYB at all. A product telling a customer their
+// compliance is clear when nothing has been checked is not a UX bug.
+//
+// Where an account fact is what the person actually wants, the honest answer is
+// to say it must be read and point at the surface that reads it.
 
 const DOMAIN_RESPONSES: { keywords: string[]; reply: string }[] = [
   { keywords: ['php', 'philippines', 'peso', 'payroll', 'manila', 'friday'],
-    reply: 'USD→PHP: 56.42 · fee 0.80% · ~4.2 min settle (99.8% success).\nRate is within 0.3% of your 30-day best. Optimal lock: Thursday 08:45 MYT, before the pre-open liquidity window closes.\nWant me to draft the Friday PHP batch?' },
+    reply: 'USD→PHP is the live testnet corridor: reference rate 56.42, Splash fee 0.80%.\nI can prepare a payout for approval — I cannot release one.' },
   { keywords: ['myr', 'malaysia', 'ringgit', 'bnm'],
-    reply: 'USD→MYR: 4.71 · fee 0.85%. Bank Negara policy meeting Thursday — MYR historically moves ±0.8% around announcements.\nRecommendation: lock before Wednesday close to avoid ~$42 extra cost on a $5,000 transfer.' },
+    reply: 'USD→MYR: reference rate 4.71, Splash fee 0.85%. Implemented in code, not yet a live corridor.\nBank Negara requires a purpose-of-payment code on inbound cross-border transfers, so a MYR payout will ask you for one.' },
   { keywords: ['idr', 'indonesia', 'rupiah', 'jakarta'],
-    reply: 'USD→IDR: 16,284 · fee 0.90% · fastest corridor at ~3.0 min.\nYour IDR volume is up 18% over 6 weeks — a weekly Wednesday batch would save ~$32/month. Want me to set that up?' },
+    reply: 'USD→IDR: reference rate 16,284, Splash fee 0.90%. Implemented in code, not yet a live corridor.\nBI-FAST routes on the Sandi bank code, so an IDR beneficiary needs one rather than a SWIFT alone.' },
   { keywords: ['cheapest', 'corridor', 'rate', 'compare', 'best'],
-    reply: 'This week by Splash fee:\n• PHP 0.80% · MYR/SGD 0.85% · IDR 0.90%\n• VND/THB 0.95% · EUR/GBP 1.10%\nPHP is your lowest-cost corridor. Batching beats single-payment spreads on every corridor.' },
+    reply: 'Splash fees by corridor:\n• PHP 0.80% · MYR/SGD 0.85% · IDR 0.90%\n• VND/THB 0.95% · EUR/GBP 1.10%\nPHP is the lowest-cost corridor and the only live one. For what YOUR volume has done, open Transfers — I do not hold your history in this reply.' },
   { keywords: ['compliance', 'kyb', 'aml', 'limit', 'flag', 'risk'],
-    reply: 'Compliance: all clear ✓\n• KYB Tier 1 approved · AML: no flags\n• Daily limit: 43% used ($12,100 remaining)\n• Walrus audit: active, 7-year retention\nNo action needed.' },
+    reply: 'I will not state your KYB or AML status from memory — that has to be read from your account, and a copilot guessing at it is worse than saying nothing.\nSettings → KYB shows the verified state and who approved it. Your daily limit is on the same page.\nWhat I can tell you: money movement unlocks only at KYB state ACTIVE, and every payout is anchored on Sui with a Walrus record.' },
   { keywords: ['batch', 'payout', 'bulk'],
-    reply: 'Batch tip: your optimal window is Friday 09:00 MYT (~52 recipients, $11,800 avg).\nLocking Thursday 08:45 MYT saves ~$18 vs. Friday open on the current PHP rate.' },
+    reply: 'Batch payouts take a CSV, screen each row, and need a checker to authorize — the person who uploads cannot release.\nFor your own optimal window I would need your payout history; open Batch to see it.' },
   { keywords: ['sgd', 'singapore'],
-    reply: 'USD→SGD: 1.345 · fee 0.85% · ~6.1 min modeled rail. Stable this week — no urgent rate action needed.' },
+    reply: 'USD→SGD: reference rate 1.345, Splash fee 0.85%. Implemented in code, not yet live.\nFAST routes on bank plus branch code, and PayNow accepts a UEN or mobile proxy instead.' },
   { keywords: ['who are you', 'your name', '0xwal', 'what are you'],
-    reply: "I'm 0xWal — your Splash copilot. I watch corridors, FX timing, batch payouts, treasury yield, and compliance, and I remember your patterns via MemWal so my suggestions get sharper over time." },
+    reply: "I am 0xWal, the Splash desk copilot. I read corridor pricing and product behaviour, and I prepare proposals a person then approves — I never execute one.\nI do not assert facts about your account unless I have read them." },
 ];
 
 const FALLBACKS = [
-  "I'm 0xWal — monitoring the live PHP testnet corridor and modeled expansion routes. What would you like to focus on?",
-  'Your blended fee this month is 0.89%, saving ~41% vs. traditional wires. Anything to optimise?',
-  'Smart Treasury earns variable Ondo USDY (T-bill) yield; your Available balance stays instant at 0%. Want to move idle USDC in?',
-  'All clear — no AML flags, no compliance issues. What can I help with?',
+  'I am 0xWal — the live corridor is USD→PHP on testnet; the rest are implemented in code. What would you like to look at?',
+  'I can help with corridors, FX timing, batch payouts, treasury and compliance rules. For figures specific to your account, the dashboard reads them; I do not hold them here.',
+  'Smart Treasury earns variable Ondo USDY (T-bill) yield, and the Available balance stays instant at 0%. Both are product facts — your balances are on the Treasury page.',
+  'Every payout needs a maker and a separate checker, and settles atomically on Sui or not at all. What can I help you prepare?',
 ];
 
 const TREASURY_KEYWORDS = ['treasury', 'yield', 'apy', 'earn', 'deposit', 'compound', 'interest'];

@@ -46,12 +46,12 @@ const COMPACT_RESPONSES: { keywords: string[]; reply: string }[] = [
   {
     keywords: ['compliance', 'kyb', 'aml', 'limit', 'flag'],
     reply:
-      'Compliance: All clear ✓\n• KYB Tier 1 approved\n• AML: No flags\n• Daily limit: 43% used ($12,100 remaining)\n• Walrus audit: Active 7-yr retention\n\nNo action needed.',
+      'I will not state your KYB or AML status from memory — it has to be read from your account, and a copilot guessing at compliance is worse than saying nothing.\n\nSettings → KYB shows the verified state, who approved it, and your limits.\n\nWhat I can tell you without reading anything: money movement unlocks only at KYB state ACTIVE, and every payout is anchored on Sui with a Walrus record.',
   },
   {
     keywords: ['batch', 'payout', 'bulk'],
     reply:
-      'Batch payout tip: your optimal window is Friday 09:00 MYT with ~52 recipients and $11,800 avg batch size.\n\nLocking Thursday 08:45 MYT saves ~$18 vs. Friday open on the current PHP rate.',
+      'Batch payouts take a CSV, screen each row, and need a checker to authorize — whoever uploads cannot release.\n\nFor your own best window I would need your payout history, which this reply does not read. Open Batch to see it.',
   },
   {
     keywords: ['sgd', 'singapore'],
