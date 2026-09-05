@@ -4,6 +4,12 @@
 **Governing constraint:** Splash **cannot hold client funds** — self-imposed, enforced by the type system and by CI, and a precondition for operating before an e-money licence exists. No licence is held today.
 E-money tier (RM 1.5M, Labuan money broking paras 6.1 + 6.2) is Phase 1.
 
+**Build phases 0–7** (env contract, claims, money arithmetic, real users,
+zkLogin, passkeys, Move authority, break-glass) are tracked separately in
+[`docs/PHASE-STATUS.md`](docs/PHASE-STATUS.md) — including what is still
+outstanding and the deploy-order items that will cause an outage if done
+singly.
+
 ---
 
 ## The design thesis
