@@ -75,7 +75,7 @@ Phase 7 addition, and `break_glass_tests` run green.
 | | |
 |---|---|
 | URL | https://v2.splashz.xyz (TLS to 2026-12-04, its own cert — v1's was never reissued) |
-| Host | `157.230.43.242`, service `splash-an`, port 3005 |
+| Host | droplet address in the team password manager; service `splash-an`, port 3005 |
 | Node | 24.11.1 at `/opt/node24` (v1 stays on `/usr/bin/node` 22 — deliberately isolated) |
 | Database | PostgreSQL 14.24 on-box, role/db `splashan`, 22 tables |
 | Sui CLI | 1.77.2 (`51d177ad7d65`); 1.75.1 kept at `/usr/local/bin/sui-1.75.1-backup` |
@@ -168,25 +168,44 @@ could locate.
 
 ---
 
-## BLOCKED — needs you
+## End-to-end verification
 
-**`https://github.com/sky9484/splashAN` returns 404.** It was public this
-morning (the clone at `4ac05c7` succeeded); it has since been made private,
-renamed, or deleted. Unauthenticated `curl` and an authenticated `gh` as
-`belulok` both get 404, so this is not a local credential problem.
+A 41-check suite runs against the deployed site through nginx and TLS
+(`e2e.sh` on the droplet). **41 pass, 0 fail.** What it covers beyond the
+happy path:
 
-The six commits exist **only on the droplet**. A full bundle of the history is
-backed up at `~/splash-backups/splashAN-20260905-2208.bundle` on the CTO's Mac
-(verified: complete history, `main` at `032eb80`).
+- A malformed JWT and an **`alg=none` forged JWT** are both rejected (400).
+- Wrong admin password rejected; `/api/admin/memberships`, `/api/transfers`
+  and `/api/treasury` all 401 with no session.
+- Self-signup refused in production (403) — `CUSTOMER_SELF_SIGNUP_ENABLED`
+  is false, so workspaces are provisioned deliberately.
+- The demo posture uses mock Seal, **and** a deployment with no demo flags
+  still fails closed. Both directions, not just the convenient one.
+- The licence-named custody refusal is present in the compiled server bundle.
 
-To unblock, one of:
+**zkLogin is confirmed working with real data, not by assertion.** A sign-in
+completed at 14:27 UTC on 5 September 2026: a `wallet_identities` row exists
+with a derived Sui address, and its stored `aud` equals this deployment's
+Google client id — which is the cross-app impersonation guard in
+`lib/auth/zklogin.ts` doing its job.
 
-1. Ask sky9484 to restore the repo, or to grant access if it went private.
-2. Name a different remote to push to — and say whether it should be private.
-3. Restore from the bundle anywhere: `git clone splashAN-*.bundle splashAN`
+### Two gaps this surfaced, both now fixed
 
-Nothing was pushed and no new repository was created, because publishing a
-fintech codebase is not a decision to make on someone's behalf.
+**`ADMIN_EMAIL` was empty.** `validateAdminCredentials` refuses every login in
+production unless `ADMIN_EMAIL`, `ADMIN_PASSWORD` and `ADMIN_SESSION_SECRET`
+are all set. Nobody could have reached `/admin`. Set, and admin login is now
+verified end to end including the console page.
+
+**No membership existed.** Phase 3 means signing in grants nothing —
+`resolveAuthorityForSession` throws rather than provisioning, which is correct
+and was working as designed. The first membership was seeded through
+`grantMembership`, the single function able to create one, with `grantedBy`
+recorded.
+
+Worth knowing for the demo: **self-approval is blocked on chain**, not in the
+application. `business_account.move` asserts `maker != approver`
+(`E_SELF_APPROVAL`, abort 29). No role, including `admin`, can bypass it — so
+demonstrating a full maker → checker flow needs two distinct identities.
 
 ---
 
@@ -220,11 +239,12 @@ under the demo flags. Needs a real coin type before any live settlement.
 
 ## Known gaps — stated rather than buried
 
-- **The Google round trip has never been exercised by a human.** Everything up
-  to it is verified: the endpoint returns `enabled:true` with a live epoch and
-  `maxEpoch`. The browser hop is the one thing no automated check covers.
-  If the consent screen is still in **Testing**, only listed test users can sign
-  in; everyone else gets `Error 403: access_denied`.
+- **The OAuth consent screen is published ("In production", External).** While
+  it was in Testing only the project owner could sign in — owners bypass the
+  test-user list, which is why the first successful sign-in happened with an
+  empty test-user list and would *not* have worked for anyone else. Scopes are
+  `openid email`, both non-sensitive, so no Google verification is required and
+  the 100-user cap does not apply.
 - **Migration `0004` moved no data**, because the database was fresh. Its
   hand-written data-migration path is therefore still unexercised. It will
   matter the first time this runs against a database that already has users.
@@ -242,11 +262,14 @@ under the demo flags. Needs a real coin type before any live settlement.
 
 ## Operating it
 
+This repository is public, so the droplet address is not written here. Set
+`SPLASH_HOST` from the team password manager before pasting anything below.
+
 ```bash
 # health
 curl -s https://v2.splashz.xyz/api/auth/zklogin/params
-ssh splash@157.230.43.242 'sudo systemctl status splash-an'
-ssh splash@157.230.43.242 'journalctl -u splash-an -n 50 --no-pager'
+ssh splash@$SPLASH_HOST 'sudo systemctl status splash-an'
+ssh splash@$SPLASH_HOST 'journalctl -u splash-an -n 50 --no-pager'
 
 # full gate (from /home/splash/splashAN, PATH=/opt/node24/bin:$PATH)
 npm run doctor        # 0 failures expected
@@ -254,9 +277,9 @@ npm run lint          # chains the six check:* invariants
 npm run build
 
 # turn zkLogin off in ~10s
-ssh splash@157.230.43.242 'cd ~/splashAN && sed -i s/^FEATURE_ZKLOGIN=.*/FEATURE_ZKLOGIN=false/ .env.local && sudo systemctl restart splash-an'
+ssh splash@$SPLASH_HOST 'cd ~/splashAN && sed -i s/^FEATURE_ZKLOGIN=.*/FEATURE_ZKLOGIN=false/ .env.local && sudo systemctl restart splash-an'
 # and on
-ssh splash@157.230.43.242 './enable-zklogin.sh <GOOGLE_CLIENT_ID>'
+ssh splash@$SPLASH_HOST './enable-zklogin.sh <GOOGLE_CLIENT_ID>'
 ```
 
 Secrets live on the box, never in the repo and never in chat:
@@ -280,6 +303,7 @@ needed by this flow (`response_type=id_token`), only the public client id.
 Node   304 / 304   (seal 10, env 12, health 7, auth 93, money 17,
                     db 14, funding 12, batch 4, explorer 6, oxwal 129)
 Move   107 / 107   (core 68, meter 23, custody 16)
+E2E     41 / 41    (./e2e.sh, against the deployed site over TLS)
 doctor 0 failures  ·  lint clean  ·  tsc --noEmit clean
 ```
 
