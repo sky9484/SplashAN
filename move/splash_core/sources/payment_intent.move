@@ -361,6 +361,39 @@ public fun confirm_payment_intent<T>(
     settle(intent, payment, clock, ctx)
 }
 
+/// Approve a payout, as an approver of the account the intent is bound to.
+///
+/// Everything the approval binds to is read off the intent: its id, its
+/// amount, and the maker — so an approver cannot be handed a transaction that
+/// approves one invoice while naming another's number, and cannot mis-address
+/// the approval to someone who was not the intent's opener. The four-eyes
+/// check, the approver-set check, verification and the freeze flags are in
+/// `business_account::mint_approval`, which owns those sets.
+///
+/// The intent's own state is checked here, where it is visible: approving a
+/// cancelled or expired intent produces an approval that can never settle, and
+/// silently minting one is worse than refusing.
+public fun approve_payout(
+    intent: &PaymentIntent,
+    account: &BusinessAccount,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    assert!(intent.account.is_some(), E_NOT_ACCOUNT_BOUND);
+    assert!(*intent.account.borrow() == object::id(account), E_WRONG_BUSINESS_ACCOUNT);
+    assert!(intent.status == STATUS_PENDING, E_NOT_PENDING);
+    assert!(clock::timestamp_ms(clock) < intent.expires_at, E_EXPIRED);
+
+    business_account::mint_approval(
+        account,
+        object::id(intent),
+        intent.sender,
+        intent.amount_usd,
+        clock,
+        ctx,
+    );
+}
+
 /// Confirm an intent bound to a business account, releasing an approval.
 ///
 /// The approval carries its own account, intent, amount and authority epoch,

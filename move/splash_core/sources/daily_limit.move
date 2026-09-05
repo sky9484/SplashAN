@@ -17,6 +17,21 @@
 /// keeps a dependency surface of the Sui framework and nothing else, on the
 /// Cetus reasoning in `Move.toml`.
 ///
+/// ─── What it does NOT bound ─────────────────────────────────────────────────
+///
+/// `splash_core` holds no `Balance<T>` — that is the licence invariant, and
+/// `scripts/check-core-no-balance.mjs` enforces it. So the coin that settles a
+/// payment comes from the payer's own wallet, not from an account this package
+/// custodies, and this ceiling therefore bounds what can be RELEASED under a
+/// tenant's approval and attributed to it. It does not and cannot bound what
+/// the owner of a private key chooses to send from their own address outside
+/// the account-bound path.
+///
+/// That is the honest reading: this is a control on delegated authority, which
+/// is where a stolen approver credential shows up. The custody bound — what
+/// the protocol itself can move out of pooled funds — is
+/// `splash_meter::spend_meter`, in the package that holds the balances.
+///
 /// ─── The window ─────────────────────────────────────────────────────────────
 ///
 /// Twenty-four hourly buckets in a ring, rolled forward lazily by the spender's
@@ -139,6 +154,12 @@ public(package) fun charge(limit: &mut DailyLimit, amount: u64, clock: &Clock) {
     roll_forward(limit, now);
 
     let spent = total(limit);
+    // The window can hold MORE than the cap: spend to the ceiling, then have
+    // the ceiling lowered under you. `cap_minor - spent` then underflows, and
+    // a u64 arithmetic abort is a fail-closed outcome with a useless
+    // diagnostic — the operator sees an arithmetic error where the truth is
+    // "this account is over its (new, lower) ceiling".
+    assert!(spent < limit.cap_minor, E_CAP_EXCEEDED);
     // Written as a subtraction, not `spent + amount <= cap`, so a large amount
     // cannot overflow u64 before the comparison happens.
     assert!(amount <= limit.cap_minor - spent, E_CAP_EXCEEDED);

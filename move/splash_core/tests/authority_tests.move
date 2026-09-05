@@ -87,14 +87,15 @@ fun open_intent(scenario: &mut Scenario, maker: address, amount: u64) {
     ts::return_shared(account);
 }
 
-/// `approver` approves the live intent for `maker`.
-fun approve(scenario: &mut Scenario, approver: address, maker: address, amount: u64) {
+/// `approver` approves the live intent. The maker and the amount are read off
+/// the intent, so there is nothing for a caller to get wrong.
+fun approve(scenario: &mut Scenario, approver: address) {
     scenario.next_tx(approver);
     let account = scenario.take_shared<BusinessAccount>();
     let intent = scenario.take_shared<PaymentIntent>();
     let c = scenario.take_shared<Clock>();
     let ctx = scenario.ctx();
-    business_account::approve_payout(&account, object::id(&intent), maker, amount, &c, ctx);
+    payment_intent::approve_payout(&intent, &account, &c, ctx);
     ts::return_shared(c);
     ts::return_shared(intent);
     ts::return_shared(account);
@@ -140,7 +141,7 @@ fun advance(scenario: &mut Scenario, by_ms: u64) {
 fun a_maker_and_a_separate_approver_can_move_money() {
     let mut scenario = setup();
     open_intent(&mut scenario, OWNER, AMOUNT);
-    approve(&mut scenario, APPROVER, OWNER, AMOUNT);
+    approve(&mut scenario, APPROVER);
     settle(&mut scenario, OWNER, AMOUNT);
 
     scenario.next_tx(OWNER);
@@ -180,7 +181,7 @@ fun an_approver_cannot_release_their_own_payment() {
         ts::return_shared(account);
     };
     open_intent(&mut scenario, APPROVER, AMOUNT);
-    approve(&mut scenario, APPROVER, APPROVER, AMOUNT);
+    approve(&mut scenario, APPROVER);
     scenario.end();
 }
 
@@ -199,7 +200,7 @@ fun an_owner_who_is_not_an_approver_cannot_approve() {
         business_account::add_owner(&mut account, OWNER2, ctx);
         ts::return_shared(account);
     };
-    approve(&mut scenario, OWNER2, OWNER, AMOUNT);
+    approve(&mut scenario, OWNER2);
     scenario.end();
 }
 
@@ -208,7 +209,7 @@ fun an_owner_who_is_not_an_approver_cannot_approve() {
 fun a_stranger_cannot_approve() {
     let mut scenario = setup();
     open_intent(&mut scenario, OWNER, AMOUNT);
-    approve(&mut scenario, OUTSIDER, OWNER, AMOUNT);
+    approve(&mut scenario, OUTSIDER);
     scenario.end();
 }
 
@@ -230,7 +231,7 @@ fun a_stranger_cannot_open_an_intent_in_a_tenants_name() {
 fun revoking_an_approver_kills_an_approval_already_in_flight() {
     let mut scenario = setup();
     open_intent(&mut scenario, OWNER, AMOUNT);
-    approve(&mut scenario, APPROVER, OWNER, AMOUNT);
+    approve(&mut scenario, APPROVER);
 
     scenario.next_tx(OWNER);
     {
@@ -257,7 +258,7 @@ fun revoking_an_approver_kills_an_approval_already_in_flight() {
 fun revoke_then_regrant_does_not_resurrect_the_approval() {
     let mut scenario = setup();
     open_intent(&mut scenario, OWNER, AMOUNT);
-    approve(&mut scenario, APPROVER, OWNER, AMOUNT);
+    approve(&mut scenario, APPROVER);
 
     scenario.next_tx(OWNER);
     {
@@ -282,7 +283,7 @@ fun revoke_then_regrant_does_not_resurrect_the_approval() {
 fun any_authority_change_kills_an_approval_in_flight() {
     let mut scenario = setup();
     open_intent(&mut scenario, OWNER, AMOUNT);
-    approve(&mut scenario, APPROVER, OWNER, AMOUNT);
+    approve(&mut scenario, APPROVER);
 
     scenario.next_tx(OWNER);
     {
@@ -303,7 +304,7 @@ fun any_authority_change_kills_an_approval_in_flight() {
 fun revoking_verification_kills_an_approval_in_flight() {
     let mut scenario = setup();
     open_intent(&mut scenario, OWNER, AMOUNT);
-    approve(&mut scenario, APPROVER, OWNER, AMOUNT);
+    approve(&mut scenario, APPROVER);
 
     scenario.next_tx(OWNER);
     {
@@ -322,16 +323,50 @@ fun revoking_verification_kills_an_approval_in_flight() {
 // ─── The approval binds to one payment ─────────────────────────────────────
 
 #[test]
-#[expected_failure(abort_code = 33, location = splash_core::business_account)]
-/// An approval for a small amount cannot release a large one. The amount is
-/// checked independently of the intent id, so a maker who somehow got an
-/// approval for the wrong invoice cannot spend it on a bigger one.
-fun an_approval_for_one_amount_cannot_release_another() {
+/// The approval's amount is DERIVED from the intent, not supplied alongside
+/// it. This is the stronger form of what used to be an equality check: an
+/// approver cannot be handed a transaction that approves one invoice while
+/// naming another's amount, because the amount is not an argument.
+///
+/// `consume_approval` still asserts the two match. That assert is now
+/// unreachable from outside the package — which is why there is no test that
+/// trips it — and it stays as the thing that would catch a future caller of
+/// `mint_approval` that does not read from an intent.
+fun the_approved_amount_is_read_off_the_intent() {
     let mut scenario = setup();
     open_intent(&mut scenario, OWNER, AMOUNT);
-    // Approved for a tenth of what the intent actually asks for.
-    approve(&mut scenario, APPROVER, OWNER, AMOUNT / 10);
-    settle(&mut scenario, OWNER, AMOUNT);
+    approve(&mut scenario, APPROVER);
+
+    scenario.next_tx(OWNER);
+    {
+        let intent = scenario.take_shared<PaymentIntent>();
+        let approval = scenario.take_from_sender<PayoutApproval>();
+        assert_eq!(business_account::approval_amount(&approval), AMOUNT);
+        assert_eq!(business_account::approval_intent(&approval), object::id(&intent));
+        scenario.return_to_sender(approval);
+        ts::return_shared(intent);
+    };
+    scenario.end();
+}
+
+#[test]
+#[expected_failure(abort_code = 400, location = splash_core::payment_intent)]
+/// Approving an intent the maker already cancelled mints authority that can
+/// never be used. Refusing is better than leaving a live-looking approval in
+/// someone's wallet.
+fun a_cancelled_intent_cannot_be_approved() {
+    let mut scenario = setup();
+    open_intent(&mut scenario, OWNER, AMOUNT);
+    scenario.next_tx(OWNER);
+    {
+        let mut intent = scenario.take_shared<PaymentIntent>();
+        let c = scenario.take_shared<Clock>();
+        let ctx = scenario.ctx();
+        payment_intent::cancel_by_sender(&mut intent, &c, ctx);
+        ts::return_shared(c);
+        ts::return_shared(intent);
+    };
+    approve(&mut scenario, APPROVER);
     scenario.end();
 }
 
@@ -362,7 +397,7 @@ fun a_bound_intent_cannot_be_settled_without_an_approval() {
 fun an_expired_approval_cannot_release_anything() {
     let mut scenario = setup();
     open_intent(&mut scenario, OWNER, AMOUNT);
-    approve(&mut scenario, APPROVER, OWNER, AMOUNT);
+    approve(&mut scenario, APPROVER);
     // Past the approval TTL. The intent's own five-minute window is shorter,
     // so this proves the backstop rather than the intent expiry: the intent is
     // checked after the approval, inside `settle`.
@@ -385,7 +420,7 @@ fun a_frozen_account_cannot_be_approved_from() {
         business_account::freeze_account(&mut account, ctx);
         ts::return_shared(account);
     };
-    approve(&mut scenario, APPROVER, OWNER, AMOUNT);
+    approve(&mut scenario, APPROVER);
     scenario.end();
 }
 
@@ -403,7 +438,7 @@ fun a_frozen_account_cannot_be_approved_from() {
 fun freezing_after_approval_still_stops_the_payment() {
     let mut scenario = setup();
     open_intent(&mut scenario, OWNER, AMOUNT);
-    approve(&mut scenario, APPROVER, OWNER, AMOUNT);
+    approve(&mut scenario, APPROVER);
     scenario.next_tx(OWNER);
     {
         let mut account = scenario.take_shared<BusinessAccount>();
@@ -710,11 +745,11 @@ fun the_daily_ceiling_stops_the_second_payment() {
     set_cap(&mut scenario, 1_500);
 
     open_intent(&mut scenario, OWNER, 1_000);
-    approve(&mut scenario, APPROVER, OWNER, 1_000);
+    approve(&mut scenario, APPROVER);
     settle(&mut scenario, OWNER, 1_000);
 
     open_intent(&mut scenario, OWNER, 1_000);
-    approve(&mut scenario, APPROVER, OWNER, 1_000);
+    approve(&mut scenario, APPROVER);
     settle(&mut scenario, OWNER, 1_000);
     scenario.end();
 }
@@ -729,13 +764,13 @@ fun an_hour_later_does_not_reset_the_window() {
     set_cap(&mut scenario, 1_000);
 
     open_intent(&mut scenario, OWNER, 1_000);
-    approve(&mut scenario, APPROVER, OWNER, 1_000);
+    approve(&mut scenario, APPROVER);
     settle(&mut scenario, OWNER, 1_000);
 
     advance(&mut scenario, HOUR);
 
     open_intent(&mut scenario, OWNER, 1_000);
-    approve(&mut scenario, APPROVER, OWNER, 1_000);
+    approve(&mut scenario, APPROVER);
     settle(&mut scenario, OWNER, 1_000);
     scenario.end();
 }
@@ -747,7 +782,7 @@ fun the_window_slides_and_capacity_returns() {
     set_cap(&mut scenario, 1_000);
 
     open_intent(&mut scenario, OWNER, 1_000);
-    approve(&mut scenario, APPROVER, OWNER, 1_000);
+    approve(&mut scenario, APPROVER);
     settle(&mut scenario, OWNER, 1_000);
 
     advance(&mut scenario, DAY);
@@ -763,7 +798,7 @@ fun the_window_slides_and_capacity_returns() {
     };
 
     open_intent(&mut scenario, OWNER, 1_000);
-    approve(&mut scenario, APPROVER, OWNER, 1_000);
+    approve(&mut scenario, APPROVER);
     settle(&mut scenario, OWNER, 1_000);
     scenario.end();
 }
@@ -776,7 +811,7 @@ fun raising_the_cap_does_not_forgive_spend_already_made() {
     set_cap(&mut scenario, 1_000);
 
     open_intent(&mut scenario, OWNER, 1_000);
-    approve(&mut scenario, APPROVER, OWNER, 1_000);
+    approve(&mut scenario, APPROVER);
     settle(&mut scenario, OWNER, 1_000);
 
     set_cap(&mut scenario, 5_000);
@@ -788,6 +823,74 @@ fun raising_the_cap_does_not_forgive_spend_already_made() {
         // Not 5_000. The 1_000 already spent still counts against the window.
         assert_eq!(business_account::daily_spent(&account, &c), 1_000);
         assert_eq!(business_account::daily_remaining(&account, &c), 4_000);
+        ts::return_shared(c);
+        ts::return_shared(account);
+    };
+    scenario.end();
+}
+
+#[test]
+#[expected_failure(abort_code = 601, location = splash_core::daily_limit)]
+/// Lowering the ceiling BELOW what has already been spent inside the window.
+///
+/// The window can then hold more than the cap, and `cap - spent` underflows.
+/// It failed closed either way — a u64 arithmetic abort is still an abort —
+/// but it reported an arithmetic error where the truth was "this account is
+/// over its new, lower ceiling", which is the difference between an operator
+/// diagnosing it in a minute and in an afternoon.
+fun a_ceiling_lowered_under_an_account_reports_the_ceiling() {
+    let mut scenario = setup();
+    set_cap(&mut scenario, 1_000);
+
+    open_intent(&mut scenario, OWNER, 1_000);
+    approve(&mut scenario, APPROVER);
+    settle(&mut scenario, OWNER, 1_000);
+
+    // Now under the spend already made.
+    set_cap(&mut scenario, 500);
+
+    open_intent(&mut scenario, OWNER, 1);
+    approve(&mut scenario, APPROVER);
+    settle(&mut scenario, OWNER, 1);
+    scenario.end();
+}
+
+#[test]
+#[expected_failure(abort_code = 25, location = splash_core::business_account)]
+/// A recovery that has become moot must not execute.
+///
+/// If the surviving owners add the nominated address themselves during the
+/// 72-hour notice, the account has already been recovered. Letting the rescuer
+/// execute anyway would still clear the approver set — so a rescuer who cannot
+/// gain anything could at least impose a delayed denial-of-service on an
+/// account that never needed rescuing.
+fun a_recovery_the_owners_already_performed_cannot_execute() {
+    let mut scenario = setup();
+    nominate_rescuer(&mut scenario);
+    scenario.next_tx(RESCUER);
+    {
+        let mut account = scenario.take_shared<BusinessAccount>();
+        let c = scenario.take_shared<Clock>();
+        let ctx = scenario.ctx();
+        business_account::request_recovery(&mut account, OWNER2, &c, ctx);
+        ts::return_shared(c);
+        ts::return_shared(account);
+    };
+    // The owners are alive after all, and add the address themselves.
+    scenario.next_tx(OWNER);
+    {
+        let mut account = scenario.take_shared<BusinessAccount>();
+        let ctx = scenario.ctx();
+        business_account::add_owner(&mut account, OWNER2, ctx);
+        ts::return_shared(account);
+    };
+    advance(&mut scenario, business_account::recovery_delay_ms());
+    scenario.next_tx(RESCUER);
+    {
+        let mut account = scenario.take_shared<BusinessAccount>();
+        let c = scenario.take_shared<Clock>();
+        let ctx = scenario.ctx();
+        business_account::execute_recovery(&mut account, &c, ctx);
         ts::return_shared(c);
         ts::return_shared(account);
     };

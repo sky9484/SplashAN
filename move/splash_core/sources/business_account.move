@@ -39,6 +39,21 @@
 /// mutator checks the caller against the sets above. That is the correct shape
 /// for authority anyway: possession of a reference to a shared object proves
 /// nothing.
+///
+/// ─── What this does not do ──────────────────────────────────────────────────
+///
+/// Four eyes is a check on ADDRESSES. One person holding two approver keys, or
+/// an owner key and an approver key, satisfies it — the chain cannot tell them
+/// apart, and no on-chain rule can. What the chain does give is that the two
+/// addresses are named, the approval names one of them, and the event stream
+/// records which. Detecting that they are the same person is a KYB and an
+/// operations question, and belongs to the console, not here.
+///
+/// An account whose owner set is full (`MAX_MEMBERS`) cannot be recovered,
+/// because `execute_recovery` has nowhere to add the new owner. Sixteen owners
+/// all losing their keys is not the failure this is guarding against, but it is
+/// a way to make an account deliberately recovery-proof, and it is better said
+/// than discovered.
 module splash_core::business_account;
 
 use splash_core::daily_limit::{Self, DailyLimit};
@@ -616,11 +631,16 @@ public fun execute_recovery(account: &mut BusinessAccount, clock: &Clock, ctx: &
     );
     assert!(account.owners.length() < MAX_MEMBERS, E_TOO_MANY_MEMBERS);
 
-    let recovery = account.pending_recovery.extract();
-    let new_owner = recovery.new_owner;
-    if (!account.owners.contains(&new_owner)) {
-        account.owners.insert(new_owner);
-    };
+    let new_owner = account.pending_recovery.borrow().new_owner;
+    // If the surviving owners added this address themselves during the notice
+    // period, the recovery has already happened and there is nothing to do.
+    // Aborting rather than proceeding matters: `execute_recovery` also clears
+    // the approver set, and a rescuer who can force that on an account that
+    // did not need rescuing holds a 72-hour delayed denial-of-service.
+    assert!(!account.owners.contains(&new_owner), E_ALREADY_A_MEMBER);
+
+    let _ = account.pending_recovery.extract();
+    account.owners.insert(new_owner);
     account.approvers = vec_set::empty<address>();
 
     bump(account, b"recovered", new_owner, ctx);
@@ -644,14 +664,19 @@ public fun set_daily_cap(_: &AdminCap, account: &mut BusinessAccount, cap_minor:
 
 // ─── Approval ──────────────────────────────────────────────────────────────
 
-/// Approve one payout, from this account, for one intent, at one amount.
+/// Mint one approval: one account, one intent, one amount, fifteen minutes.
 ///
-/// The caller must be an approver of this account, and must not be the maker.
-/// Four eyes is asserted here rather than trusted from a UI: `maker` is the
-/// address the approval is transferred to, and `payment_intent` will refuse it
-/// unless that address is also the intent's bound sender, so the maker named
-/// here is the person who will actually spend.
-public fun approve_payout(
+/// `public(package)`, and the only caller is `payment_intent::approve_payout`.
+/// That indirection is the point. This module cannot import `payment_intent`
+/// (that module imports this one, and Move forbids the cycle), so an approval
+/// minted here could only ever be bound to an intent id and an amount the
+/// CALLER supplied — and an approver who is handed a PTB has no way to check
+/// that the amount beside the id is the amount in the intent.
+///
+/// Moving the entry point into `payment_intent`, which can see both objects,
+/// makes the amount and the maker DERIVED from the intent rather than asserted
+/// about it. The mismatch is then unrepresentable instead of merely checked.
+public(package) fun mint_approval(
     account: &BusinessAccount,
     intent: ID,
     maker: address,
