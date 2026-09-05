@@ -2,13 +2,8 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { readJsonBody } from '@/lib/server/http';
-import {
-  findInvoiceBySlug,
-  listRecipients,
-  recordAnalyticsEvent,
-  updateInvoice,
-  upsertRecipientFromInvoice,
-} from '@/lib/server/operations';
+import { findInvoiceBySlug, recordAnalyticsEvent, updateInvoice } from '@/lib/server/operations';
+import { findIssuerForPayLink, upsertRecipientFromInvoice } from '@/lib/server/recipients-store';
 
 export const BANK_TRANSFER_INSTRUCTIONS = {
   beneficiary: 'Splash Labuan Ltd client account',
@@ -23,10 +18,10 @@ const paidSchema = z.object({
   paymentReference: z.string().trim().min(4),
 });
 
-function publicInvoice(slug: string) {
+async function publicInvoice(slug: string) {
   const invoice = findInvoiceBySlug(slug);
   if (!invoice) return null;
-  const issuer = listRecipients().find((recipient) => recipient.name === invoice.issuerOrg);
+  const issuer = await findIssuerForPayLink(invoice.issuerOrg);
   return {
     id: invoice.id,
     issuerOrg: invoice.issuerOrg,
@@ -43,7 +38,7 @@ function publicInvoice(slug: string) {
 
 export async function GET(_request: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const invoice = publicInvoice(slug);
+  const invoice = await publicInvoice(slug);
   return invoice
     ? NextResponse.json(invoice)
     : NextResponse.json({ error: 'Payment request not found' }, { status: 404 });
@@ -56,10 +51,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
   const parsed = paidSchema.safeParse(await readJsonBody(request));
   if (!parsed.success) return NextResponse.json({ error: 'Valid payer details are required' }, { status: 400 });
 
-  const recipient = upsertRecipientFromInvoice({
-    name: parsed.data.payerOrgName,
-    orgEmail: parsed.data.payerOrgEmail,
-  });
+  // The payer becomes a beneficiary of the ISSUING org, so the issuer's org is
+  // what this record must belong to. `InvoiceRecord` has no org id yet, so it
+  // is recovered from the issuer — and when it cannot be, no beneficiary is
+  // created rather than an ownerless one that every tenant could read.
+  const issuer = await findIssuerForPayLink(invoice.issuerOrg);
+  const recipient = issuer
+    ? await upsertRecipientFromInvoice({
+        orgId: issuer.orgId,
+        name: parsed.data.payerOrgName,
+        orgEmail: parsed.data.payerOrgEmail,
+      })
+    : null;
   updateInvoice(invoice.id, {
     payerOrgName: parsed.data.payerOrgName,
     payerOrgEmail: parsed.data.payerOrgEmail,
@@ -67,6 +70,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
     status: 'paid',
   });
   const counterpartyPull = recordAnalyticsEvent('counterparty_pull');
-  console.info('[kyb-invite] prepared', { recipientId: recipient.id, email: recipient.orgEmail });
-  return NextResponse.json({ ok: true, recipientId: recipient.id, counterpartyPull });
+  if (recipient) {
+    console.info('[kyb-invite] prepared', { recipientId: recipient.id, email: recipient.orgEmail });
+  }
+  // The payment is recorded either way — a missing issuer record must not lose
+  // the payer's declaration that they have paid.
+  return NextResponse.json({ ok: true, recipientId: recipient?.id ?? null, counterpartyPull });
 }

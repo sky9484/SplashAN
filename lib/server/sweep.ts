@@ -1,4 +1,5 @@
-import { createSweepJob, findRecipient, updateSweepJob } from '@/lib/server/operations';
+import { createSweepJob, updateSweepJob } from '@/lib/server/operations';
+import { readRecipientForStaff } from '@/lib/server/recipients-store';
 import { recordMovement } from '@/lib/server/ledger-store';
 import { patchTransfer, readTransferForStaff } from '@/lib/server/transfers-store';
 import { pdaxAdapter } from '@/lib/server/pdax';
@@ -31,7 +32,8 @@ export async function completeDeliveryForTransfer(intentId: string) {
   }
 
   if (process.env.SWEEP_ACCOUNT_ENABLED === 'false') throw new Error('Sweep accounts are disabled');
-  const recipient = intent.recipientId ? findRecipient(intent.recipientId) : null;
+  // Staff read: the transfer in hand already established who owns this.
+  const recipient = intent.recipientId ? await readRecipientForStaff(intent.recipientId) : null;
   const quote = await pdaxAdapter.quote(intent.targetCurrency, intent.stablecoinAmountMicro);
   const job = createSweepJob({
     transferIntentId: intent.id,

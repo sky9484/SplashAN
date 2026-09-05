@@ -64,6 +64,13 @@
       "when": 1788626606916,
       "tag": "0008_ledger_refs",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1788627965869,
+      "tag": "0009_recipient_persistence",
+      "breakpoints": true
     }
   ]
 }

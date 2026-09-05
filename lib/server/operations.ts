@@ -108,6 +108,11 @@ export type BatchRecord = {
 
 export type RecipientRecord = {
   id: string;
+  /** The org this beneficiary belongs to.
+   *
+   *  Absent until now, which is why `listRecipients()` returned every tenant's
+   *  and `deleteRecipient(id)` deleted any of them. Required, not optional. */
+  orgId: string;
   name: string;
   country: string;
   bank: string;
@@ -455,7 +460,13 @@ export function listBatches() {
   return [...operations.batches.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
-export function createRecipient(input: {
+/**
+ * Build a beneficiary record. Does NOT decide where it lives — the caller
+ * persists it through `lib/server/recipients-store.ts`.
+ */
+export function buildRecipient(input: {
+  /** Resolved from the SESSION by the caller, never from the request. */
+  orgId: string;
   name: string;
   country: string;
   bank?: string;
@@ -471,6 +482,7 @@ export function createRecipient(input: {
 }): RecipientRecord {
   const record: RecipientRecord = {
     id: createId('rcpt'),
+    orgId: input.orgId,
     name: input.name,
     country: input.country,
     bank: input.bank ?? '',
@@ -485,38 +497,18 @@ export function createRecipient(input: {
     demo: input.demo,
     createdAt: new Date().toISOString(),
   };
-  operations.recipients.set(record.id, record);
   return record;
 }
 
-export function upsertRecipientFromInvoice(input: { name: string; orgEmail?: string }) {
-  const email = input.orgEmail?.trim().toLowerCase();
-  const existing = listRecipients().find((recipient) =>
-    email ? recipient.orgEmail?.toLowerCase() === email : recipient.name.toLowerCase() === input.name.toLowerCase(),
-  );
-  if (existing) return existing;
-  return createRecipient({
-    name: input.name,
-    orgEmail: input.orgEmail,
-    country: 'XX',
-    tier: 'PAYOUT_ONLY',
-    kybStatus: 'none',
-    createdVia: 'invoice_link',
-    kybInviteSent: true,
-  });
-}
-
-export function listRecipients() {
-  return [...operations.recipients.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-}
-
-export function findRecipient(recipientId: string) {
-  return operations.recipients.get(recipientId) ?? null;
-}
-
-export function deleteRecipient(recipientId: string): void {
-  operations.recipients.delete(recipientId);
-}
+// `listRecipients`, `findRecipient`, `deleteRecipient` and
+// `upsertRecipientFromInvoice` used to live here, over a process-global map
+// with no org id on the record. `listRecipients()` returned every tenant's
+// beneficiaries — names, banks, SWIFT codes, account numbers — and
+// `deleteRecipient(id)` deleted any of them by id alone.
+//
+// They are gone rather than deprecated. Use `lib/server/recipients-store.ts`,
+// where every read takes an orgId, the delete is scoped, and cross-tenant reach
+// is spelled `readRecipientForStaff`.
 
 export function createInvoice(input: Omit<InvoiceRecord, 'id' | 'payLinkSlug' | 'createdAt' | 'updatedAt'> & { id?: string; payLinkSlug?: string }) {
   const now = new Date().toISOString();
@@ -706,7 +698,16 @@ function seedDemoData() {
   void analyzeAndRemember('Batches on Friday');
   void analyzeAndRemember('Prefers USD settlement');
 
-  const acme = createRecipient({
+  // Demo seed lives in this process only, owned by DEMO_ORG_ID so it can never
+  // be read alongside a real tenant's beneficiaries.
+  const seedRecipient = (input: Parameters<typeof buildRecipient>[0]) => {
+    const record = buildRecipient(input);
+    operations.recipients.set(record.id, record);
+    return record;
+  };
+
+  const acme = seedRecipient({
+    orgId: DEMO_ORG_ID,
     name: 'Acme PH',
     country: 'PH',
     bank: 'BDO',
@@ -722,8 +723,8 @@ function seedDemoData() {
       sweepDelaySeconds: 4,
     },
   });
-  createRecipient({ name: 'Manila Textiles', country: 'PH', bank: 'BPI', account: 'DEMO-MANILA', tier: 'PAYOUT_ONLY', demo: true });
-  const cebu = createRecipient({ name: 'Cebu Components', country: 'PH', tier: 'STORED_BALANCE', demo: true });
+  seedRecipient({ orgId: DEMO_ORG_ID, name: 'Manila Textiles', country: 'PH', bank: 'BPI', account: 'DEMO-MANILA', tier: 'PAYOUT_ONLY', demo: true });
+  const cebu = seedRecipient({ orgId: DEMO_ORG_ID, name: 'Cebu Components', country: 'PH', tier: 'STORED_BALANCE', demo: true });
 
   const due = new Date(Date.now() + 16 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const oldDue = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);

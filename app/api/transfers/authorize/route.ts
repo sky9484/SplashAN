@@ -5,11 +5,12 @@ import { createIntercompanyTransfer } from '@/lib/server/intercompany';
 import { convertUsdToUsdc, usdCentsToUsdcMicro } from '@/lib/server/labuan-settlement';
 import { executeComposedPayment } from '@/lib/server/composed-payment';
 import {
-  createRecipient,
+  buildRecipient,
   createTransferIntent,
   updateInvoice,
 } from '@/lib/server/operations';
 import { accountBalance, listMovementsSince, recordMovement } from '@/lib/server/ledger-store';
+import { persistRecipient } from '@/lib/server/recipients-store';
 import { patchAuditReceipt, patchTransfer, persistTransfer } from '@/lib/server/transfers-store';
 import { pythAdapter } from '@/lib/server/pyth';
 import { calculateQuote } from '@/lib/server/quote';
@@ -257,13 +258,14 @@ export async function POST(request: Request) {
     ? null
     : sourceAmount > 0 ? await convertUsdToUsdc(sourceAmount) : null;
   const sourceStablecoin = 'USDC' as const;
-  const recipient = createRecipient({
+  const recipient = await persistRecipient(buildRecipient({
+    orgId,
     name: body.recipient.name,
     country: body.recipient.country,
     swift: body.recipient.bank?.swift,
     account: body.recipient.bank?.account,
     tier: body.deliveryTier,
-  });
+  }));
   const intent = createTransferIntent({
     // From the SESSION, never the request. This is the field that decides
     // whose transfer it is and therefore who can read it back.

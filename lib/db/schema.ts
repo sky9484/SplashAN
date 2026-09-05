@@ -338,9 +338,20 @@ export const suppliers = pgTable('suppliers', {
   /** Provider's reference, so a verdict can be re-fetched and audited. */
   screeningReference: text('screening_reference'),
 
+  // ── Operational record ───────────────────────────────────────────────────
+  /** PAYOUT_ONLY, SWEEP_ACCOUNT or STORED_BALANCE — read on the settlement path. */
+  tier: text('tier'),
+  /** Venue, destination bank and account, delay. One object, queried by nobody. */
+  sweepConfig: jsonb('sweep_config'),
+  demo: boolean('demo').notNull().default(false),
+  /** Contact email for the KYB invite, whether one was sent, and whether this
+   *  beneficiary was typed in or created by an invoice link. */
+  recipientMetadata: jsonb('recipient_metadata'),
+
   ...timestamps,
 }, (table) => [
   index('suppliers_org_idx').on(table.orgId),
+  index('suppliers_org_created_idx').on(table.orgId, table.createdAt),
   index('suppliers_screening_idx').on(table.screeningVerdict),
 ]);
 
