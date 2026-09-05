@@ -200,6 +200,10 @@ export type SweepJob = {
 
 export type RateHold = {
   id: string;
+  /** The account that took this hold. A rate lock is a commitment made to
+   *  one customer; without an owner, `listRateHolds()` handed every
+   *  tenant's corridor positions to anyone signed in. */
+  accountId?: string;
   corridorCurrency: string;
   rate: string;
   feeBps: number;
@@ -451,6 +455,18 @@ export function findBatchByIdempotencyKey(accountId: string, idempotencyKey: str
   return null;
 }
 
+/**
+ * A batch belonging to `accountId`.
+ *
+ * The unscoped `readBatch` is gone: the record already carried the account
+ * that authorized the run, and nothing checked it on the way back out.
+ */
+export function readBatchFor(accountId: string, batchId: string) {
+  const record = operations.batches.get(batchId) ?? null;
+  return record && record.accountId === accountId ? record : null;
+}
+
+/** Cross-tenant. The staff console only. */
 export function readBatch(batchId: string) {
   return operations.batches.get(batchId) ?? null;
 }
@@ -617,6 +633,8 @@ export function createRateHold(input: Omit<RateHold, 'id' | 'state' | 'createdAt
   return hold;
 }
 
+/** Expire what has run out, then return every hold. Staff console only —
+ *  the customer-facing reads below are scoped. */
 export function listRateHolds() {
   const now = Date.now();
   for (const hold of operations.rateHolds.values()) {
@@ -625,9 +643,24 @@ export function listRateHolds() {
   return [...operations.rateHolds.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
-export function readRateHold(holdId: string) {
+/**
+ * One account's rate holds.
+ *
+ * A hold is a commitment made to one customer, and a list of them reveals
+ * that customer's corridor positions and timing. The unscoped list went to
+ * anyone signed in.
+ *
+ * A hold with no `accountId` is a demo seed row and belongs to nobody, so it
+ * matches no account rather than every one.
+ */
+export function listRateHoldsFor(accountId: string) {
+  return listRateHolds().filter((hold) => hold.accountId === accountId);
+}
+
+export function readRateHoldFor(accountId: string, holdId: string) {
   listRateHolds();
-  return operations.rateHolds.get(holdId) ?? null;
+  const hold = operations.rateHolds.get(holdId) ?? null;
+  return hold && hold.accountId === accountId ? hold : null;
 }
 
 // `readAuditReceipt` and `updateAuditReceipt` are gone from here for the same
