@@ -27,7 +27,7 @@ Promotion requires all of the following evidence:
 1. Runtime Sui USDT/USDC depth exceeds the configured minimum for target settlement sizes.
 2. Tether-specific KYT and Travel Rule policy has written compliance approval.
 3. Measured effective conversion slippage stays within the on-chain compliance limit.
-4. PDAX and Hata confirm that USDT-origin flows are accepted through the target off-ramp corridors.
+4. The payout and FX partners confirm in writing that USDT-origin flows are accepted through the target off-ramp corridors.
 
 The normalize adapter is present but unreachable while the registry flag is
 off. Enabling the flag also requires a configured `USDT_TYPE`.
@@ -45,5 +45,5 @@ stablecoin intake branch or change USDC as the canonical settlement asset.
 - Pool-depth threshold: pending measurement.
 - Tether KYT approval: pending.
 - Slippage sample: pending.
-- PDAX/Hata origin acceptance: pending.
+- Payout/FX partner origin acceptance: pending.
 - Stripe/Bridge architecture review: pending.

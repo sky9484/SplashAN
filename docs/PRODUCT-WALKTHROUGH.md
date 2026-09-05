@@ -46,7 +46,7 @@ Restart the dev server after any `.env.local` change.
   it, open the copied link in an incognito window: same receipt, no login.
   That incognito reveal is the strongest new wow moment.
 - **§5 Treasury** ends with a one-line trust panel — click "Splash orchestrates
-  — we never hold your funds." to unfold the Airwallex → Hata → PDAX·GCash →
+  — we never hold your funds." to unfold the Airwallex → PDAX·GCash →
   Splash partner path.
 
 ---
