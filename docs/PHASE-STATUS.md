@@ -30,7 +30,7 @@ message; nothing is squashed.
 
 ### Phase 6 · Move authority — not started
 
-Blocked on two things now. The first blocker is cleared:
+Blocked on Sebastian. The other two blockers are cleared:
 
 1. ~~**The Sui CLI.**~~ **Cleared.** Sui 1.77.2 (`51d177ad7d65`) is installed
    at `%LOCALAPPDATA%\bin\sui.exe`; the 1.75.1 binary it replaced is kept at
@@ -46,16 +46,26 @@ Blocked on two things now. The first blocker is cleared:
    out exactly that package, with an error that reads like a code fault.
 
 2. **Sebastian confirms.** Protocol: Move changes are not self-approved.
-3. **`move/splash_core/Move.toml` has an empty `[dependencies]` block** — no
-   pinned Sui framework, so the `Move.lock` is the only pin, and every
-   `sui move build` rewrites it to that CLI's own framework rev (committed:
-   `494fa6ed`, compiler 1.59.1; 1.75.1 writes `b9149cbf`; 1.77.2 writes
-   `06734f6f`). All rewrites reverted, so the pin on record is not the
-   framework the 52 green tests ran against. On Windows the regenerated lock
-   also writes backslashes into `subdir`, which would not resolve on Linux CI.
-   Worth settling whether or not Phase 6 proceeds — as its own commit, not
-   folded into an authority change.
+3. ~~**The framework pin.**~~ **Settled.** All three `Move.lock` files are
+   regenerated on 1.77.2 and committed: lock format 4, Sui framework
+   `06734f6f`, DeepBook `daa5a951`, OpenZeppelin math `a9703fe8`. The pin on
+   record is now the framework the 52 green tests actually ran against, which
+   it was not before — the committed lock had been written by compiler 1.59.1
+   and pinned `494fa6ed`.
 
+   Two things came out of the regeneration:
+
+   * **DeepBook's `token` package is now pinned** (`c43c84a4`). It is a
+     transitive dependency that `Move.toml` never named, so nothing had it on
+     record before.
+   * **The committed separators are forward slashes, and Windows will fight
+     you over it.** The generator writes the platform separator, so on Windows
+     every `sui move build` and `sui move test` rewrites `subdir` and `local`
+     paths back to backslashes and leaves the three files dirty. A backslash
+     lock does not resolve on Linux, so the portable form is the one that is
+     committed — verified to build and to pass all 52 tests on Windows too.
+     `git checkout -- move/*/Move.lock` after a local Move build; a Linux
+     build leaves them alone.
 Scope, unchanged from the brief: delete `mint_attestation_cap`
 (`business_account.move:149` — it lets Splash mint a capability to an arbitrary
 address, the inverse of canon); add `owners` / `approvers` / `frozen` /

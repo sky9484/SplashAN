@@ -17,8 +17,9 @@ claims, exact money arithmetic, real user accounts that fail closed, zkLogin
 sign-in, and passkey approval authority. Since the last note, the staff console
 gained the screen that grants memberships — Phase 3 removed every implicit
 grant, which was right, and left no way to give a real account access short of
-a SQL client. Sui 1.77.2 is now installed and all 52 Move tests are green
-(14 + 22 + 16), so **Phase 6 (Move authority) is blocked on you alone.**
+a SQL client. Sui 1.77.2 is now installed, all 52 Move tests are green (14 + 22 + 16), and
+the lockfiles are regenerated against that toolchain and committed. **Phase 6
+(Move authority) is blocked on you alone.**
 
 ---
 
@@ -116,43 +117,45 @@ With the build output now present, `npm run check:core` also cross-checks the
 no-`Balance<T>` invariant against **compiled bytecode**, not just source — 6
 modules, holds. Previously it printed "no build output to cross-check".
 
-### The lockfiles are stale, and every CLI rewrites them
+### The lockfiles are regenerated on 1.77.2 and committed
 
-`sui move build` on **1.77.2 also rewrites `Move.lock`** — I first saw this on
-1.75.1 and wrote it up as a 1.75.1 artifact; that was wrong. Both versions
-convert the committed lock from `version = 3` to `version = 4`, and each pins a
-*different* Sui framework rev while doing it:
+They were stale: the committed lock had been written by compiler **1.59.1** and
+pinned Sui framework `494fa6ed`, so the pin on record was not the framework
+anything has been tested against for a long time. All three are now regenerated
+on 1.77.2 — lock format 4, Sui `06734f6f`, DeepBook `daa5a951`, OpenZeppelin
+math `a9703fe8` — and the 52 tests were re-run from exactly the files that are
+committed: 14 + 22 + 16, no failures.
 
-| Written by | Lock version | Framework rev |
-|---|---|---|
-| committed (1.59.1) | 3 | `494fa6ed` |
-| 1.75.1 | 4 | `b9149cbf` |
-| 1.77.2 | 4 | `06734f6f` |
+Two things worth your eye.
 
-I have reverted it every time; nothing of this is committed. Two conclusions:
+**DeepBook's `token` package is now pinned** at `c43c84a4`. It is a transitive
+dependency `Move.toml` never named, so nothing had it on record before. It is
+on record now, which is strictly better, but it is a pin nobody chose — worth
+a look before publish.
 
-- **The committed lock records `compiler-version = "1.59.1"`.** It was never
-  regenerated on 1.77.2 either, so the framework it pins is not the framework
-  the 52 green tests just ran against.
-- **This is blocker 3 with teeth.** With `[dependencies]` empty in
-  `splash_core/Move.toml`, the lock is the only thing pinning the framework,
-  and whichever CLI runs a build silently repins it.
+**The separators are forward slashes, deliberately, and Windows will fight you
+over it.** The generator writes the *platform* separator, so on Windows it
+emits `subdir = 'crates\sui-framework\packages\move-stdlib'` and
+`local = '..\splash_core'`. Those do not resolve on Linux, so committing the
+raw Windows output would have shipped a lock that breaks any Linux build or CI
+runner. I converted every separator to forward slashes and verified the result
+both builds and passes all 52 tests on Windows, so the portable form is correct
+on both platforms.
 
-One practical wrinkle if you decide to regenerate: on Windows the new lock
-writes `subdir = 'crates\sui-framework\packages\move-stdlib'` with
-backslashes, which will not resolve on Linux CI. Regenerate it on Linux/WSL,
-or hand-correct the separators.
+The cost: on Windows, every `sui move build` and `sui move test` rewrites them
+back and leaves the three files dirty. `git checkout -- move/*/Move.lock`
+after a local Move build. A Linux build leaves them alone. If that churn
+annoys you more than the portability is worth, the alternative is to regenerate
+on WSL and commit that — same content, no local churn.
 
 ---
 
 ## What I need from you, in order
 
-1. **Decide what to do about the lockfiles**, before any Move is written.
-   Regenerating them on 1.77.2 makes the pin match what the tests actually
-   run against; leaving them means the next person on a different CLI gets a
-   silent repin. Either is defensible; drifting is not. Doing it as part of
-   Phase 6 would mix a toolchain change into an authority change, so it wants
-   to be its own commit either way.
+1. **Sanity-check the regenerated lock**, in particular DeepBook's `token` at
+   `c43c84a4` — a transitive pin that was previously unrecorded and that
+   nobody has chosen. Everything else in it is a rev already named in
+   `Move.toml`.
 
 2. **Confirm the Phase 6 scope.** Unchanged from the build list:
    - delete `mint_attestation_cap` (`business_account.move:149`) — it lets
