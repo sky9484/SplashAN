@@ -116,13 +116,26 @@ if (allowPool || disallowPool) {
     console.log(`verified ${poolId} is ${type}`);
   }
 
+  // Phase 6: adding a venue is AdminCap (the cold multisig), removing one is
+  // ComplianceCap. S-12 is the attack where someone stands up their own pool
+  // and satisfies the depth and slippage guards trivially, so naming a venue
+  // is not a compliance-key power.
+  const ADMIN_CAP = env('SPLASH_ADMIN_CAP_ID');
+  if (allowPool && !ADMIN_CAP) {
+    throw new Error(
+      'Adding a DeepBook venue requires the AdminCap (SPLASH_ADMIN_CAP_ID), which lives on the ' +
+        'cold multisig. Removing one only needs the ComplianceCap. See docs/KEY-CEREMONY-RUNBOOK.md.',
+    );
+  }
   const poolTx = new Transaction();
   poolTx.setGasBudget('20000000');
   poolTx.moveCall({
-    target: `${PACKAGE}::compliance_config::${allowPool ? 'allow_pool' : 'disallow_pool'}`,
-    arguments: [poolTx.object(CONFIG), poolTx.object(CAP), poolTx.pure.id(poolId)],
+    target: `${PACKAGE}::compliance_config::${allowPool ? 'admin_allow_pool' : 'disallow_pool'}`,
+    arguments: allowPool
+      ? [poolTx.object(ADMIN_CAP), poolTx.object(CONFIG), poolTx.pure.id(poolId)]
+      : [poolTx.object(CONFIG), poolTx.object(CAP), poolTx.pure.id(poolId)],
   });
-  await submit(poolTx, allowPool ? 'allow_pool' : 'disallow_pool');
+  await submit(poolTx, allowPool ? 'admin_allow_pool' : 'disallow_pool');
   console.log('whitelist now:', (await readConfig()).allowed_deepbook_pools);
 
   // Venue management is a standalone operation. Only fall through to the
@@ -164,10 +177,29 @@ console.log(hasMinSettlement
   ? `contract supports min_settlement_amount -> setting ${next.minSettlement} (minor units)`
   : 'deployed contract predates min_settlement_amount — using the legacy 4-arg update');
 
+// `tighten` aborts on any argument that loosens a control (E_NOT_A_TIGHTENING,
+// 356). Check here so the operator gets a sentence instead of an abort code,
+// and name the AdminCap path they need instead.
+const loosenings = [];
+if (next.deviationPpm > Number(current.max_deviation_ppm)) loosenings.push('deviation-ppm');
+if (next.stalenessMs > Number(current.max_staleness_ms)) loosenings.push('staleness-ms');
+if (next.slippageBps > Number(current.max_slippage_bps)) loosenings.push('slippage-bps');
+if (next.minDepth < Number(current.min_depth_base_units)) loosenings.push('min-depth');
+if (hasMinSettlement && next.minSettlement < Number(current.min_settlement_amount)) {
+  loosenings.push('min-settlement');
+}
+if (loosenings.length > 0) {
+  throw new Error(
+    `ComplianceCap is subtractive: it cannot loosen ${loosenings.join(', ')}. ` +
+      'Relaxations run from the cold multisig as compliance_config::admin_set_parameters ' +
+      '(&AdminCap first, then the config).',
+  );
+}
+
 const tx = new Transaction();
 tx.setGasBudget('20000000');
 tx.moveCall({
-  target: `${PACKAGE}::compliance_config::update`,
+  target: `${PACKAGE}::compliance_config::tighten`,
   arguments: [
     tx.object(CONFIG),
     tx.object(CAP),

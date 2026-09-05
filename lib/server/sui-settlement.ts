@@ -354,7 +354,8 @@ const ABORT_CODES: Record<number, string> = {
   352: 'E_SETTLEMENT_PAUSED — Settlement has been paused by the compliance operator.',
   353: 'E_POOL_NOT_ALLOWED — the DeepBook pool passed to the liquidity guard is not on ComplianceConfig.allowed_deepbook_pools (audit S-12). Add it with scripts/set-compliance-config.mjs --allow-pool <id>, and check DEEPBOOK_POOL_ID points at the venue you whitelisted.',
   354: 'E_TOO_MANY_POOLS — the DeepBook whitelist is already at compliance_config::max_allowed_pools(). Remove a venue before adding another.',
-  355: 'E_POOL_LIST_EMPTY — refused to leave the DeepBook whitelist empty (that would abort every settlement). Add the replacement venue first, then remove the old one; use set_paused for an intentional halt.',
+  355: 'E_POOL_LIST_EMPTY — refused to leave the DeepBook whitelist empty (that would abort every settlement). Add the replacement venue first, then remove the old one; use compliance_config::pause for an intentional halt.',
+  356: 'E_NOT_A_TIGHTENING — compliance_config::tighten was passed a value that loosens a control. ComplianceCap is subtractive by type; relaxations are AdminCap (admin_set_parameters) from the cold multisig.',
 
   // ── payment_intent ───────────────────────────────────────────────────────
   400: 'E_NOT_PENDING — payment_intent confirm/cancel called on an intent that is not in STATUS_PENDING.',
@@ -1750,9 +1751,52 @@ export async function updateComplianceControls(
     throw new Error('minSettlementAmount must be greater than zero — a zero floor disables the minimum on chain.');
   }
 
+  // Phase 6: ComplianceCap is subtractive BY TYPE. `tighten` aborts on any
+  // argument that loosens a control, and there is no ComplianceCap unpause at
+  // all — both directions of loosening are AdminCap, which lives on the cold
+  // multisig and which this server does not hold.
+  //
+  // So refuse here, with the exact command, rather than building a PTB that
+  // aborts on chain. A 356 in a wallet is a worse explanation than a sentence.
+  const loosenings: string[] = [];
+  if (input.maxDeviationPpm > onChain.maxDeviationPpm) {
+    loosenings.push(`maxDeviationPpm ${onChain.maxDeviationPpm} -> ${input.maxDeviationPpm} (tolerating more peg drift)`);
+  }
+  if (input.maxStalenessMs > onChain.maxStalenessMs) {
+    loosenings.push(`maxStalenessMs ${onChain.maxStalenessMs} -> ${input.maxStalenessMs} (tolerating older readings)`);
+  }
+  if (input.maxSlippageBps > onChain.maxSlippageBps) {
+    loosenings.push(`maxSlippageBps ${onChain.maxSlippageBps} -> ${input.maxSlippageBps} (tolerating more slippage)`);
+  }
+  if (input.minDepthBaseUnits < onChain.minDepthBaseUnits) {
+    loosenings.push(`minDepthBaseUnits ${onChain.minDepthBaseUnits} -> ${input.minDepthBaseUnits} (requiring less depth)`);
+  }
+  if (supportsMinSettlement && minSettlement !== null && onChain.minSettlementAmount !== null && minSettlement < onChain.minSettlementAmount) {
+    loosenings.push(`minSettlementAmount ${onChain.minSettlementAmount} -> ${minSettlement} (letting smaller settlements through)`);
+  }
+  if (onChain.paused && !input.paused) {
+    loosenings.push('resuming settlement');
+  }
+
+  if (loosenings.length > 0) {
+    throw new Error(
+      'The compliance capability can only make controls stricter. This change loosens: ' +
+        `${loosenings.join('; ')}. Loosening is AdminCap — run it from the cold multisig:
+` +
+        `  sui client call --package ${packageId} --module compliance_config ` +
+        `--function admin_set_parameters --args <ADMIN_CAP_ID> ${configId} ` +
+        `${input.maxDeviationPpm} ${input.maxStalenessMs} ${input.maxSlippageBps} ${input.minDepthBaseUnits}` +
+        `${supportsMinSettlement && minSettlement !== null ? ` ${minSettlement}` : ''}` +
+        (onChain.paused && !input.paused
+          ? `
+  sui client call --package ${packageId} --module compliance_config --function admin_set_paused --args <ADMIN_CAP_ID> ${configId} false`
+          : ''),
+    );
+  }
+
   const tx = new Transaction();
   tx.moveCall({
-    target: `${packageId}::compliance_config::update`,
+    target: `${packageId}::compliance_config::tighten`,
     arguments: [
       tx.object(configId),
       tx.object(capId),
@@ -1763,9 +1807,11 @@ export async function updateComplianceControls(
       ...(supportsMinSettlement && minSettlement !== null ? [tx.pure.u64(minSettlement)] : []),
     ],
   });
-  tx.moveCall({
-    target: `${packageId}::compliance_config::set_paused`,
-    arguments: [tx.object(configId), tx.object(capId), tx.pure.bool(input.paused)],
-  });
+  if (input.paused && !onChain.paused) {
+    tx.moveCall({
+      target: `${packageId}::compliance_config::pause`,
+      arguments: [tx.object(configId), tx.object(capId)],
+    });
+  }
   return executeSdkTransaction(tx);
 }

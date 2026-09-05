@@ -27,6 +27,9 @@ const E_TOO_MANY_POOLS: u64 = 354;
 /// Whitelist would be left empty, which bricks every settlement path. Use
 /// `set_paused` for an intentional halt; swap pools by adding before removing.
 const E_POOL_LIST_EMPTY: u64 = 355;
+/// A `ComplianceCap` call tried to LOOSEN a parameter. Relaxations are
+/// `AdminCap`-gated; see the note on the cap.
+const E_NOT_A_TIGHTENING: u64 = 356;
 
 public struct ComplianceConfig has key {
     id: UID,
@@ -52,6 +55,22 @@ public struct ComplianceConfig has key {
     paused: bool,
 }
 
+/// ComplianceCap — SUBTRACTIVE authority, and subtractive BY TYPE.
+///
+/// Every function in this package that takes `&ComplianceCap` can only make
+/// the controls stricter: lower the tolerated peg deviation, staleness or
+/// slippage; raise the required depth or the settlement floor; remove a venue;
+/// pause. There is no function taking this cap that loosens anything, and
+/// `scripts/check-compliance-subtractive.mjs` fails the build if one appears.
+///
+/// The property matters because the compliance key lives closer to people and
+/// to process than the cold multisig does. Whoever holds it can stop money
+/// moving and can never make it easier to move — so it can be handed to a
+/// compliance function without handing over a way to widen the controls, and a
+/// compromise of it is a denial-of-service, never a loosening.
+///
+/// Loosening — raising a tolerance, adding a venue, unpausing — is `AdminCap`,
+/// which is the cold 2-of-3 multisig.
 public struct ComplianceCap has key {
     id: UID,
     config_id: ID,
@@ -115,11 +134,19 @@ public fun create(
     transfer::transfer(cap, ctx.sender());
 }
 
-/// Update the numeric risk parameters. The pool whitelist is deliberately NOT
-/// settable here — it moves only through `allow_pool` / `disallow_pool`, so
-/// every venue change emits its own event instead of hiding inside a routine
-/// threshold tweak.
-public fun update(
+/// Tighten the numeric risk parameters. Every argument must be at least as
+/// strict as what is stored, or the call aborts.
+///
+/// "Stricter" differs per field and the asymmetry is the whole point:
+/// tolerances (deviation, staleness, slippage) may only go DOWN, requirements
+/// (depth, settlement floor) may only go UP. Passing the current value is
+/// allowed, so tightening one field does not force a caller to restate the
+/// others exactly.
+///
+/// The pool whitelist is deliberately not settable here — it moves only
+/// through `admin_allow_pool` / `disallow_pool`, so every venue change emits
+/// its own event instead of hiding inside a threshold tweak.
+public fun tighten(
     config: &mut ComplianceConfig,
     cap: &ComplianceCap,
     max_deviation_ppm: u64,
@@ -129,6 +156,37 @@ public fun update(
     min_settlement_amount: u64,
 ) {
     assert!(cap.config_id == object::id(config), E_INVALID_CAP);
+    assert_valid(max_deviation_ppm, max_staleness_ms, max_slippage_bps, min_depth_base_units, min_settlement_amount);
+
+    assert!(max_deviation_ppm <= config.max_deviation_ppm, E_NOT_A_TIGHTENING);
+    assert!(max_staleness_ms <= config.max_staleness_ms, E_NOT_A_TIGHTENING);
+    assert!(max_slippage_bps <= config.max_slippage_bps, E_NOT_A_TIGHTENING);
+    assert!(min_depth_base_units >= config.min_depth_base_units, E_NOT_A_TIGHTENING);
+    assert!(min_settlement_amount >= config.min_settlement_amount, E_NOT_A_TIGHTENING);
+
+    config.max_deviation_ppm = max_deviation_ppm;
+    config.max_staleness_ms = max_staleness_ms;
+    config.max_slippage_bps = max_slippage_bps;
+    config.min_depth_base_units = min_depth_base_units;
+    config.min_settlement_amount = min_settlement_amount;
+    emit_update(config);
+}
+
+/// Relax the numeric risk parameters. `AdminCap` — the cold multisig — because
+/// this is the only direction that can make money easier to move.
+///
+/// It accepts a tightening too. Splitting "relax" from "set" would mean a
+/// mixed change (one tolerance up, one down) needed two transactions and left
+/// the config in an intermediate state between them.
+public fun admin_set_parameters(
+    _admin: &AdminCap,
+    config: &mut ComplianceConfig,
+    max_deviation_ppm: u64,
+    max_staleness_ms: u64,
+    max_slippage_bps: u64,
+    min_depth_base_units: u64,
+    min_settlement_amount: u64,
+) {
     assert_valid(max_deviation_ppm, max_staleness_ms, max_slippage_bps, min_depth_base_units, min_settlement_amount);
     config.max_deviation_ppm = max_deviation_ppm;
     config.max_staleness_ms = max_staleness_ms;
@@ -147,8 +205,14 @@ public fun transfer_cap(cap: ComplianceCap, recipient: address) {
 
 /// Add a DeepBook venue to the whitelist (S-12). Aborts on a duplicate, so a
 /// replayed call cannot silently succeed.
-public fun allow_pool(config: &mut ComplianceConfig, cap: &ComplianceCap, pool_id: ID) {
-    assert!(cap.config_id == object::id(config), E_INVALID_CAP);
+///
+/// `AdminCap`, not `ComplianceCap`: adding a venue is the single most
+/// consequential loosening in this file. S-12 is precisely the attack where
+/// someone stands up their own pool, seeds it with their own liquidity and
+/// satisfies the depth and slippage guards trivially — so the power to name a
+/// venue belongs with the cold multisig, not with the key that is allowed to
+/// stop things.
+public fun admin_allow_pool(_admin: &AdminCap, config: &mut ComplianceConfig, pool_id: ID) {
     assert!(config.allowed_deepbook_pools.length() < MAX_ALLOWED_POOLS, E_TOO_MANY_POOLS);
     config.allowed_deepbook_pools.insert(pool_id);
 
@@ -169,15 +233,19 @@ public fun disallow_pool(config: &mut ComplianceConfig, cap: &ComplianceCap, poo
     emit_update(config);
 }
 
-public fun set_paused(config: &mut ComplianceConfig, cap: &ComplianceCap, paused: bool) {
+/// Halt settlement. One direction only — `ComplianceCap` cannot resume,
+/// because resuming is a loosening and this cap does not loosen. Resuming is
+/// `admin_set_paused`.
+public fun pause(config: &mut ComplianceConfig, cap: &ComplianceCap) {
     assert!(cap.config_id == object::id(config), E_INVALID_CAP);
-    config.paused = paused;
+    config.paused = true;
     emit_update(config);
 }
 
-/// Break-glass unpause, AdminCap-gated.
+/// Pause or resume, AdminCap-gated. Since Phase 6 this is also the ONLY way to
+/// resume: `pause` is one-directional.
 ///
-/// MUST ship before the immutable publish. `set_paused` is `ComplianceCap`-only;
+/// MUST ship before the immutable publish. `pause` is `ComplianceCap`-only;
 /// `ComplianceCap` is `key` with no `store`, is minted once by `create`, and can
 /// move only via `transfer_cap` called BY ITS HOLDER. There is no recovery path.
 /// In an immutable package, losing that cap while `paused == true` deadlocks
