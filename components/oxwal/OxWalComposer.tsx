@@ -119,7 +119,7 @@ export default function OxWalComposer({
       <input
         ref={fileInputRef}
         type="file"
-        accept=".csv,.xlsx,.xls"
+        accept=".csv,.xlsx"
         className="hidden"
         onChange={(event) => {
           const file = event.target.files?.[0];
