@@ -1,5 +1,6 @@
 'use client';
 
+import { suiVisionTxUrl } from '@/lib/explorer';
 import { useEffect, useRef, useState } from 'react';
 import { useReactToPrint } from 'react-to-print';
 import { FileText, Link2, Loader2 } from 'lucide-react';
@@ -45,7 +46,7 @@ export default function StepReceipt({ state, reset }: { state: TransferState; re
   });
 
   const digest = state.txDigest ?? null;
-  const explorerUrl = digest ? `https://testnet.suivision.xyz/txblock/${digest}` : null;
+  const explorerUrl = digest ? suiVisionTxUrl(digest) : null;
 
   async function shareWithSupplier() {
     if (!state.transferIntentId) {

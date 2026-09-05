@@ -44,7 +44,7 @@ type CustomerTokenPayload = CustomerSession & {
 export const CUSTOMER_SESSION_COOKIE = 'splash_customer_session';
 export const FALLBACK_CUSTOMER_EMAIL = 'splash@demo';
 export const FALLBACK_CUSTOMER_PASSWORD = 'splash@123';
-export const FALLBACK_CUSTOMER_ORGANIZATION = 'Splash Demo Ltd';
+export const FALLBACK_CUSTOMER_ORGANIZATION = 'Splash Workspace';
 
 export function timingSafeStrEqual(a: string, b: string): boolean {
   const aBuffer = Buffer.from(a);

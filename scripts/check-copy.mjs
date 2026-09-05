@@ -1,7 +1,7 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { extname, join, relative } from 'node:path';
 
-const roots = ['app', 'components', 'lib'];
+const roots = ['app', 'components', 'content', 'lib'];
 const allowedExtensions = new Set(['.js', '.jsx', '.mjs', '.ts', '.tsx']);
 const banned = [
   /we don't hold user money/i,
@@ -31,6 +31,30 @@ const banned = [
   // banned — licensed partners are the system of record for customer funds.
   /segregated custody/i,
   /never commingled/i,
+];
+
+// Reader-facing surfaces only: app/, components/, content/.
+//
+// Canon is that no partner is named until its agreement is signed. Four
+// counterparties were named on the public /trust page as partners with
+// roles of record, and one carried a 2-of-3 key-governance claim the
+// codebase contradicts. A name in shipped copy is the claim, whatever the
+// column beside it says.
+//
+// Not applied to lib/: an engineering note reasoning about a future cold
+// multisig is design, not a claim, and Phase 7 builds a real 2-of-3
+// OwnerCap. A guard that fights the work it is meant to protect gets
+// weakened, so it stops at the surfaces a reader actually reads.
+//
+// SECURITY.md and STATUS.md keep the record of what was removed and why.
+const claimSurfaceBanned = [
+  /\bBitGo\b/i,
+  /\bCoKeeps\b/i,
+  /\bGambit\b/i,
+  /\bHata\b/i,
+  /Coins[.]ph/i,
+  // The governance claim itself, independent of who is named beside it.
+  /\b2[- ]?of[- ]?3\b/i,
 ];
 
 // Fixed-APY guard: any "<number>% APY" must be immediately preceded by
@@ -143,6 +167,13 @@ for (const root of roots) {
     }
     for (const apy of apyViolations(text)) {
       violations.push(`${relative('.', file)}: fixed APY figure "${apy}" — yield copy must be prefixed with "Variable"`);
+    }
+    if (root === 'app' || root === 'components' || root === 'content') {
+      for (const pattern of claimSurfaceBanned) {
+        if (pattern.test(text)) {
+          violations.push(`${relative('.', file)}: names an unsigned counterparty or asserts key governance — ${pattern.source}`);
+        }
+      }
     }
     if (root === 'app' || root === 'components') {
       for (const hex of hexViolations(text)) {

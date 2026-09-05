@@ -66,6 +66,9 @@ jobs:
       - name: test — health checks
         run: npm run test:health
 
+      - name: test — explorer links follow the network
+        run: npm run test:explorer
+
       - name: production build
         env:
           NEXT_TELEMETRY_DISABLED: '1'

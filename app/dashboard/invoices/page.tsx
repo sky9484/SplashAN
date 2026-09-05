@@ -184,7 +184,7 @@ export default function InvoicesPage() {
 }
 
 function CreateInvoiceModal({ close, onCreated }: { close: () => void; onCreated: () => void }) {
-  const [form, setForm] = useState({ issuerOrg: 'Splash Demo Ltd', payerOrgName: '', payerOrgEmail: '', amountUsd: '', targetCurrency: 'PHP', dueDate: '', memo: '' });
+  const [form, setForm] = useState({ issuerOrg: 'Splash Workspace', payerOrgName: '', payerOrgEmail: '', amountUsd: '', targetCurrency: 'PHP', dueDate: '', memo: '' });
   const [documentBase64, setDocumentBase64] = useState<string>();
   const [submitting, setSubmitting] = useState(false);
 

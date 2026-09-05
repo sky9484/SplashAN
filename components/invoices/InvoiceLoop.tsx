@@ -38,7 +38,7 @@ type GateStage = { label: string; detail: string; state: GateState; icon: Lucide
 
 const invoicePromptChips: OxWalComposerChip[] = [
   { label: 'Extract invoice', prompt: 'Extract and recommend route for the selected invoice', icon: 'file' },
-  { label: 'Check Seal', prompt: 'Check Seal access for Splash Demo Ltd', icon: 'search' },
+  { label: 'Check Seal', prompt: 'Check Seal access for Splash Workspace', icon: 'search' },
   { label: 'Open action desk', prompt: 'Open action desk', icon: 'write' },
 ];
 
@@ -143,7 +143,7 @@ export default function InvoiceLoop() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          issuerOrg: 'Splash Demo Ltd',
+          issuerOrg: 'Splash Workspace',
           payerOrgName: 'Acme Manufacturing PH',
           payerOrgEmail: 'finance@acme-ph.example',
           amountUsd: 5000,
@@ -229,7 +229,7 @@ export default function InvoiceLoop() {
         toast.error('Select an invoice with a Seal policy first');
         return;
       }
-      void checkAccess('Splash Demo Ltd');
+      void checkAccess('Splash Workspace');
       toast.success('Seal access check started');
       return;
     }
@@ -406,14 +406,14 @@ function UploadPanel({ uploading, onUpload }: { uploading: boolean; onUpload: (f
         icon={FileUp}
         eyebrow="Intake"
         title="Encrypted document"
-        body="Upload a PDF or image. Demo metadata is attached so the full loop can run immediately."
+        body="Upload a PDF or image. Metadata is prefilled so the loop can run end to end before your own data is connected."
       />
       <label className="mt-4 flex min-h-44 cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-[#5C9EAD]/35 bg-[#5C9EAD]/8 p-5 text-center transition hover:border-[#5C9EAD]/70 hover:bg-[#5C9EAD]/12">
         <span className="flex h-12 w-12 items-center justify-center rounded-lg bg-white text-[#326273] shadow-sm">
           {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <UploadCloud className="h-5 w-5" />}
         </span>
         <strong className="mt-3 text-sm text-[#1F4452]">{uploading ? 'Encrypting and storing...' : 'Drop or choose a PDF/image'}</strong>
-        <small className="mt-1 text-[13px] font-medium leading-5 text-[#326273]/55">Demo defaults to Acme PH, $5,000, due Jun 28.</small>
+        <small className="mt-1 text-[13px] font-medium leading-5 text-[#326273]/55">Prefilled: Acme PH, $5,000, due Jun 28. Edit any field.</small>
         <input
           type="file"
           accept=".pdf,image/*"
@@ -545,7 +545,7 @@ function SealPanel({
         ))}
       </div>
       <div className="mt-4 grid gap-2">
-        {['Splash Demo Ltd', 'unknown@org'].map((identity) => {
+        {['Splash Workspace', 'unknown@org'].map((identity) => {
           const checking = checkingIdentity === identity;
           return (
             <button

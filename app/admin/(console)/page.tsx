@@ -1,3 +1,4 @@
+import { faucetUrl, suiVisionAccountUrl } from '@/lib/explorer';
 import Link from 'next/link';
 import { headers } from 'next/headers';
 import { AlertTriangle, CheckCircle2, ClipboardCheck, Headphones, ShieldCheck, Wallet } from 'lucide-react';
@@ -98,16 +99,16 @@ export default async function AdminOverviewPage() {
           </div>
           <div className="mt-3 flex flex-wrap gap-3 text-xs">
             <a
-              href={`https://${process.env.SUI_NETWORK ?? 'testnet'}.suivision.xyz/account/${wallet.address}`}
+              href={suiVisionAccountUrl(wallet.address)}
               target="_blank"
               rel="noopener noreferrer"
               className="rounded-lg border border-[#5C9EAD]/40 px-3 py-1.5 font-semibold text-[#326273] hover:border-[#5C9EAD]"
             >
               View on Sui Explorer
             </a>
-            {(process.env.SUI_NETWORK ?? 'testnet') === 'testnet' && (
+            {faucetUrl(wallet.address) && (
               <a
-                href={`https://faucet.testnet.sui.io/?address=${wallet.address}`}
+                href={faucetUrl(wallet.address) as string}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="rounded-lg bg-[#5C9EAD] px-3 py-1.5 font-semibold text-white hover:bg-[#4A8B9A]"

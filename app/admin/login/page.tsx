@@ -9,7 +9,7 @@ import { adminConsolePath } from '@/lib/admin-routing';
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState('staff@splash.finance');
-  const [password, setPassword] = useState('splash-admin-demo');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   async function login(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -81,7 +81,7 @@ export default function AdminLoginPage() {
           </button>
           <div className="admin-login-note">
             <ShieldCheck aria-hidden="true" />
-            <span><strong>Local demo ready</strong><small>Production requires configured admin credentials and a session secret.</small></span>
+            <span><strong>Staff access</strong><small>ADMIN_EMAIL, ADMIN_PASSWORD and ADMIN_SESSION_SECRET must be configured. Sign-in is refused in production until they are.</small></span>
           </div>
         </form>
       </section>

@@ -1,3 +1,4 @@
+import { suiScanTxUrl, suiVisionTxUrl } from '@/lib/explorer';
 import { getContractConfig } from '@/lib/server/contract-config';
 import { analyzeAndRemember } from '@/lib/server/memwal';
 import type { StoredSettlementEvidence } from '@/lib/evidence/settlement';
@@ -112,7 +113,12 @@ export type RecipientRecord = {
   createdVia: 'manual' | 'invoice_link';
   sweepConfig?: {
     targetCurrency: string;
-    partner: 'PDAX' | 'HATA' | 'TOKOCRYPTO' | 'BITKUB';
+    /**
+     * Sweep venue for this recipient. A free string, not a union of firm
+     * names: the set is configured per deployment, and enumerating unsigned
+     * venues in a shipped type states a roster Splash has not agreed.
+     */
+    partner: string;
     destinationBank: string;
     destinationAccount: string;
     sweepDelaySeconds: number;
@@ -276,8 +282,8 @@ export function createPayLinkSlug() {
 
 function explorerLinks(digest: string | null) {
   return {
-    suiVisionTxUrl: digest ? `https://testnet.suivision.xyz/txblock/${digest}` : null,
-    suiScanTxUrl: digest ? `https://suiscan.xyz/testnet/tx/${digest}` : null,
+    suiVisionTxUrl: digest ? suiVisionTxUrl(digest) : null,
+    suiScanTxUrl: digest ? suiScanTxUrl(digest) : null,
   };
 }
 
@@ -706,7 +712,7 @@ function seedDemoData() {
   const invoice = createInvoice({
     id: 'inv_demo_acme_5000',
     payLinkSlug: 'acme-ph-5000',
-    issuerOrg: 'Splash Demo Ltd',
+    issuerOrg: 'Splash Workspace',
     payerOrgName: 'Acme Manufacturing PH',
     payerOrgEmail: 'finance@acme-ph.example',
     amountUsd: '5000.00',
@@ -719,8 +725,8 @@ function seedDemoData() {
     documentSha256: 'demo'.padEnd(64, '0'),
     demo: true,
   });
-  createInvoice({ issuerOrg: 'Splash Demo Ltd', payerOrgName: 'Acme Manufacturing PH', amountUsd: '3200.00', targetCurrency: 'PHP', dueDate: due, memo: 'Freight invoice', status: 'sent', demo: true });
-  createInvoice({ issuerOrg: 'Splash Demo Ltd', payerOrgName: 'Manila Textiles', amountUsd: '1800.00', targetCurrency: 'PHP', dueDate: oldDue, memo: 'Overdue textile invoice', status: 'overdue', demo: true });
+  createInvoice({ issuerOrg: 'Splash Workspace', payerOrgName: 'Acme Manufacturing PH', amountUsd: '3200.00', targetCurrency: 'PHP', dueDate: due, memo: 'Freight invoice', status: 'sent', demo: true });
+  createInvoice({ issuerOrg: 'Splash Workspace', payerOrgName: 'Manila Textiles', amountUsd: '1800.00', targetCurrency: 'PHP', dueDate: oldDue, memo: 'Overdue textile invoice', status: 'overdue', demo: true });
 
   const transfer = createTransferIntent({
     recipientName: acme.name,
@@ -765,4 +771,10 @@ function seedDemoData() {
   createRateHold({ corridorCurrency: 'PHP', rate: '56.5', feeBps: 80, demo: true });
 }
 
-seedDemoData();
+// Sample rows exist so a fresh local instance has something to render. They
+// are never seeded in production: a live workspace that arrives pre-populated
+// with another company's invoices is both wrong and, because every row is
+// flagged `demo: true`, covered in DEMO badges it should never have shown.
+if (process.env.NODE_ENV !== 'production') {
+  seedDemoData();
+}

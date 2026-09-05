@@ -1,3 +1,4 @@
+import { suiScanTxUrl, suiVisionTxUrl } from '@/lib/explorer';
 import { listBatches, listTransfers, listTransactions } from '@/lib/server/operations';
 import { pythAdapter } from '@/lib/server/pyth';
 import { readComplianceControls } from '@/lib/server/sui-settlement';
@@ -140,11 +141,11 @@ export default async function AdminTransactionsPage() {
                     <td>
                       {transfer.verificationReference && (
                         <div className="flex gap-1">
-                          <a href={`https://testnet.suivision.xyz/txblock/${transfer.verificationReference}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded bg-[#5C9EAD]/10 px-2 py-1 text-xs font-semibold text-[#5C9EAD] hover:bg-[#5C9EAD]/20">
+                          <a href={suiVisionTxUrl(transfer.verificationReference)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded bg-[#5C9EAD]/10 px-2 py-1 text-xs font-semibold text-[#5C9EAD] hover:bg-[#5C9EAD]/20">
                             <ExternalLink size={10} />
                             SuiVision
                           </a>
-                          <a href={`https://suiscan.xyz/testnet/tx/${transfer.verificationReference}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded bg-[#5C9EAD]/10 px-2 py-1 text-xs font-semibold text-[#5C9EAD] hover:bg-[#5C9EAD]/20">
+                          <a href={suiScanTxUrl(transfer.verificationReference)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded bg-[#5C9EAD]/10 px-2 py-1 text-xs font-semibold text-[#5C9EAD] hover:bg-[#5C9EAD]/20">
                             <ExternalLink size={10} />
                             SuiScan
                           </a>

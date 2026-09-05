@@ -424,7 +424,7 @@ function seedFixtures() {
     amountUsd: '5000.00',
     targetCurrency: 'PHP',
     dueDate: '2026-07-17',
-    issuerOrg: 'Splash Demo Ltd',
+    issuerOrg: 'Splash Workspace',
     payerOrgName: 'Acme Manufacturing PH',
     payerOrgEmail: 'finance@acme-ph.example',
     memo: 'Component supply invoice',
