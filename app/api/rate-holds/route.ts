@@ -24,16 +24,16 @@ export async function GET(request: Request) {
   // returned to anyone signed in.
   const accountCheck = await requireSessionAccount(auth.session);
   if (accountCheck.response) return accountCheck.response;
-  const { accountId } = accountCheck.account;
+  const { orgId } = accountCheck.account;
 
   const holdId = new URL(request.url).searchParams.get('id');
   if (holdId) {
-    const hold = readRateHoldFor(accountId, holdId);
+    const hold = readRateHoldFor(orgId, holdId);
     return hold
       ? NextResponse.json(hold)
       : NextResponse.json({ error: 'Rate hold not found' }, { status: 404 });
   }
-  return NextResponse.json({ items: listRateHoldsFor(accountId) });
+  return NextResponse.json({ items: listRateHoldsFor(orgId) });
 }
 
 export async function POST(request: Request) {
@@ -49,7 +49,7 @@ export async function POST(request: Request) {
   }
   const corridorCurrency = parsed.data.corridorCurrency.toUpperCase();
   const hold = createRateHold({
-    accountId: accountCheck.account.accountId,
+    orgId: accountCheck.account.orgId,
     corridorCurrency,
     rate: String(parsed.data.rate),
     feeBps: getCorridorFeeBps(corridorCurrency),

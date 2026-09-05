@@ -23,8 +23,8 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'accountId does not belong to this organization' }, { status: 403 });
   }
 
-  const entries = await listMovements(accountId);
-  const balanceMinor = await accountBalance(accountId);
+  const entries = await listMovements(accountCheck.account.orgId);
+  const balanceMinor = await accountBalance(accountCheck.account.orgId);
   // `moneyJson` because these are bigints now: JSON.stringify throws on one,
   // and a Number() would lose precision above 2^53 rather than saying so.
   return moneyJson({

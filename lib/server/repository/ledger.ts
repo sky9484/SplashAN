@@ -17,6 +17,28 @@
  * emptied on every restart, and the audited ledger was written by its own test
  * and no one else. This module is the join.
  *
+ * ─── Whose balance this is ──────────────────────────────────────────────────
+ *
+ * Keyed by ORG, not by the on-chain business account id.
+ *
+ * `resolveBusinessAccountId` returns the org's `sui_business_account_id`, and
+ * when there is none it falls back to the env-wide `SPLASH_BUSINESS_ACCOUNT_ID`
+ * and then to the literal `dashboard-primary`. Both fallbacks are shared by
+ * every org that reaches them, so an account id is not a tenant key: two orgs
+ * without a provisioned on-chain account resolve to the same string and would
+ * have shared one balance. That is verifiable in the seeded dev database,
+ * where `acme` and `northwind` both resolve to `dashboard-primary`.
+ *
+ * So the posting account is `account:<orgId>:<subject>`:
+ *
+ *   subject `self`     the org's own spendable balance — what the authorize
+ *                      route checks before letting a payment leave.
+ *   subject `<id>`     a beneficiary's stored balance, held inside the org's
+ *                      book. A sweep credits and debits this side.
+ *
+ * The on-chain account id remains what it is — an object id — and is no
+ * longer asked to double as an ownership boundary.
+ *
  * ─── Signs ──────────────────────────────────────────────────────────────────
  *
  * `post.ts` states the convention — debits positive, credits negative — and
@@ -45,21 +67,23 @@ import { journalEntries, ledgerPostings } from '../../db/schema.ts';
 
 /** What one movement looks like to a caller, in the vocabulary they already use. */
 export type LedgerEntryInput = {
-  accountId: string;
+  /** The tenant. Required — this is the ownership boundary. */
+  orgId: string;
+  /** `self` for the org's own balance, or a beneficiary id for a stored
+   *  balance held inside that org's book. */
+  subject?: string;
   direction: 'CREDIT' | 'DEBIT';
   amountMinor: bigint;
   refType: 'TRANSFER' | 'SWEEP' | 'FEE' | 'FUNDING' | 'YIELD_SIM' | 'SEED';
   refId: string;
-  /** The org, where the caller knows it. The account id is the scoping key;
-   *  this is for reporting and joins. */
-  orgId?: string | null;
   suiTxDigest?: string;
   currency?: string;
 };
 
 export type LedgerEntryRow = {
   id: string;
-  accountId: string;
+  orgId: string;
+  subject: string;
   direction: 'CREDIT' | 'DEBIT';
   amountMinor: bigint;
   balanceAfterMinor: bigint;
@@ -69,8 +93,8 @@ export type LedgerEntryRow = {
   createdAt: string;
 };
 
-/** The customer's side of a movement. */
-const customerAccount = (accountId: string) => `account:${accountId}`;
+/** The customer's side of a movement, inside their own tenant. */
+const customerAccount = (orgId: string, subject = 'self') => `account:${orgId}:${subject}`;
 
 /** Our side of it, named for what moved rather than lumped into one bucket, so
  *  a reconciliation can tell funding from settlement without reading refIds. */
@@ -88,6 +112,7 @@ export async function recordEntry(
   input: LedgerEntryInput,
 ): Promise<LedgerEntryRow> {
   const currency = input.currency ?? 'USDC';
+  const subject = input.subject ?? 'self';
   const id = `jnl_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
 
   // Money in is a credit to a liability: negative on the customer's account.
@@ -96,23 +121,24 @@ export async function recordEntry(
   const { postJournal } = await import('../../ledger/post.ts');
   await postJournal(db, {
     id,
-    orgId: input.orgId ?? null,
+    orgId: input.orgId,
     kind: input.refType,
     intentId: input.refType === 'TRANSFER' ? input.refId : null,
     refId: input.refId,
     suiTxDigest: input.suiTxDigest ?? null,
     postings: [
-      { account: customerAccount(input.accountId), currency, amountMinor: signed },
+      { account: customerAccount(input.orgId, subject), currency, amountMinor: signed },
       { account: contraAccount(input.refType), currency, amountMinor: -signed },
     ],
   });
 
   return {
     id,
-    accountId: input.accountId,
+    orgId: input.orgId,
+    subject,
     direction: input.direction,
     amountMinor: input.amountMinor,
-    balanceAfterMinor: await accountBalanceMinor(db, input.accountId, currency),
+    balanceAfterMinor: await accountBalanceMinor(db, input.orgId, subject, currency),
     refType: input.refType,
     refId: input.refId,
     suiTxDigest: input.suiTxDigest,
@@ -128,7 +154,8 @@ export async function recordEntry(
  */
 export async function accountBalanceMinor(
   db: Database,
-  accountId: string,
+  orgId: string,
+  subject = 'self',
   currency = 'USDC',
 ): Promise<bigint> {
   const [row] = await db
@@ -136,7 +163,7 @@ export async function accountBalanceMinor(
     .from(ledgerPostings)
     .where(
       and(
-        eq(ledgerPostings.account, customerAccount(accountId)),
+        eq(ledgerPostings.account, customerAccount(orgId, subject)),
         eq(ledgerPostings.currency, currency),
       ),
     );
@@ -153,8 +180,9 @@ export async function accountBalanceMinor(
  */
 export async function listEntriesFor(
   db: Database,
-  accountId: string,
+  orgId: string,
   limit = 100,
+  subject = 'self',
   currency = 'USDC',
 ): Promise<LedgerEntryRow[]> {
   const rows = await db
@@ -170,21 +198,22 @@ export async function listEntriesFor(
     .innerJoin(journalEntries, eq(journalEntries.id, ledgerPostings.journalId))
     .where(
       and(
-        eq(ledgerPostings.account, customerAccount(accountId)),
+        eq(ledgerPostings.account, customerAccount(orgId, subject)),
         eq(ledgerPostings.currency, currency),
       ),
     )
     .orderBy(desc(ledgerPostings.createdAt))
     .limit(limit);
 
-  let running = await accountBalanceMinor(db, accountId, currency);
+  let running = await accountBalanceMinor(db, orgId, subject, currency);
   return rows.map((row) => {
     // A negative posting is money arriving (credit to a liability).
     const credit = row.amountMinor < 0n;
     const amountMinor = credit ? -row.amountMinor : row.amountMinor;
     const entry: LedgerEntryRow = {
       id: row.journalId,
-      accountId,
+      orgId,
+      subject,
       direction: credit ? 'CREDIT' : 'DEBIT',
       amountMinor,
       balanceAfterMinor: running,
@@ -208,8 +237,9 @@ export async function listEntriesFor(
  */
 export async function listEntriesSince(
   db: Database,
-  accountId: string,
+  orgId: string,
   sinceMs: number,
+  subject = 'self',
   currency = 'USDC',
 ): Promise<LedgerEntryRow[]> {
   const rows = await db
@@ -225,7 +255,7 @@ export async function listEntriesSince(
     .innerJoin(journalEntries, eq(journalEntries.id, ledgerPostings.journalId))
     .where(
       and(
-        eq(ledgerPostings.account, customerAccount(accountId)),
+        eq(ledgerPostings.account, customerAccount(orgId, subject)),
         eq(ledgerPostings.currency, currency),
         gte(ledgerPostings.createdAt, new Date(sinceMs)),
       ),
@@ -236,7 +266,8 @@ export async function listEntriesSince(
     const credit = row.amountMinor < 0n;
     return {
       id: row.journalId,
-      accountId,
+      orgId,
+      subject,
       direction: credit ? ('CREDIT' as const) : ('DEBIT' as const),
       amountMinor: credit ? -row.amountMinor : row.amountMinor,
       // A window read is for totalling, not for display. The running balance

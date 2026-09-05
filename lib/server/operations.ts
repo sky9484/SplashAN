@@ -200,10 +200,14 @@ export type SweepJob = {
 
 export type RateHold = {
   id: string;
-  /** The account that took this hold. A rate lock is a commitment made to
-   *  one customer; without an owner, `listRateHolds()` handed every
-   *  tenant's corridor positions to anyone signed in. */
-  accountId?: string;
+  /** The org that took this hold. A rate lock is a commitment made to one
+   *  customer; without an owner, `listRateHolds()` handed every tenant's
+   *  corridor positions to anyone signed in.
+   *
+   *  The ORG, not the on-chain account id: that id falls back to a value
+   *  shared by every org without a provisioned account, so scoping by it
+   *  would have merged two tenants' holds back together. */
+  orgId?: string;
   corridorCurrency: string;
   rate: string;
   feeBps: number;
@@ -644,23 +648,23 @@ export function listRateHolds() {
 }
 
 /**
- * One account's rate holds.
+ * One org's rate holds.
  *
  * A hold is a commitment made to one customer, and a list of them reveals
  * that customer's corridor positions and timing. The unscoped list went to
  * anyone signed in.
  *
- * A hold with no `accountId` is a demo seed row and belongs to nobody, so it
- * matches no account rather than every one.
+ * A hold with no `orgId` is a demo seed row and belongs to nobody, so it
+ * matches no org rather than every one.
  */
-export function listRateHoldsFor(accountId: string) {
-  return listRateHolds().filter((hold) => hold.accountId === accountId);
+export function listRateHoldsFor(orgId: string) {
+  return listRateHolds().filter((hold) => hold.orgId === orgId);
 }
 
-export function readRateHoldFor(accountId: string, holdId: string) {
+export function readRateHoldFor(orgId: string, holdId: string) {
   listRateHolds();
   const hold = operations.rateHolds.get(holdId) ?? null;
-  return hold && hold.accountId === accountId ? hold : null;
+  return hold && hold.orgId === orgId ? hold : null;
 }
 
 // `readAuditReceipt` and `updateAuditReceipt` are gone from here for the same

@@ -141,7 +141,7 @@ export async function POST(request: Request) {
   // reset every account's daily spend to zero and the cap stopped binding.
   // Today's movements only, unpaged: a page limit here would hand a busy
   // account its budget back once the early debits fell off the end.
-  const todaysMovements = await listMovementsSince(businessAccountId, startOfUtcDay(Date.now()));
+  const todaysMovements = await listMovementsSince(orgId, startOfUtcDay(Date.now()));
   const limits = checkAuthorizationLimits({
     amountUsd: sourceAmount,
     settings,
@@ -222,7 +222,7 @@ export async function POST(request: Request) {
   // figure the ledger does not hold.
   if (
     fundingSelection.type === 'held'
-    && (await accountBalance(businessAccountId)) < BigInt(sourceAmountMicro)
+    && (await accountBalance(orgId)) < BigInt(sourceAmountMicro)
   ) {
     return NextResponse.json({ error: 'Splash balance is insufficient for this payment source' }, { status: 409 });
   }
@@ -315,7 +315,6 @@ export async function POST(request: Request) {
     ? fundingSession?.normalizedAmountUsdcMicro ?? sourceAmountMicro
     : sourceAmountMicro;
   const payerDebit = await recordMovement({
-    accountId: businessAccountId,
     orgId,
     direction: 'DEBIT',
     amountMinor: BigInt(debitedAmountMicro),

@@ -29,7 +29,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'businessAccountId does not belong to this organization' }, { status: 403 });
   }
   const registry = getEnabledFundingOptions();
-  const heldBalanceMicro = Number(await accountBalance(businessAccountId));
+  const heldBalanceMicro = Number(await accountBalance(accountCheck.account.orgId));
   const sources = buildFundingSources({ registry, heldBalanceMicro, amountDueMicro });
   const lastUsedSource = readLastUsedFundingSource(businessAccountId);
   const countryCode = request.headers.get('x-vercel-ip-country')

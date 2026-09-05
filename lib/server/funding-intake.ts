@@ -98,8 +98,11 @@ export async function ingestStablecoinDeposit(input: InboundDeposit) {
     })!;
   }
 
+  // The session's ORG, not its on-chain account id: that id falls back to a
+  // value shared by every org without a provisioned account, so crediting by
+  // it would put one tenant's deposit into another tenant's balance.
   await recordMovement({
-    accountId: session.businessAccountId,
+    orgId: session.orgId,
     direction: 'CREDIT',
     amountMinor: BigInt(normalized.amountOutMicro),
     refType: 'FUNDING',

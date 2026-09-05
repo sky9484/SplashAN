@@ -52,23 +52,23 @@ test('a credit and a debit leave the balance the arithmetic says', async () => {
   const { client, db } = await migratedDb();
 
   await recordEntry(db, {
-    accountId: 'acct_1', orgId: 'acme', direction: 'CREDIT',
+    orgId: 'acme', direction: 'CREDIT',
     amountMinor: USDC(5000), refType: 'FUNDING', refId: 'fs_1',
   });
-  assert.equal(await accountBalanceMinor(db, 'acct_1'), USDC(5000));
+  assert.equal(await accountBalanceMinor(db, 'acme'), USDC(5000));
 
   await recordEntry(db, {
-    accountId: 'acct_1', orgId: 'acme', direction: 'DEBIT',
+    orgId: 'acme', direction: 'DEBIT',
     amountMinor: USDC(1800), refType: 'TRANSFER', refId: 'ti_1',
   });
-  assert.equal(await accountBalanceMinor(db, 'acct_1'), USDC(3200));
+  assert.equal(await accountBalanceMinor(db, 'acme'), USDC(3200));
   await client.close();
 });
 
 test('the balance survives the process — it is a query, not a map', async () => {
   const { client, db } = await migratedDb();
   await recordEntry(db, {
-    accountId: 'acct_1', direction: 'CREDIT', amountMinor: USDC(5000),
+    orgId: 'acme', direction: 'CREDIT', amountMinor: USDC(5000),
     refType: 'FUNDING', refId: 'fs_1',
   });
 
@@ -76,17 +76,17 @@ test('the balance survives the process — it is a query, not a map', async () =
   // map this replaces returned 0 here, and the gate on every held-balance
   // payment read that 0 as the truth.
   const other = drizzle(client, { schema });
-  assert.equal(await accountBalanceMinor(other, 'acct_1'), USDC(5000));
+  assert.equal(await accountBalanceMinor(other, 'acme'), USDC(5000));
   await client.close();
 });
 
-test('one account’s movements are not another’s', async () => {
+test('one org’s movements are not another’s', async () => {
   const { client, db } = await migratedDb();
   await recordEntry(db, {
-    accountId: 'acct_1', direction: 'CREDIT', amountMinor: USDC(5000),
+    orgId: 'acme', direction: 'CREDIT', amountMinor: USDC(5000),
     refType: 'FUNDING', refId: 'fs_1',
   });
-  assert.equal(await accountBalanceMinor(db, 'acct_2'), 0n, 'an unknown account holds nothing');
+  assert.equal(await accountBalanceMinor(db, 'northwind'), 0n, 'another org holds nothing');
   await client.close();
 });
 
@@ -97,10 +97,61 @@ test('an amount past 2^53 is exact, where a JS number stops being', async () => 
   // the one below it are the same value.
   const past = 9_007_199_254_740_993n;
   await recordEntry(db, {
-    accountId: 'acct_1', direction: 'CREDIT', amountMinor: past,
+    orgId: 'acme', direction: 'CREDIT', amountMinor: past,
     refType: 'FUNDING', refId: 'fs_1',
   });
-  assert.equal(await accountBalanceMinor(db, 'acct_1'), past);
+  assert.equal(await accountBalanceMinor(db, 'acme'), past);
+  await client.close();
+});
+
+
+test('two orgs that share an on-chain account do not share a balance', async () => {
+  const { client, db } = await migratedDb();
+
+  // `resolveBusinessAccountId` returns the org's `sui_business_account_id`, and
+  // when there is none it falls back to the env-wide SPLASH_BUSINESS_ACCOUNT_ID
+  // and then to the literal `dashboard-primary`. Both are shared by every org
+  // that reaches them — in the seeded dev database `acme` and `northwind` both
+  // resolve to `dashboard-primary` right now.
+  //
+  // So the ledger is keyed by ORG. Were it keyed by that account id, these two
+  // credits would have landed in one balance and either org could spend the
+  // other's money.
+  await recordEntry(db, {
+    orgId: 'acme', direction: 'CREDIT', amountMinor: USDC(5000),
+    refType: 'FUNDING', refId: 'fs_a',
+  });
+  await recordEntry(db, {
+    orgId: 'northwind', direction: 'CREDIT', amountMinor: USDC(70),
+    refType: 'FUNDING', refId: 'fs_n',
+  });
+
+  assert.equal(await accountBalanceMinor(db, 'acme'), USDC(5000));
+  assert.equal(await accountBalanceMinor(db, 'northwind'), USDC(70));
+  await client.close();
+});
+
+test('a beneficiary’s stored balance lives inside its own org’s book', async () => {
+  const { client, db } = await migratedDb();
+
+  await recordEntry(db, {
+    orgId: 'acme', direction: 'CREDIT', amountMinor: USDC(5000),
+    refType: 'FUNDING', refId: 'fs_a',
+  });
+  // A sweep credits the RECIPIENT, not the org's own spendable balance.
+  await recordEntry(db, {
+    orgId: 'acme', subject: 'rcpt_9', direction: 'CREDIT', amountMinor: USDC(1800),
+    refType: 'TRANSFER', refId: 'ti_1',
+  });
+
+  assert.equal(
+    await accountBalanceMinor(db, 'acme'),
+    USDC(5000),
+    'a recipient credit is not the payer’s money to spend again',
+  );
+  assert.equal(await accountBalanceMinor(db, 'acme', 'rcpt_9'), USDC(1800));
+  // And the same recipient id under a different org is a different balance.
+  assert.equal(await accountBalanceMinor(db, 'northwind', 'rcpt_9'), 0n);
   await client.close();
 });
 
@@ -110,15 +161,15 @@ test('every movement is a balanced pair, and the invariant query agrees', async 
   const { client, db } = await migratedDb();
 
   await recordEntry(db, {
-    accountId: 'acct_1', orgId: 'acme', direction: 'CREDIT',
+    orgId: 'acme', direction: 'CREDIT',
     amountMinor: USDC(5000), refType: 'FUNDING', refId: 'fs_1',
   });
   await recordEntry(db, {
-    accountId: 'acct_1', orgId: 'acme', direction: 'DEBIT',
+    orgId: 'acme', direction: 'DEBIT',
     amountMinor: USDC(1800), refType: 'TRANSFER', refId: 'ti_1',
   });
   await recordEntry(db, {
-    accountId: 'acct_2', orgId: 'acme', direction: 'CREDIT',
+    orgId: 'acme', subject: 'rcpt_1', direction: 'CREDIT',
     amountMinor: USDC(1800), refType: 'TRANSFER', refId: 'ti_1',
   });
 
@@ -137,11 +188,11 @@ test('every movement is a balanced pair, and the invariant query agrees', async 
 test('the customer side and our side are named, not lumped together', async () => {
   const { client, db } = await migratedDb();
   await recordEntry(db, {
-    accountId: 'acct_1', direction: 'CREDIT', amountMinor: USDC(5000),
+    orgId: 'acme', direction: 'CREDIT', amountMinor: USDC(5000),
     refType: 'FUNDING', refId: 'fs_1',
   });
   await recordEntry(db, {
-    accountId: 'acct_1', direction: 'DEBIT', amountMinor: USDC(1800),
+    orgId: 'acme', direction: 'DEBIT', amountMinor: USDC(1800),
     refType: 'TRANSFER', refId: 'ti_1',
   });
 
@@ -153,7 +204,7 @@ test('the customer side and our side are named, not lumped together', async () =
     [
       // Negative on the customer's account is money they HOLD: a credit to a
       // liability, per the convention lib/ledger/post.ts states.
-      { account: 'account:acct_1', total: '-3200000000' },
+      { account: 'account:acme:self', total: '-3200000000' },
       // Our side is the mirror: we hold the 5,000 that arrived, and the 1,800
       // that settled has left.
       { account: 'splash:funding', total: '5000000000' },
@@ -161,7 +212,7 @@ test('the customer side and our side are named, not lumped together', async () =
     ],
     'funding and settlement are distinguishable without reading refIds',
   );
-  assert.equal(__testing.customerAccount('acct_1'), 'account:acct_1');
+  assert.equal(__testing.customerAccount('acme'), 'account:acme:self');
   assert.equal(__testing.contraAccount('SWEEP'), 'splash:sweep');
   await client.close();
 });
@@ -171,22 +222,22 @@ test('the customer side and our side are named, not lumped together', async () =
 test('the running balance is walked back from now, so a page is not a lie', async () => {
   const { client, db } = await migratedDb();
   await recordEntry(db, {
-    accountId: 'acct_1', direction: 'CREDIT', amountMinor: USDC(5000),
+    orgId: 'acme', direction: 'CREDIT', amountMinor: USDC(5000),
     refType: 'FUNDING', refId: 'fs_1',
   });
   await recordEntry(db, {
-    accountId: 'acct_1', direction: 'DEBIT', amountMinor: USDC(1000),
+    orgId: 'acme', direction: 'DEBIT', amountMinor: USDC(1000),
     refType: 'TRANSFER', refId: 'ti_1',
   });
   await recordEntry(db, {
-    accountId: 'acct_1', direction: 'DEBIT', amountMinor: USDC(800),
+    orgId: 'acme', direction: 'DEBIT', amountMinor: USDC(800),
     refType: 'SWEEP', refId: 'sw_1',
   });
 
   // Only the newest two. Totalled FORWARDS from zero the first row would read
   // -1000, because the oldest row in a page is not the oldest row in the
   // account. Walked backwards from the balance, it reads what it actually was.
-  const page = await listEntriesFor(db, 'acct_1', 2);
+  const page = await listEntriesFor(db, 'acme', 2);
   assert.equal(page.length, 2);
   assert.equal(page[0].balanceAfterMinor, USDC(3200));
   assert.equal(page[1].balanceAfterMinor, USDC(4000));
@@ -196,11 +247,11 @@ test('the running balance is walked back from now, so a page is not a lie', asyn
 test('a movement carries what it refers to, in its own column', async () => {
   const { client, db } = await migratedDb();
   await recordEntry(db, {
-    accountId: 'acct_1', direction: 'DEBIT', amountMinor: USDC(800),
+    orgId: 'acme', direction: 'DEBIT', amountMinor: USDC(800),
     refType: 'SWEEP', refId: 'sweep_job_9', suiTxDigest: '0xabc',
   });
 
-  const [entry] = await listEntriesFor(db, 'acct_1');
+  const [entry] = await listEntriesFor(db, 'acme');
   // Before migration 0008 these had nowhere honest to go: the ref would have
   // ridden in `intent_id` (which means an intent) and the digest in
   // `description` (which means prose).
@@ -220,7 +271,7 @@ test('the daily window is today’s movements, and it does not page', async () =
 
   // Yesterday's debit, backdated directly: `recordEntry` stamps now.
   await recordEntry(db, {
-    accountId: 'acct_1', direction: 'DEBIT', amountMinor: USDC(9000),
+    orgId: 'acme', direction: 'DEBIT', amountMinor: USDC(9000),
     refType: 'TRANSFER', refId: 'ti_old',
   });
   await client.query(
@@ -229,7 +280,7 @@ test('the daily window is today’s movements, and it does not page', async () =
 
   for (let i = 0; i < 5; i += 1) {
     await recordEntry(db, {
-      accountId: 'acct_1', direction: 'DEBIT', amountMinor: USDC(100),
+      orgId: 'acme', direction: 'DEBIT', amountMinor: USDC(100),
       refType: 'TRANSFER', refId: `ti_${i}`,
     });
   }
@@ -237,7 +288,7 @@ test('the daily window is today’s movements, and it does not page', async () =
   const startOfUtcDay = Date.UTC(
     new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate(),
   );
-  const today = await listEntriesSince(db, 'acct_1', startOfUtcDay);
+  const today = await listEntriesSince(db, 'acme', startOfUtcDay);
 
   assert.equal(today.length, 5, 'yesterday’s 9,000 does not consume today’s budget');
   assert.equal(

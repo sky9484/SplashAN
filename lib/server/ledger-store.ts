@@ -22,6 +22,19 @@
  * Every movement now goes through `postJournal` as a balanced pair, and the
  * balance is a SUM over `ledger_postings`.
  *
+ * ─── Whose balance this is ──────────────────────────────────────────────────
+ *
+ * Keyed by ORG, with a `subject` inside it — `self` for the org's own
+ * spendable balance, a beneficiary id for a stored balance held in that org's
+ * book.
+ *
+ * NOT by the on-chain business account id. That id falls back to the env-wide
+ * `SPLASH_BUSINESS_ACCOUNT_ID` and then to the literal `dashboard-primary`,
+ * both shared by every org that reaches them — so two orgs without a
+ * provisioned on-chain account resolve to the same string and would have
+ * shared a balance. In the seeded dev database, `acme` and `northwind` both
+ * resolve to `dashboard-primary` today.
+ *
  * ─── Amounts are bigint here ────────────────────────────────────────────────
  *
  * The in-memory record used a JS `number` for micro-USDC. Callers that still
@@ -52,21 +65,22 @@ async function db() {
 }
 
 export type LedgerMovement = {
-  accountId: string;
+  /** The tenant. Required — this is the ownership boundary. */
+  orgId: string;
+  /** `self` (default) for the org's own balance, or a beneficiary id. */
+  subject?: string;
   direction: 'CREDIT' | 'DEBIT';
   amountMinor: bigint;
   refType: LedgerEntry['refType'];
   refId: string;
-  /** Known at the authorize and sweep sites, not at the funding webhook. The
-   *  account id is the scoping key either way. */
-  orgId?: string | null;
   suiTxDigest?: string;
   demo?: boolean;
 };
 
 export type LedgerLine = {
   id: string;
-  accountId: string;
+  orgId: string;
+  subject: string;
   direction: 'CREDIT' | 'DEBIT';
   amountMinor: bigint;
   balanceAfterMinor: bigint;
@@ -76,10 +90,17 @@ export type LedgerLine = {
   createdAt: string;
 };
 
+/** The in-process record still stores one flat key; it is `<orgId>:<subject>`. */
+function memoryKey(orgId: string, subject = 'self') {
+  return `${orgId}:${subject}`;
+}
+
 function fromMemory(entry: LedgerEntry): LedgerLine {
+  const [orgId, ...rest] = entry.accountId.split(':');
   return {
     id: entry.id,
-    accountId: entry.accountId,
+    orgId,
+    subject: rest.join(':') || 'self',
     direction: entry.direction,
     amountMinor: entry.amountUsdcMicro,
     balanceAfterMinor: entry.balanceAfterMicro,
@@ -96,7 +117,7 @@ export async function recordMovement(movement: LedgerMovement): Promise<LedgerLi
     const { createLedgerEntry } = await import('./operations.ts');
     return fromMemory(
       createLedgerEntry({
-        accountId: movement.accountId,
+        accountId: memoryKey(movement.orgId, movement.subject),
         direction: movement.direction,
         amountUsdcMicro: movement.amountMinor,
         refType: movement.refType,
@@ -107,29 +128,28 @@ export async function recordMovement(movement: LedgerMovement): Promise<LedgerLi
     );
   }
   return repo.recordEntry(await db(), {
-    accountId: movement.accountId,
+    orgId: movement.orgId,
+    subject: movement.subject,
     direction: movement.direction,
     amountMinor: movement.amountMinor,
     refType: movement.refType,
     refId: movement.refId,
-    orgId: movement.orgId ?? null,
     suiTxDigest: movement.suiTxDigest,
   });
 }
 
 /**
- * What this account may spend, in minor units.
+ * What this org may spend, in minor units.
  *
- * Scoped by account id, which is the tenant key: it is resolved from the
- * session by `requireSessionAccount` and never accepted from a request — see
- * the `isForeignAccountId` guard at every call site that takes one.
+ * `orgId` comes from the session by way of `requireSessionAccount` and is
+ * never accepted from a request.
  */
-export async function accountBalance(accountId: string): Promise<bigint> {
+export async function accountBalance(orgId: string, subject = 'self'): Promise<bigint> {
   if (!usingPostgres()) {
     const { getLedgerBalance } = await import('./operations.ts');
-    return getLedgerBalance(accountId);
+    return getLedgerBalance(memoryKey(orgId, subject));
   }
-  return repo.accountBalanceMinor(await db(), accountId);
+  return repo.accountBalanceMinor(await db(), orgId, subject);
 }
 
 /**
@@ -139,23 +159,28 @@ export async function accountBalance(accountId: string): Promise<bigint> {
  * A paged read there would be a ceiling that stops binding on a busy account.
  */
 export async function listMovementsSince(
-  accountId: string,
+  orgId: string,
   sinceMs: number,
+  subject = 'self',
 ): Promise<LedgerLine[]> {
   if (!usingPostgres()) {
     const { listLedgerEntries } = await import('./operations.ts');
-    return listLedgerEntries(accountId)
+    return listLedgerEntries(memoryKey(orgId, subject))
       .filter((entry) => Date.parse(entry.createdAt) >= sinceMs)
       .map(fromMemory);
   }
-  return repo.listEntriesSince(await db(), accountId, sinceMs);
+  return repo.listEntriesSince(await db(), orgId, sinceMs, subject);
 }
 
 /** One account's movements, newest first. */
-export async function listMovements(accountId: string, limit = 100): Promise<LedgerLine[]> {
+export async function listMovements(
+  orgId: string,
+  limit = 100,
+  subject = 'self',
+): Promise<LedgerLine[]> {
   if (!usingPostgres()) {
     const { listLedgerEntries } = await import('./operations.ts');
-    return listLedgerEntries(accountId).slice(0, limit).map(fromMemory);
+    return listLedgerEntries(memoryKey(orgId, subject)).slice(0, limit).map(fromMemory);
   }
-  return repo.listEntriesFor(await db(), accountId, limit);
+  return repo.listEntriesFor(await db(), orgId, limit, subject);
 }

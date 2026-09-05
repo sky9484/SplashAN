@@ -14,12 +14,12 @@ export async function completeDeliveryForTransfer(intentId: string) {
     return { state: 'DISBURSED' as const };
   }
 
-  // The RECIPIENT's account, not the payer's — the payer was debited at
-  // authorization. Both sides carry the transfer's org so the journal can be
-  // reported on without a join through the intent.
+  // The RECIPIENT's stored balance, held inside the paying org's book — the
+  // payer's own balance was debited at authorization. `subject` is what
+  // separates the two inside one tenant.
   await recordMovement({
-    accountId,
     orgId: intent.orgId,
+    subject: accountId,
     direction: 'CREDIT',
     amountMinor: BigInt(intent.stablecoinAmountMicro),
     refType: 'TRANSFER',
@@ -51,8 +51,8 @@ export async function completeDeliveryForTransfer(intentId: string) {
     const completedAt = new Date();
     const heldDurationMs = completedAt.getTime() - new Date(job.createdAt).getTime();
     await recordMovement({
-      accountId,
       orgId: intent.orgId,
+      subject: accountId,
       direction: 'DEBIT',
       amountMinor: BigInt(intent.stablecoinAmountMicro),
       refType: 'SWEEP',

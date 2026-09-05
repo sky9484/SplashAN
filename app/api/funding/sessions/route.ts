@@ -42,7 +42,7 @@ export async function POST(request: Request) {
   // org credit a deposit to (and later spend it from) another org's ledger.
   const accountCheck = await requireSessionAccount(auth.session);
   if (accountCheck.response) return accountCheck.response;
-  const { accountId } = accountCheck.account;
+  const { accountId, orgId } = accountCheck.account;
   if (isForeignAccountId(parsed.data.businessAccountId, accountId)) {
     return NextResponse.json({ error: 'businessAccountId does not belong to this organization' }, { status: 403 });
   }
@@ -50,6 +50,7 @@ export async function POST(request: Request) {
   try {
     const amountExpectedMicro = Math.round(parsed.data.amountUsd * 1_000_000);
     const session = createFundingSession({
+      orgId,
       businessAccountId: accountId,
       selection: parsed.data.selection as FundingSelection,
       amountExpectedMicro,
