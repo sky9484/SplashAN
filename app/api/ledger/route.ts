@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 
 import { requireCustomerRequest } from '@/lib/server/customer-auth';
-import { getLedgerBalance, listLedgerEntries } from '@/lib/server/operations';
+import { divRound, formatMinor } from '@/lib/money';
+import { moneyJson } from '@/lib/server/json';
+import { accountBalance, listMovements } from '@/lib/server/ledger-store';
 import { isForeignAccountId, requireSessionAccount } from '@/lib/server/session-account';
 
 export async function GET(request: Request) {
@@ -21,12 +23,17 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'accountId does not belong to this organization' }, { status: 403 });
   }
 
-  const entries = listLedgerEntries(accountId);
-  const balanceMicro = getLedgerBalance(accountId);
-  return NextResponse.json({
+  const entries = await listMovements(accountId);
+  const balanceMinor = await accountBalance(accountId);
+  // `moneyJson` because these are bigints now: JSON.stringify throws on one,
+  // and a Number() would lose precision above 2^53 rather than saying so.
+  return moneyJson({
     accountId,
     entries,
-    balanceMicro,
-    balanceUsdc: (balanceMicro / 1_000_000).toFixed(2),
+    balanceMicro: balanceMinor,
+    // Micro-USDC to a two-decimal display figure. `floor`, not `trunc`: on a
+    // negative balance trunc rounds toward zero and would show less debt than
+    // there is.
+    balanceUsdc: formatMinor(divRound(balanceMinor, 10_000n, 'floor'), 2),
   });
 }

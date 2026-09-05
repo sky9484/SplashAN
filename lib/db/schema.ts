@@ -603,6 +603,13 @@ export const journalEntries = pgTable('journal_entries', {
   orgId: text('org_id').references(() => organizations.id),
   kind: text('kind').notNull(),
   intentId: text('intent_id'),
+  /** What this movement refers to — the sweep job, funding session, intent.
+   *  `kind` says which. Without it these rode in `intent_id`, which means an
+   *  intent and nothing else. */
+  refId: text('ref_id'),
+  /** Chain evidence for a ledger line, so reconciling the ledger against the
+   *  chain is a join rather than parsing prose out of `description`. */
+  suiTxDigest: text('sui_tx_digest'),
   description: text('description'),
   ...timestamps,
 }, (table) => [index('journal_intent_idx').on(table.intentId)]);
@@ -618,4 +625,7 @@ export const ledgerPostings = pgTable('ledger_postings', {
 }, (table) => [
   index('postings_journal_idx').on(table.journalId),
   index('postings_account_idx').on(table.account, table.currency),
+  /** One account's movements newest-first: the ledger page and every balance
+   *  check. Carries the ordering so the read is a scan, not a sort. */
+  index('postings_account_created_idx').on(table.account, table.currency, table.createdAt),
 ]);

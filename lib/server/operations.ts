@@ -160,8 +160,11 @@ export type LedgerEntry = {
   id: string;
   accountId: string;
   direction: 'CREDIT' | 'DEBIT';
-  amountUsdcMicro: number;
-  balanceAfterMicro: number;
+  /** Minor units as bigint, like the `ledger_postings` column this mirrors.
+   *  A JS number is exact only below 2^53 — about nine billion dollars at six
+   *  decimals — and the failure above it is silent rounding in a balance. */
+  amountUsdcMicro: bigint;
+  balanceAfterMicro: bigint;
   refType: 'TRANSFER' | 'SWEEP' | 'FEE' | 'FUNDING' | 'YIELD_SIM' | 'SEED';
   refId: string;
   suiTxDigest?: string;
@@ -560,16 +563,25 @@ export function createLedgerEntry(input: Omit<LedgerEntry, 'id' | 'balanceAfterM
   return entry;
 }
 
-export function listLedgerEntries(accountId?: string) {
+/**
+ * In-process ledger, for the no-database path in `lib/server/ledger-store.ts`
+ * and the demo seed. Every deployed environment goes through `postJournal`.
+ *
+ * `accountId` is REQUIRED. It used to be optional, and omitting it returned
+ * every account's entries — the enumeration primitive that turns a guessed
+ * account id into a targeted debit, documented at `app/api/ledger/route.ts`.
+ * Required means the unscoped call is a type error rather than a habit.
+ */
+export function listLedgerEntries(accountId: string) {
   return [...operations.ledgerEntries.values()]
-    .filter((entry) => !accountId || entry.accountId === accountId)
+    .filter((entry) => entry.accountId === accountId)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
-export function getLedgerBalance(accountId: string) {
+export function getLedgerBalance(accountId: string): bigint {
   return listLedgerEntries(accountId).reduce(
     (balance, entry) => balance + (entry.direction === 'CREDIT' ? entry.amountUsdcMicro : -entry.amountUsdcMicro),
-    0,
+    0n,
   );
 }
 
@@ -779,7 +791,7 @@ function seedDemoData() {
     demo: true,
   });
   updateInvoice(invoice.id, { transferIntentId: transfer.id });
-  createLedgerEntry({ accountId: cebu.id, direction: 'CREDIT', amountUsdcMicro: 5_000_000_000, refType: 'SEED', refId: 'demo_seed', demo: true });
+  createLedgerEntry({ accountId: cebu.id, direction: 'CREDIT', amountUsdcMicro: 5_000_000_000n, refType: 'SEED', refId: 'demo_seed', demo: true });
   createRateHold({ corridorCurrency: 'PHP', rate: '56.5', feeBps: 80, demo: true });
 }
 

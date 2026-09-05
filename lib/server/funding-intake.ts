@@ -4,7 +4,7 @@ import { timingSafeEqual } from 'node:crypto';
 
 import { assessKyt, type FundingSourceType } from '@/lib/funding/kyt-policy';
 import { resolveFundingSelection } from '@/lib/funding/registry';
-import { createLedgerEntry } from '@/lib/server/operations';
+import { recordMovement } from '@/lib/server/ledger-store';
 import { normalizeToUsdc } from '@/lib/server/funding-normalization';
 import {
   readFundingSession,
@@ -98,10 +98,10 @@ export async function ingestStablecoinDeposit(input: InboundDeposit) {
     })!;
   }
 
-  createLedgerEntry({
+  await recordMovement({
     accountId: session.businessAccountId,
     direction: 'CREDIT',
-    amountUsdcMicro: normalized.amountOutMicro,
+    amountMinor: BigInt(normalized.amountOutMicro),
     refType: 'FUNDING',
     refId: session.id,
     suiTxDigest: input.sourceTxDigest,

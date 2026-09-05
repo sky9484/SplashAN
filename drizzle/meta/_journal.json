@@ -57,6 +57,13 @@
       "when": 1788622922326,
       "tag": "0007_transfer_persistence",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1788626606916,
+      "tag": "0008_ledger_refs",
+      "breakpoints": true
     }
   ]
 }

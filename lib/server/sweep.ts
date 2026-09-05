@@ -1,4 +1,5 @@
-import { createLedgerEntry, createSweepJob, findRecipient, updateSweepJob } from '@/lib/server/operations';
+import { createSweepJob, findRecipient, updateSweepJob } from '@/lib/server/operations';
+import { recordMovement } from '@/lib/server/ledger-store';
 import { patchTransfer, readTransferForStaff } from '@/lib/server/transfers-store';
 import { pdaxAdapter } from '@/lib/server/pdax';
 
@@ -12,10 +13,14 @@ export async function completeDeliveryForTransfer(intentId: string) {
     return { state: 'DISBURSED' as const };
   }
 
-  createLedgerEntry({
+  // The RECIPIENT's account, not the payer's — the payer was debited at
+  // authorization. Both sides carry the transfer's org so the journal can be
+  // reported on without a join through the intent.
+  await recordMovement({
     accountId,
+    orgId: intent.orgId,
     direction: 'CREDIT',
-    amountUsdcMicro: intent.stablecoinAmountMicro,
+    amountMinor: BigInt(intent.stablecoinAmountMicro),
     refType: 'TRANSFER',
     refId: intent.id,
     suiTxDigest: intent.suiTxDigest ?? undefined,
@@ -43,7 +48,15 @@ export async function completeDeliveryForTransfer(intentId: string) {
     const result = await pdaxAdapter.payout(job);
     const completedAt = new Date();
     const heldDurationMs = completedAt.getTime() - new Date(job.createdAt).getTime();
-    createLedgerEntry({ accountId, direction: 'DEBIT', amountUsdcMicro: intent.stablecoinAmountMicro, refType: 'SWEEP', refId: job.id, suiTxDigest: intent.suiTxDigest ?? undefined });
+    await recordMovement({
+      accountId,
+      orgId: intent.orgId,
+      direction: 'DEBIT',
+      amountMinor: BigInt(intent.stablecoinAmountMicro),
+      refType: 'SWEEP',
+      refId: job.id,
+      suiTxDigest: intent.suiTxDigest ?? undefined,
+    });
     updateSweepJob(job.id, { state: 'COMPLETED', partnerPayoutRef: result.partnerPayoutRef, heldDurationMs, completedAt: completedAt.toISOString() });
     await patchTransfer(intent.id, { state: 'DISBURSED' });
     return { state: 'DISBURSED' as const, heldDurationMs, partnerPayoutRef: result.partnerPayoutRef };

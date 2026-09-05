@@ -5,12 +5,11 @@ import { createIntercompanyTransfer } from '@/lib/server/intercompany';
 import { convertUsdToUsdc, usdCentsToUsdcMicro } from '@/lib/server/labuan-settlement';
 import { executeComposedPayment } from '@/lib/server/composed-payment';
 import {
-  createLedgerEntry,
   createRecipient,
   createTransferIntent,
-  getLedgerBalance,
   updateInvoice,
 } from '@/lib/server/operations';
+import { accountBalance, listMovementsSince, recordMovement } from '@/lib/server/ledger-store';
 import { patchAuditReceipt, patchTransfer, persistTransfer } from '@/lib/server/transfers-store';
 import { pythAdapter } from '@/lib/server/pyth';
 import { calculateQuote } from '@/lib/server/quote';
@@ -27,12 +26,11 @@ import { requireCustomerRequest } from '@/lib/server/customer-auth';
 import { assertCleanBody, ProvenanceViolationError, provenanceViolationResponse } from '@/lib/auth/provenance-guard';
 import { requireActiveOrg } from '@/lib/server/kyb-gate';
 import { checkMinimumSettlement } from '@/lib/policy/limits';
-import { checkAuthorizationLimits } from '@/lib/policy/authorization-limits';
+import { checkAuthorizationLimits, startOfUtcDay } from '@/lib/policy/authorization-limits';
 import { verifyPayoutTotp } from '@/lib/auth/totp';
 import { readOperatingSettings } from '@/lib/server/operating-settings';
 import { readComplianceControls } from '@/lib/server/sui-settlement';
 import { isForeignAccountId, requireSessionAccount } from '@/lib/server/session-account';
-import { listLedgerEntries } from '@/lib/server/operations';
 import { readJsonBody } from '@/lib/server/http';
 
 export const maxDuration = 60;
@@ -137,10 +135,20 @@ export async function POST(request: Request) {
   // Ceilings the operator configured in Settings. Until now the only amount
   // rule on this route was the $100 floor, so a $1,000 per-transfer limit
   // bounded nothing.
+  // The daily ceiling is computed from the ledger rather than a counter, which
+  // is right — but the ledger it read was the in-process map, so a restart
+  // reset every account's daily spend to zero and the cap stopped binding.
+  // Today's movements only, unpaged: a page limit here would hand a busy
+  // account its budget back once the early debits fell off the end.
+  const todaysMovements = await listMovementsSince(businessAccountId, startOfUtcDay(Date.now()));
   const limits = checkAuthorizationLimits({
     amountUsd: sourceAmount,
     settings,
-    ledger: listLedgerEntries(businessAccountId),
+    ledger: todaysMovements.map((line) => ({
+      direction: line.direction,
+      amountUsdcMicro: Number(line.amountMinor),
+      createdAt: line.createdAt,
+    })),
   });
   if (!limits.ok) {
     return NextResponse.json({ error: limits.message, code: limits.code, limitUsd: limits.limitUsd }, { status: 400 });
@@ -207,7 +215,14 @@ export async function POST(request: Request) {
   if (!fundingSession && fundingSelection.type !== 'held') {
     return NextResponse.json({ error: 'Bank and coin sources require a funding session before settlement' }, { status: 409 });
   }
-  if (fundingSelection.type === 'held' && getLedgerBalance(businessAccountId) < sourceAmountMicro) {
+  // The balance this gate reads is now a SUM over ledger_postings rather than
+  // over a map that emptied on restart. Compared as bigint on both sides —
+  // mixing a bigint balance with a number amount is how a check passes on a
+  // figure the ledger does not hold.
+  if (
+    fundingSelection.type === 'held'
+    && (await accountBalance(businessAccountId)) < BigInt(sourceAmountMicro)
+  ) {
     return NextResponse.json({ error: 'Splash balance is insufficient for this payment source' }, { status: 409 });
   }
   if (fundingSelection.type === 'fiat' && fundingSession) {
@@ -288,7 +303,7 @@ export async function POST(request: Request) {
   //
   // `ingestStablecoinDeposit` writes a CREDIT against the funding session's
   // account when a deposit lands, and that same account is what
-  // `getLedgerBalance` reports as spendable "Splash Balance". Debiting only on
+  // `accountBalance` reports as spendable "Splash Balance". Debiting only on
   // the `held` branch meant a stablecoin-funded transfer settled without ever
   // consuming its credit — so one 5,000 deposit funded a 5,000 stablecoin
   // transfer AND a second 5,000 transfer from the balance it left behind.
@@ -297,10 +312,11 @@ export async function POST(request: Request) {
   const debitedAmountMicro = fundingSelection.type === 'stablecoin'
     ? fundingSession?.normalizedAmountUsdcMicro ?? sourceAmountMicro
     : sourceAmountMicro;
-  const payerDebit = createLedgerEntry({
+  const payerDebit = await recordMovement({
     accountId: businessAccountId,
+    orgId,
     direction: 'DEBIT',
-    amountUsdcMicro: debitedAmountMicro,
+    amountMinor: BigInt(debitedAmountMicro),
     refType: 'TRANSFER',
     refId: intent.id,
     demo: process.env.NODE_ENV !== 'production' || process.env.USE_MOCK_APIS === 'true' || process.env.NEXT_PUBLIC_DEMO_MODE === 'true',
@@ -308,7 +324,7 @@ export async function POST(request: Request) {
   // Fiat rails fund the payout externally, so their balance legitimately dips
   // negative until the provider's credit posts; a coin or held source going
   // negative means we just spent money the ledger says is not there.
-  if (payerDebit.balanceAfterMicro < 0 && fundingSelection.type !== 'fiat') {
+  if (payerDebit.balanceAfterMinor < 0n && fundingSelection.type !== 'fiat') {
     await patchTransfer(intent.id, {
       state: 'FAILED',
       failureReason: 'Ledger balance would go negative for this funding source',

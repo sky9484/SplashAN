@@ -8,7 +8,7 @@ import {
   type FundingSourceId,
 } from '@/lib/funding/registry';
 import { requireCustomerRequest } from '@/lib/server/customer-auth';
-import { getLedgerBalance } from '@/lib/server/operations';
+import { accountBalance } from '@/lib/server/ledger-store';
 import { readLastUsedFundingSource } from '@/lib/server/funding-sessions';
 import { isForeignAccountId, requireSessionAccount } from '@/lib/server/session-account';
 
@@ -29,7 +29,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'businessAccountId does not belong to this organization' }, { status: 403 });
   }
   const registry = getEnabledFundingOptions();
-  const heldBalanceMicro = getLedgerBalance(businessAccountId);
+  const heldBalanceMicro = Number(await accountBalance(businessAccountId));
   const sources = buildFundingSources({ registry, heldBalanceMicro, amountDueMicro });
   const lastUsedSource = readLastUsedFundingSource(businessAccountId);
   const countryCode = request.headers.get('x-vercel-ip-country')
