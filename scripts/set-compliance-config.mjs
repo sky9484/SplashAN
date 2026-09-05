@@ -54,8 +54,15 @@ function arg(name) {
 const PACKAGE = env('SPLASH_PACKAGE_ID');
 const CONFIG = env('SPLASH_COMPLIANCE_CONFIG_ID');
 const CAP = env('SPLASH_COMPLIANCE_CAP_ID');
-if (!PACKAGE || !CONFIG || !CAP) {
-  throw new Error('SPLASH_PACKAGE_ID, SPLASH_COMPLIANCE_CONFIG_ID and SPLASH_COMPLIANCE_CAP_ID are required.');
+// Phase 7: every use of the compliance cap is checked against the shared
+// registry, so a revoked cap is refused on chain (abort 210) rather than by
+// convention off it.
+const REGISTRY = env('SPLASH_CAP_REGISTRY_ID');
+if (!PACKAGE || !CONFIG || !CAP || !REGISTRY) {
+  throw new Error(
+    'SPLASH_PACKAGE_ID, SPLASH_COMPLIANCE_CONFIG_ID, SPLASH_COMPLIANCE_CAP_ID and ' +
+      'SPLASH_CAP_REGISTRY_ID are required.',
+  );
 }
 
 async function readConfig() {
@@ -133,7 +140,7 @@ if (allowPool || disallowPool) {
     target: `${PACKAGE}::compliance_config::${allowPool ? 'admin_allow_pool' : 'disallow_pool'}`,
     arguments: allowPool
       ? [poolTx.object(ADMIN_CAP), poolTx.object(CONFIG), poolTx.pure.id(poolId)]
-      : [poolTx.object(CONFIG), poolTx.object(CAP), poolTx.pure.id(poolId)],
+      : [poolTx.object(CONFIG), poolTx.object(CAP), poolTx.object(REGISTRY), poolTx.pure.id(poolId)],
   });
   await submit(poolTx, allowPool ? 'admin_allow_pool' : 'disallow_pool');
   console.log('whitelist now:', (await readConfig()).allowed_deepbook_pools);
@@ -203,6 +210,7 @@ tx.moveCall({
   arguments: [
     tx.object(CONFIG),
     tx.object(CAP),
+    tx.object(REGISTRY),
     tx.pure.u64(next.deviationPpm),
     tx.pure.u64(next.stalenessMs),
     tx.pure.u64(next.slippageBps),

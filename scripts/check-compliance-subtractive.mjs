@@ -136,6 +136,16 @@ for (const file of readdirSync(SOURCES).filter((f) => f.endsWith('.move'))) {
 
   for (const fn of functions(source)) {
     if (!/&\s*ComplianceCap\b/.test(fn.params)) continue;
+
+    // Pure reads are exempt, structurally rather than by name: a function with
+    // no `&mut` parameter and no transfer or event in its body changes nothing,
+    // and a function that changes nothing cannot loosen a control. That is what
+    // lets `assert_compliance_cap` and the generation getter take the cap
+    // without being enumerated here as subtractive operations.
+    const mutates =
+      /&\s*mut\b/.test(fn.params) || /transfer::/.test(fn.body) || /event::emit/.test(fn.body);
+    if (!mutates) continue;
+
     inspected += 1;
 
     const rule = ALLOWED[fn.name];

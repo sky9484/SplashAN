@@ -9,6 +9,7 @@
 module splash_core::compliance_tests;
 
 use splash_core::business_account;
+use splash_core::cap_registry::{Self, CapRegistry};
 use splash_core::compliance_config::{Self, ComplianceConfig, ComplianceCap};
 use std::unit_test::assert_eq;
 use sui::test_scenario::{Self as ts, Scenario};
@@ -28,9 +29,12 @@ fun setup(): Scenario {
     let mut scenario = ts::begin(ADMIN);
     {
         let ctx = scenario.ctx();
+        cap_registry::init_for_testing(ctx);
         let admin = business_account::admin_cap_for_testing(ctx);
+        let registry = cap_registry::new_for_testing(ctx);
         compliance_config::create(
             &admin,
+            &registry,
             DEVIATION,
             STALENESS,
             SLIPPAGE,
@@ -40,6 +44,7 @@ fun setup(): Scenario {
             ctx,
         );
         business_account::destroy_admin_cap_for_testing(admin);
+        cap_registry::share_for_testing(registry);
     };
     scenario
 }
@@ -52,10 +57,12 @@ fun tightening_in_every_direction_is_allowed() {
     {
         let mut config = scenario.take_shared<ComplianceConfig>();
         let cap = scenario.take_from_sender<ComplianceCap>();
+        let registry = scenario.take_shared<CapRegistry>();
 
         compliance_config::tighten(
             &mut config,
             &cap,
+            &registry,
             DEVIATION - 1_000,   // tolerance down
             STALENESS - 100_000, // tolerance down
             SLIPPAGE - 100,      // tolerance down
@@ -67,6 +74,7 @@ fun tightening_in_every_direction_is_allowed() {
         assert_eq!(compliance_config::min_depth_base_units(&config), DEPTH + 500_000);
 
         scenario.return_to_sender(cap);
+        ts::return_shared(registry);
         ts::return_shared(config);
     };
     scenario.end();
@@ -82,9 +90,11 @@ fun restating_the_current_values_is_allowed() {
     {
         let mut config = scenario.take_shared<ComplianceConfig>();
         let cap = scenario.take_from_sender<ComplianceCap>();
-        compliance_config::tighten(&mut config, &cap, DEVIATION, STALENESS, SLIPPAGE, DEPTH, FLOOR);
+        let registry = scenario.take_shared<CapRegistry>();
+        compliance_config::tighten(&mut config, &cap, &registry, DEVIATION, STALENESS, SLIPPAGE, DEPTH, FLOOR);
         assert_eq!(compliance_config::max_slippage_bps(&config), SLIPPAGE);
         scenario.return_to_sender(cap);
+        ts::return_shared(registry);
         ts::return_shared(config);
     };
     scenario.end();
@@ -99,9 +109,11 @@ fun raising_a_tolerance_aborts() {
     {
         let mut config = scenario.take_shared<ComplianceConfig>();
         let cap = scenario.take_from_sender<ComplianceCap>();
+        let registry = scenario.take_shared<CapRegistry>();
         compliance_config::tighten(
             &mut config,
             &cap,
+            &registry,
             DEVIATION,
             STALENESS,
             SLIPPAGE + 100, // more slippage tolerated
@@ -109,6 +121,7 @@ fun raising_a_tolerance_aborts() {
             FLOOR,
         );
         scenario.return_to_sender(cap);
+        ts::return_shared(registry);
         ts::return_shared(config);
     };
     scenario.end();
@@ -123,9 +136,11 @@ fun lowering_a_requirement_aborts() {
     {
         let mut config = scenario.take_shared<ComplianceConfig>();
         let cap = scenario.take_from_sender<ComplianceCap>();
+        let registry = scenario.take_shared<CapRegistry>();
         compliance_config::tighten(
             &mut config,
             &cap,
+            &registry,
             DEVIATION,
             STALENESS,
             SLIPPAGE,
@@ -133,6 +148,7 @@ fun lowering_a_requirement_aborts() {
             FLOOR - 1, // a smaller settlement floor lets more through
         );
         scenario.return_to_sender(cap);
+        ts::return_shared(registry);
         ts::return_shared(config);
     };
     scenario.end();
@@ -147,9 +163,11 @@ fun the_admin_cap_can_relax_what_the_compliance_cap_tightened() {
     {
         let mut config = scenario.take_shared<ComplianceConfig>();
         let cap = scenario.take_from_sender<ComplianceCap>();
-        compliance_config::tighten(&mut config, &cap, DEVIATION, STALENESS, 100, DEPTH, FLOOR);
+        let registry = scenario.take_shared<CapRegistry>();
+        compliance_config::tighten(&mut config, &cap, &registry, DEVIATION, STALENESS, 100, DEPTH, FLOOR);
         assert_eq!(compliance_config::max_slippage_bps(&config), 100);
         scenario.return_to_sender(cap);
+        ts::return_shared(registry);
         ts::return_shared(config);
     };
     scenario.next_tx(ADMIN);
@@ -184,9 +202,11 @@ fun the_compliance_cap_can_halt_but_only_the_admin_cap_resumes() {
     {
         let mut config = scenario.take_shared<ComplianceConfig>();
         let cap = scenario.take_from_sender<ComplianceCap>();
-        compliance_config::pause(&mut config, &cap);
+        let registry = scenario.take_shared<CapRegistry>();
+        compliance_config::pause(&mut config, &cap, &registry);
         assert_eq!(compliance_config::paused(&config), true);
         scenario.return_to_sender(cap);
+        ts::return_shared(registry);
         ts::return_shared(config);
     };
     scenario.next_tx(ADMIN);
@@ -222,13 +242,15 @@ fun venues_are_added_by_admin_and_removed_by_compliance() {
     {
         let mut config = scenario.take_shared<ComplianceConfig>();
         let cap = scenario.take_from_sender<ComplianceCap>();
-        compliance_config::disallow_pool(&mut config, &cap, pool_b());
+        let registry = scenario.take_shared<CapRegistry>();
+        compliance_config::disallow_pool(&mut config, &cap, &registry, pool_b());
         assert_eq!(compliance_config::is_pool_allowed(&config, pool_b()), false);
         // The last venue still cannot be removed — an empty whitelist bricks
         // every settlement path, which is `pause`'s job and should not be
         // reachable by accident.
         assert_eq!(compliance_config::is_pool_allowed(&config, pool_a()), true);
         scenario.return_to_sender(cap);
+        ts::return_shared(registry);
         ts::return_shared(config);
     };
     scenario.end();
@@ -242,8 +264,10 @@ fun the_last_venue_cannot_be_removed() {
     {
         let mut config = scenario.take_shared<ComplianceConfig>();
         let cap = scenario.take_from_sender<ComplianceCap>();
-        compliance_config::disallow_pool(&mut config, &cap, pool_a());
+        let registry = scenario.take_shared<CapRegistry>();
+        compliance_config::disallow_pool(&mut config, &cap, &registry, pool_a());
         scenario.return_to_sender(cap);
+        ts::return_shared(registry);
         ts::return_shared(config);
     };
     scenario.end();

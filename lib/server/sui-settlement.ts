@@ -253,6 +253,19 @@ async function assertSettlementPoolFunded(
 }
 
 /**
+ * The shared `CapRegistry` (Phase 7). Required by every call that USES a
+ * revocable capability.
+ *
+ * Deliberately throwing rather than optional: without it the PTB cannot be
+ * built at all, which is the correct failure. An "optional registry" would mean
+ * a code path where a revoked capability still works, and that path would be
+ * the one running in production the day someone needs the revocation.
+ */
+function capRegistryObjectId(): string {
+  return configIdOrThrow('capRegistryId', 'SPLASH_CAP_REGISTRY_ID');
+}
+
+/**
  * The attestation capability — and ONLY the attestation capability.
  *
  * A-12 fix. This used to fall back to `adminCapId`, which is why the S-10 cap
@@ -431,6 +444,11 @@ const ABORT_CODES: Record<number, string> = {
   417: 'E_WRONG_BUSINESS_ACCOUNT — the account passed is not the account the intent was opened against.',
   418: 'E_NOT_A_MEMBER — the signer is neither an owner nor an approver of the account, so cannot open an intent in its name.',
   419: 'E_ACCOUNT_NOT_PAYABLE — the account is frozen or not KYB-verified.',
+
+  // ── cap_registry (break-glass revocation) ────────────────────────────────
+  210: 'E_STALE_GENERATION — the capability presented is from a superseded generation. It was revoked by a break-glass rotation and is permanently dead; a replacement was minted to whoever the rotation named. Check the CapabilityRevoked event and update the configured object id.',
+  211: 'E_UNKNOWN_KIND — cap_registry was asked about a capability kind it does not track. Only AnchorCap (0) and ComplianceCap (1) carry generations.',
+  212: 'E_INVALID_HOLDER — a break-glass rotation named 0x0 as the new holder, which would mint the replacement capability to nobody and leave the kind unusable.',
 
   // ── daily_limit (per-account 24h ceiling) ────────────────────────────────
   200: 'E_ZERO_AMOUNT — daily_limit::charge called with a zero payout.',
@@ -880,6 +898,7 @@ export async function confirmComposedPaymentOnSui(input: {
     target: `${packageId}::audit_anchor::anchor_audit_hash`,
     arguments: [
       tx.object(anchorCapId),
+      tx.object(capRegistryObjectId()),
       tx.pure.string(input.auditHash),
       tx.pure.string(input.anchorId),
       tx.pure.string(input.backingBlobId),
@@ -951,6 +970,7 @@ export async function anchorAuditHashOnSui(input: {
     target: `${packageId}::audit_anchor::anchor_audit_hash`,
     arguments: [
       tx.object(anchorCapId),
+      tx.object(capRegistryObjectId()),
       tx.pure.string(input.auditHash),
       tx.pure.string(input.anchorId),
       tx.pure.string(input.backingBlobId),
@@ -1024,6 +1044,7 @@ export async function refreshPegOnSui(input: { usdcPrice: number; usdtPrice: num
     arguments: [
       tx.object(pegStateId),
       tx.object(anchorCapId),
+      tx.object(capRegistryObjectId()),
       tx.pure.u64(usdcDeviationPpm),
       tx.pure.u64(usdtDeviationPpm),
       tx.object('0x6'),
@@ -1138,9 +1159,14 @@ async function updatePegOnSui(): Promise<void> {
   // A-12: no adminCapId fallback. An unconfigured attestation cap must stop the
   // peg daemon, not silently promote the hot key to money authority.
   const SPLASH_ANCHOR_CAP_ID = optionalConfigId('anchorCapId');
+  const SPLASH_CAP_REGISTRY_ID = optionalConfigId('capRegistryId');
 
   if (!SPLASH_ANCHOR_CAP_ID) {
     console.warn('[Sui Peg Update] SPLASH_ANCHOR_CAP_ID is not set — skipping auto peg refresh. Settlement may fail with E_PEG_STALE. Point it at the AnchorCap minted by the package publish (business_account::init), rotated with business_account::rotate_anchor_cap — never at SPLASH_ADMIN_CAP_ID.');
+    return;
+  }
+  if (!SPLASH_CAP_REGISTRY_ID) {
+    console.warn('[Sui Peg Update] SPLASH_CAP_REGISTRY_ID is not set — skipping auto peg refresh. Since Phase 7 the anchor cap is checked against the shared CapRegistry on every use, so the call cannot be built without it. This is the correct failure: a code path that pushed a peg reading WITHOUT the revocation check is a path where a revoked capability still works.');
     return;
   }
   if (!SPLASH_PACKAGE_ID || !SPLASH_PEG_STATE_ID) {
@@ -1169,7 +1195,7 @@ async function updatePegOnSui(): Promise<void> {
     '--package', SPLASH_PACKAGE_ID,
     '--module', 'peg_monitor',
     '--function', 'update_peg',
-    '--args', SPLASH_PEG_STATE_ID, SPLASH_ANCHOR_CAP_ID, usdcDeviationPpm, usdtDeviationPpm, '0x6',
+    '--args', SPLASH_PEG_STATE_ID, SPLASH_ANCHOR_CAP_ID, SPLASH_CAP_REGISTRY_ID, usdcDeviationPpm, usdtDeviationPpm, '0x6',
     '--gas-budget', process.env.SUI_PEG_UPDATE_GAS_BUDGET ?? '10000000',
     '--json',
   ], 1024 * 1024 * 5);
@@ -1282,6 +1308,7 @@ export async function recordSingleTransferOnSui(input: {
   // settle_payment takes no capability, so the only cap this PTB needs is the
   // attestation cap for the peg push — this path stays fully hot after the split.
   const SPLASH_ANCHOR_CAP_ID = anchorCapObjectId();
+  const SPLASH_CAP_REGISTRY_ID = capRegistryObjectId();
   // MEASURED, never a constant. Writing a hardcoded 0 here and reading it back
   // via assert_pegged one command later is what made the peg breaker inert.
   const pegAttestation = await resolvePegAttestation();
@@ -1306,6 +1333,7 @@ export async function recordSingleTransferOnSui(input: {
         arguments: [
           tx.object(SPLASH_PEG_STATE_ID),
           tx.object(SPLASH_ANCHOR_CAP_ID),
+          tx.object(SPLASH_CAP_REGISTRY_ID),
           tx.pure.u64(usdcDeviationPpm),
           tx.pure.u64(usdtDeviationPpm),
           tx.object('0x6'),
@@ -1358,6 +1386,7 @@ export async function recordSingleTransferOnSui(input: {
       `${SPLASH_PACKAGE_ID}::peg_monitor::update_peg`,
       `@${SPLASH_PEG_STATE_ID}`,
       `@${SPLASH_ANCHOR_CAP_ID}`,
+      `@${SPLASH_CAP_REGISTRY_ID}`,
       usdcDeviationPpm,
       usdtDeviationPpm,
       '@0x6',
@@ -1478,6 +1507,7 @@ export async function recordBatchSettlementOnSui(input: {
   // `SettlementCap` with per-batch limits) is an explicit follow-up decision —
   // see docs/KEY-CEREMONY-RUNBOOK.md. Single transfers are unaffected.
   const SPLASH_ANCHOR_CAP_ID = anchorCapObjectId();
+  const SPLASH_CAP_REGISTRY_ID = capRegistryObjectId();
   // The batch no longer takes an AdminCap. It takes a delegation the TENANT
   // granted, which the operator owns and can therefore name as an input.
   const SPLASH_PAYOUT_DELEGATION_ID = configIdOrThrow('payoutDelegationId', 'SPLASH_PAYOUT_DELEGATION_ID');
@@ -1522,6 +1552,7 @@ export async function recordBatchSettlementOnSui(input: {
         arguments: [
           tx.object(SPLASH_PEG_STATE_ID),
           tx.object(SPLASH_ANCHOR_CAP_ID),
+          tx.object(SPLASH_CAP_REGISTRY_ID),
           tx.pure.u64(usdcDeviationPpm),
           tx.pure.u64(usdtDeviationPpm),
           tx.object('0x6'),
@@ -1575,6 +1606,7 @@ export async function recordBatchSettlementOnSui(input: {
       `${SPLASH_PACKAGE_ID}::peg_monitor::update_peg`,
       `@${SPLASH_PEG_STATE_ID}`,
       `@${SPLASH_ANCHOR_CAP_ID}`,
+      `@${SPLASH_CAP_REGISTRY_ID}`,
       usdcDeviationPpm,
       usdtDeviationPpm,
       '@0x6',
@@ -1841,6 +1873,7 @@ export async function updateComplianceControls(
     arguments: [
       tx.object(configId),
       tx.object(capId),
+      tx.object(capRegistryObjectId()),
       tx.pure.u64(input.maxDeviationPpm),
       tx.pure.u64(input.maxStalenessMs),
       tx.pure.u64(input.maxSlippageBps),
@@ -1851,7 +1884,7 @@ export async function updateComplianceControls(
   if (input.paused && !onChain.paused) {
     tx.moveCall({
       target: `${packageId}::compliance_config::pause`,
-      arguments: [tx.object(configId), tx.object(capId)],
+      arguments: [tx.object(configId), tx.object(capId), tx.object(capRegistryObjectId())],
     });
   }
   return executeSdkTransaction(tx);

@@ -108,6 +108,11 @@ export const envSchema = z.object({
    *  the cold 2-of-3 and must never be online. */
   SPLASH_TREASURY_CAP_ID: objectId,
   SPLASH_ANCHOR_CAP_ID: objectId,
+  /** Phase 7 break-glass. The shared CapRegistry holding the live generation
+   *  for each revocable capability. Every call that USES an AnchorCap or a
+   *  ComplianceCap passes it, so a revoked capability stops working on chain
+   *  rather than being rejected by convention off it. */
+  SPLASH_CAP_REGISTRY_ID: objectId,
   /** Renamed with the Phase 6 cap split (`AttestationCap` -> `AnchorCap`).
    *  Declared must-be-unset rather than silently ignored: a stale object id
    *  under the old name would point at a capability type that no longer

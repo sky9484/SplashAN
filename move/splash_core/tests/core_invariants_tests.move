@@ -15,6 +15,7 @@ module splash_core::core_invariants_tests;
 
 use splash_core::audit_anchor;
 use splash_core::business_account;
+use splash_core::cap_registry;
 use splash_core::payment_intent;
 use std::unit_test::assert_eq;
 use sui::clock;
@@ -373,8 +374,10 @@ fun anchor_cap_attests_but_moves_no_money() {
     c.set_for_testing(1_000_000);
 
     let cap = business_account::anchor_cap_for_testing(ctx);
+    let registry = cap_registry::new_for_testing(ctx);
     audit_anchor::anchor_audit_hash(
         &cap,
+        &registry,
         b"audit-hash".to_string(),
         b"anchor-001".to_string(),
         b"walrus-blob".to_string(),
@@ -383,6 +386,7 @@ fun anchor_cap_attests_but_moves_no_money() {
         ctx,
     );
     business_account::destroy_anchor_cap(cap);
+    cap_registry::share_for_testing(registry);
     c.destroy_for_testing();
     scenario.end();
 }

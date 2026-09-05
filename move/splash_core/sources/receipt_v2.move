@@ -16,7 +16,8 @@
 ///     auditors can prove a digest was checked.
 module splash_core::receipt_v2;
 
-use splash_core::business_account::AnchorCap;
+use splash_core::business_account::{Self, AnchorCap};
+use splash_core::cap_registry::CapRegistry;
 use std::string::String;
 use sui::clock::{Self, Clock};
 use sui::event;
@@ -83,7 +84,8 @@ public struct ReceiptVerificationChecked has copy, drop {
 /// mutator from the scaffold is removed (M-03 fix) — receipts are now truly
 /// immutable.
 public fun create_receipt(
-    _cap: &AnchorCap,
+    cap: &AnchorCap,
+    registry: &CapRegistry,
     receipt_id: String,
     sender: address,
     recipient: address,
@@ -97,6 +99,8 @@ public fun create_receipt(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
+    // A revoked cap mints nothing.
+    business_account::assert_anchor_cap(registry, cap);
     assert!(std::string::length(&receipt_id) > 0, E_EMPTY_RECEIPT_ID);
     assert!(std::string::length(&tx_digest)  > 0, E_EMPTY_TX_DIGEST);
     assert!(amount_usd > 0,                       E_ZERO_AMOUNT);

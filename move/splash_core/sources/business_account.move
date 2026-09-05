@@ -56,6 +56,7 @@
 /// than discovered.
 module splash_core::business_account;
 
+use splash_core::cap_registry::{Self, CapRegistry};
 use splash_core::daily_limit::{Self, DailyLimit};
 use std::string::String;
 use sui::clock::{Self, Clock};
@@ -178,8 +179,16 @@ public struct TreasuryCap has key, store {
 /// Deliberately `key` ONLY (no `store`): it cannot be `public_transfer`red out
 /// of this module, so every custody change goes through `rotate_anchor_cap` /
 /// `destroy_anchor_cap` and leaves an event for off-chain monitoring.
+///
+/// Phase 7 added the generation. Possession is no longer authority on its own:
+/// every function that accepts one checks it against `CapRegistry`, so a cap
+/// from a superseded generation is dead on chain rather than merely
+/// discouraged off it. That is what makes a STOLEN cap recoverable — the old
+/// answer, "off-chain rejection of anchors bearing the retired id", was a hope
+/// about future consumers, not a control.
 public struct AnchorCap has key {
     id: UID,
+    generation: u64,
 }
 
 // ─── Objects ───────────────────────────────────────────────────────────────
@@ -333,7 +342,14 @@ fun init(ctx: &mut TxContext) {
     let publisher = tx_context::sender(ctx);
     transfer::transfer(AdminCap { id: object::new(ctx) }, publisher);
     transfer::transfer(TreasuryCap { id: object::new(ctx) }, publisher);
-    transfer::transfer(AnchorCap { id: object::new(ctx) }, publisher);
+    // Minted at the genesis generation. `cap_registry::init` shares the
+    // registry at the same value in this same publish transaction — neither
+    // module can read the other's object during `init`, so both hardcode it
+    // and a test asserts they agree.
+    transfer::transfer(
+        AnchorCap { id: object::new(ctx), generation: cap_registry::genesis() },
+        publisher,
+    );
 }
 
 // ─── Application ───────────────────────────────────────────────────────────
@@ -833,8 +849,11 @@ public fun rotate_anchor_cap(
 ) {
     assert!(holder != @0x0, E_INVALID_HOLDER);
 
-    let AnchorCap { id: retired_id } = retired;
-    let fresh = AnchorCap { id: object::new(ctx) };
+    // The generation is CARRIED, not bumped. This is a custody move — the
+    // operator is handing the cap to a new host — and bumping here would
+    // revoke nothing that is not already being consumed.
+    let AnchorCap { id: retired_id, generation } = retired;
+    let fresh = AnchorCap { id: object::new(ctx), generation };
 
     event::emit(AnchorCapRotated {
         retired_cap_id: object::uid_to_address(&retired_id),
@@ -853,12 +872,56 @@ public fun rotate_anchor_cap(
 /// (a) it can move no funds by construction, and (b) off-chain rejection of
 /// anchors bearing the retired cap id. See the key-ceremony runbook.
 public fun destroy_anchor_cap(cap: AnchorCap) {
-    let AnchorCap { id } = cap;
+    let AnchorCap { id, generation: _ } = cap;
     event::emit(AnchorCapDestroyed {
         anchor_cap_id: object::uid_to_address(&id),
     });
     object::delete(id);
 }
+
+/// BREAK-GLASS. Revoke every outstanding `AnchorCap` and mint one replacement.
+///
+/// This is the answer to the two holes Phase 6 left open and named: a cap that
+/// is LOST (so `rotate_anchor_cap` has nothing to consume) and a cap that is
+/// STOLEN (so its holder will never destroy it). Both are the same operation —
+/// the old cap's generation stops being current, so it stops working, whether
+/// it is at the bottom of a river or in a thief's wallet.
+///
+/// It does not restore the arbitrary minting Phase 6 deleted. The bump that
+/// creates this capability is the same bump that kills the previous one, in one
+/// transaction, so there is still never a second concurrent holder.
+///
+/// There is no delay, and `cap_registry`'s module comment argues that at
+/// length: a delay would protect against an `AdminCap` that already holds
+/// strictly more authority than the cap being rotated, and would hand a thief
+/// a window.
+///
+/// Operational cost, which is real: the operator server's cap dies the instant
+/// this lands, and anchoring fails until the new object id is deployed. The
+/// `CapabilityRevoked` event is the signal. See the key-ceremony runbook.
+public fun break_glass_anchor_cap(
+    _: &AdminCap,
+    registry: &mut CapRegistry,
+    holder: address,
+    reason: vector<u8>,
+    ctx: &mut TxContext,
+) {
+    assert!(holder != @0x0, E_INVALID_HOLDER);
+    let generation = cap_registry::bump(registry, cap_registry::kind_anchor(), holder, reason, ctx);
+    transfer::transfer(AnchorCap { id: object::new(ctx), generation }, holder);
+}
+
+/// The check every consumer of an `AnchorCap` must make.
+///
+/// `scripts/check-cap-generations.mjs` fails the build if a function takes
+/// `&AnchorCap` without calling this — because a single consumer that forgets
+/// is a hole through which a revoked cap keeps working, and it would be found
+/// by an incident rather than by a build.
+public fun assert_anchor_cap(registry: &CapRegistry, cap: &AnchorCap) {
+    cap_registry::assert_current(registry, cap_registry::kind_anchor(), cap.generation);
+}
+
+public fun anchor_cap_generation(cap: &AnchorCap): u64 { cap.generation }
 
 // ─── Views ─────────────────────────────────────────────────────────────────
 
@@ -908,6 +971,11 @@ public fun approval_expires_at_ms(approval: &PayoutApproval): u64 { approval.exp
 // ─── Test helpers ──────────────────────────────────────────────────────────
 
 #[test_only]
+public fun init_for_testing(ctx: &mut TxContext) {
+    init(ctx)
+}
+
+#[test_only]
 public fun admin_cap_for_testing(ctx: &mut TxContext): AdminCap {
     AdminCap { id: object::new(ctx) }
 }
@@ -925,7 +993,12 @@ public fun destroy_treasury_cap_for_testing(cap: TreasuryCap) {
 
 #[test_only]
 public fun anchor_cap_for_testing(ctx: &mut TxContext): AnchorCap {
-    AnchorCap { id: object::new(ctx) }
+    AnchorCap { id: object::new(ctx), generation: cap_registry::genesis() }
+}
+
+#[test_only]
+public fun anchor_cap_at_generation_for_testing(generation: u64, ctx: &mut TxContext): AnchorCap {
+    AnchorCap { id: object::new(ctx), generation }
 }
 
 #[test_only]

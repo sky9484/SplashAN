@@ -6,6 +6,7 @@
 module splash_core::compliance_config;
 
 use splash_core::business_account::AdminCap;
+use splash_core::cap_registry::{Self, CapRegistry};
 use sui::event;
 use sui::vec_set::{Self, VecSet};
 
@@ -71,9 +72,15 @@ public struct ComplianceConfig has key {
 ///
 /// Loosening — raising a tolerance, adding a venue, unpausing — is `AdminCap`,
 /// which is the cold 2-of-3 multisig.
+///
+/// Phase 7 added the generation. A lost `ComplianceCap` is not a brick —
+/// `AdminCap` can do everything this cap does — so break-glass here is about
+/// REVOCATION, not recovery: a stolen compliance key can pause settlement
+/// repeatedly, and until Phase 7 nothing could take it back.
 public struct ComplianceCap has key {
     id: UID,
     config_id: ID,
+    generation: u64,
 }
 
 public struct ComplianceConfigUpdated has copy, drop {
@@ -106,6 +113,7 @@ public struct DeepbookPoolDisallowed has copy, drop {
 /// the failure S-12 describes. Duplicate IDs abort (`vec_set::from_keys`).
 public fun create(
     _admin: &AdminCap,
+    registry: &CapRegistry,
     max_deviation_ppm: u64,
     max_staleness_ms: u64,
     max_slippage_bps: u64,
@@ -129,7 +137,11 @@ public fun create(
         paused: false,
     };
     let config_id = object::id(&config);
-    let cap = ComplianceCap { id: object::new(ctx), config_id };
+    let cap = ComplianceCap {
+        id: object::new(ctx),
+        config_id,
+        generation: cap_registry::compliance_generation(registry),
+    };
     transfer::share_object(config);
     transfer::transfer(cap, ctx.sender());
 }
@@ -149,12 +161,14 @@ public fun create(
 public fun tighten(
     config: &mut ComplianceConfig,
     cap: &ComplianceCap,
+    registry: &CapRegistry,
     max_deviation_ppm: u64,
     max_staleness_ms: u64,
     max_slippage_bps: u64,
     min_depth_base_units: u64,
     min_settlement_amount: u64,
 ) {
+    assert_compliance_cap(registry, cap);
     assert!(cap.config_id == object::id(config), E_INVALID_CAP);
     assert_valid(max_deviation_ppm, max_staleness_ms, max_slippage_bps, min_depth_base_units, min_settlement_amount);
 
@@ -223,7 +237,13 @@ public fun admin_allow_pool(_admin: &AdminCap, config: &mut ComplianceConfig, po
 /// Remove a venue. The last entry cannot be removed: an empty whitelist would
 /// abort every settlement, which is `set_paused`'s job and should not be
 /// reachable by accident. To swap venues, `allow_pool` the new one first.
-public fun disallow_pool(config: &mut ComplianceConfig, cap: &ComplianceCap, pool_id: ID) {
+public fun disallow_pool(
+    config: &mut ComplianceConfig,
+    cap: &ComplianceCap,
+    registry: &CapRegistry,
+    pool_id: ID,
+) {
+    assert_compliance_cap(registry, cap);
     assert!(cap.config_id == object::id(config), E_INVALID_CAP);
     assert!(config.allowed_deepbook_pools.length() > 1, E_POOL_LIST_EMPTY);
     // `vec_set::remove` aborts if absent, so a typo'd ID fails loudly.
@@ -236,7 +256,8 @@ public fun disallow_pool(config: &mut ComplianceConfig, cap: &ComplianceCap, poo
 /// Halt settlement. One direction only — `ComplianceCap` cannot resume,
 /// because resuming is a loosening and this cap does not loosen. Resuming is
 /// `admin_set_paused`.
-public fun pause(config: &mut ComplianceConfig, cap: &ComplianceCap) {
+public fun pause(config: &mut ComplianceConfig, cap: &ComplianceCap, registry: &CapRegistry) {
+    assert_compliance_cap(registry, cap);
     assert!(cap.config_id == object::id(config), E_INVALID_CAP);
     config.paused = true;
     emit_update(config);
@@ -261,6 +282,43 @@ public fun admin_set_paused(_admin: &AdminCap, config: &mut ComplianceConfig, pa
     config.paused = paused;
     emit_update(config);
 }
+
+/// BREAK-GLASS. Revoke every outstanding `ComplianceCap` and mint one
+/// replacement, bound to `config`.
+///
+/// Unlike the anchor cap, losing this one bricks nothing — `AdminCap` already
+/// holds strictly larger versions of everything it does. This exists for the
+/// other half: a compliance key believed compromised could, until now, pause
+/// settlement as often as it liked forever, and `transfer_cap` is callable only
+/// BY ITS HOLDER, so there was no way to take it back.
+public fun break_glass_compliance_cap(
+    _admin: &AdminCap,
+    registry: &mut CapRegistry,
+    config: &ComplianceConfig,
+    holder: address,
+    reason: vector<u8>,
+    ctx: &mut TxContext,
+) {
+    let generation = cap_registry::bump(
+        registry,
+        cap_registry::kind_compliance(),
+        holder,
+        reason,
+        ctx,
+    );
+    transfer::transfer(
+        ComplianceCap { id: object::new(ctx), config_id: object::id(config), generation },
+        holder,
+    );
+}
+
+/// The check every consumer of a `ComplianceCap` must make. Enforced by
+/// `scripts/check-cap-generations.mjs`.
+public fun assert_compliance_cap(registry: &CapRegistry, cap: &ComplianceCap) {
+    cap_registry::assert_current(registry, cap_registry::kind_compliance(), cap.generation);
+}
+
+public fun compliance_cap_generation(cap: &ComplianceCap): u64 { cap.generation }
 
 public fun assert_active(config: &ComplianceConfig) {
     assert!(!config.paused, E_SETTLEMENT_PAUSED);
