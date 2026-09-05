@@ -1,5 +1,6 @@
 import { suiScanTxUrl, suiVisionTxUrl } from '@/lib/explorer';
-import { listBatches, listTransactions } from '@/lib/server/operations';
+import { listTransactions } from '@/lib/server/operations';
+import { listBatchesForStaff } from '@/lib/server/batches-store';
 import { listTransfersForStaff } from '@/lib/server/transfers-store';
 import { pythAdapter } from '@/lib/server/pyth';
 import { readComplianceControls } from '@/lib/server/sui-settlement';
@@ -11,7 +12,7 @@ import { describeFundingSelection } from '@/lib/funding/registry';
 export const dynamic = 'force-dynamic';
 
 export default async function AdminTransactionsPage() {
-  const batches = listBatches();
+  const batches = await listBatchesForStaff();
   const transfers = await listTransfersForStaff();
   const transactions = await listTransactions();
   const fundingSessions = listFundingSessions();

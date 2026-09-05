@@ -78,6 +78,13 @@
       "when": 1788628625081,
       "tag": "0010_invoice_persistence",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1788631897662,
+      "tag": "0011_batch_runs",
+      "breakpoints": true
     }
   ]
 }

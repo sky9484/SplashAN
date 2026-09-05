@@ -12,6 +12,8 @@ import { accountBalance, listMovementsSince, recordMovement } from '@/lib/server
 import { persistRecipient } from '@/lib/server/recipients-store';
 import { patchInvoice } from '@/lib/server/invoices-store';
 import { patchAuditReceipt, patchTransfer, persistTransfer } from '@/lib/server/transfers-store';
+import { proposeForApproval } from '@/lib/server/dual-approval';
+import { resolveAuthorityForSession } from '@/lib/auth/authority';
 import { pythAdapter } from '@/lib/server/pyth';
 import { calculateQuote } from '@/lib/server/quote';
 import { completeDeliveryForTransfer } from '@/lib/server/sweep';
@@ -155,13 +157,47 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: limits.message, code: limits.code, limitUsd: limits.limitUsd }, { status: 400 });
   }
   if (limits.requiresSecondApproval) {
+    // This used to answer 409 telling the operator to "submit it through the
+    // approval queue", and put nothing in the approval queue. A control that
+    // stops work without offering the sanctioned path is one people route
+    // around — by splitting the payment under the threshold, which is worse
+    // than having no threshold.
+    const maker = await resolveAuthorityForSession(auth.session);
+    const proposal = await proposeForApproval({
+      orgId,
+      // The MAKER, from the session. The submit route compares this against
+      // the approver to refuse self-approval, so it is the whole substance
+      // of maker-checker.
+      createdBy: maker.userId,
+      kind: 'PAYMENT',
+      amountUsd: body.amount.value,
+      targetCurrency: body.amount.targetCurrency.toUpperCase(),
+      recommendation:
+        `Pay ${body.amount.value} USD to ${body.recipient.name} in ` +
+        `${body.amount.targetCurrency.toUpperCase()}. Above the ` +
+        `${settings.approvalThresholdUsd} USD dual-approval threshold.`,
+      passedChecks: [
+        { source: 'COMPLIANCE', ref: 'KYB org state is ACTIVE' },
+        { source: 'BALANCE', ref: `Per-transfer and daily ceilings, ${limits.spentTodayUsd} USD spent today` },
+        { source: 'COUNTERPARTY', ref: `Beneficiary ${body.recipient.name} (${body.recipient.country})` },
+      ],
+      payload: { ...body, businessAccountId: undefined },
+      idempotencyKey: `transfer:${orgId}:${body.amount.value}:${body.recipient.name}:${body.amount.targetCurrency}`,
+      approvalThresholdUsd: settings.approvalThresholdUsd,
+    });
     return NextResponse.json(
       {
         error:
           `${body.amount.value} USD is at or above the ${settings.approvalThresholdUsd} approval threshold and ` +
-          'dual approval is enabled, so this payment needs a second approver. Submit it through the approval queue.',
+          (proposal
+            ? 'dual approval is enabled. It is now in the approval queue and needs a second approver.'
+            : 'dual approval is enabled, so this payment needs a second approver. The approval queue could not be reached — try again.'),
         code: 'requires_second_approval',
         approvalThresholdUsd: settings.approvalThresholdUsd,
+        // Where it went, so the client can link straight to it rather than
+        // telling the operator to go looking.
+        proposalId: proposal?.id ?? null,
+        queueUrl: proposal ? '/queue' : null,
       },
       { status: 409 },
     );

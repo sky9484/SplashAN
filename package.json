@@ -36,6 +36,8 @@
     "test:money": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test tests/money.test.mjs",
     "test:wire": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test tests/wire-format.test.mjs",
     "test:travelrule": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test tests/travel-rule.test.mjs",
+    "test:batches": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --import ./scripts/alias-hook.mjs --test tests/batch-persistence.test.mjs",
+    "test:makerchecker": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --import ./scripts/alias-hook.mjs --test tests/maker-checker.test.mjs",
     "test:invoices": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --import ./scripts/alias-hook.mjs --test tests/invoice-persistence.test.mjs",
     "test:recipients": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --import ./scripts/alias-hook.mjs --test tests/recipient-persistence.test.mjs",
     "test:ledger": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --import ./scripts/alias-hook.mjs --test tests/ledger-persistence.test.mjs",

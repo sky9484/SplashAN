@@ -89,6 +89,10 @@ export type TransferIntentRecord = {
 
 export type BatchRecord = {
   id: string;
+  /** The org this run belongs to. Required — `accountId` below is an
+   *  on-chain object id that falls back to a value shared across orgs, so it
+   *  cannot serve as the ownership boundary. */
+  orgId: string;
   state: TransferIntentState;
   rowCount: number;
   acceptedRows: number;
@@ -98,8 +102,12 @@ export type BatchRecord = {
   packageId: string | null;
   explorer: { suiVisionTxUrl: string | null; suiScanTxUrl: string | null };
   demo?: boolean;
-  /** Owning account — batches are per-org and must not be readable across orgs. */
+  /** The on-chain BusinessAccount this run settles from. Recorded, not the
+   *  scoping key — see `orgId` above. */
   accountId?: string;
+  /** The proposal that authorized this run, when it needed a second
+   *  approver. */
+  proposalId?: string;
   /** Replay key. A repeat authorization with the same key returns this record
    *  instead of paying every recipient a second time. */
   idempotencyKey?: string;
@@ -417,7 +425,13 @@ export function createTransferIntent(input: {
 // is a choice somebody makes wrongly at 2am. Use `lib/server/transfers-store.ts`,
 // where every read takes an orgId and cross-tenant reach is spelled `*ForStaff`.
 
-export function createBatch(input: {
+/**
+ * Build a payout-run record. Does NOT decide where it lives — the caller
+ * claims it through `lib/server/batches-store.ts`, where the replay key is
+ * enforced by a unique index rather than a lookup that a restart empties.
+ */
+export function buildBatch(input: {
+  orgId: string;
   rowCount: number;
   acceptedRows: number;
   blockedRows: number;
@@ -427,6 +441,7 @@ export function createBatch(input: {
 }) {
   const record: BatchRecord = {
     id: createId('batch'),
+    orgId: input.orgId,
     state: 'QUEUED',
     rowCount: input.rowCount,
     acceptedRows: input.acceptedRows,
@@ -451,39 +466,19 @@ export function createBatch(input: {
  * everyone twice. Returning the existing record makes the second call a no-op
  * rather than a second payroll run.
  */
-export function findBatchByIdempotencyKey(accountId: string, idempotencyKey: string): BatchRecord | null {
-  if (!idempotencyKey) return null;
-  for (const record of operations.batches.values()) {
-    if (record.idempotencyKey === idempotencyKey && (record.accountId ?? '') === accountId) return record;
-  }
-  return null;
-}
-
-/**
- * A batch belonging to `accountId`.
- *
- * The unscoped `readBatch` is gone: the record already carried the account
- * that authorized the run, and nothing checked it on the way back out.
- */
-export function readBatchFor(accountId: string, batchId: string) {
-  const record = operations.batches.get(batchId) ?? null;
-  return record && record.accountId === accountId ? record : null;
-}
-
-/** Cross-tenant. The staff console only. */
-export function readBatch(batchId: string) {
-  return operations.batches.get(batchId) ?? null;
-}
-
-export function updateBatch(batchId: string, patch: Partial<BatchRecord>): void {
-  const record = operations.batches.get(batchId);
-  if (!record) return;
-  Object.assign(record, patch);
-}
-
-export function listBatches() {
-  return [...operations.batches.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-}
+// `readBatch`, `readBatchFor`, `updateBatch`, `listBatches` and
+// `findBatchByIdempotencyKey` used to live here over a process-global map.
+//
+// `readBatch(id)` and `listBatches()` were unscoped — any tenant's payout run,
+// row counts, totals and settlement digest, to anyone signed in. And the
+// idempotency lookup, the guard that stops a re-submitted file paying every
+// recipient twice, was a read of that same map: a restart between the two
+// submissions emptied it, and restarts are exactly when an operator retries.
+//
+// They are gone rather than deprecated. Use `lib/server/batches-store.ts`,
+// where every read takes an orgId, cross-tenant reach is spelled
+// `listBatchesForStaff`, and the replay key is claimed by a unique index rather
+// than consulted by a lookup.
 
 /**
  * Build a beneficiary record. Does NOT decide where it lives — the caller
@@ -713,7 +708,8 @@ export async function listTransactions(): Promise<TransactionRecord[]> {
     explorer: explorerLinks(transfer.suiTxDigest),
     createdAt: transfer.createdAt,
   }));
-  const fromBatches: TransactionRecord[] = listBatches().map((batch) => ({
+  const { listBatchesForStaff } = await import('./batches-store.ts');
+  const fromBatches: TransactionRecord[] = (await listBatchesForStaff()).map((batch) => ({
     id: batch.id,
     kind: 'batch',
     state: batch.state,

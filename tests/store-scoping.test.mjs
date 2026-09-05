@@ -28,12 +28,13 @@ test('the transfer history is the caller’s own, and reads the durable store', 
   assert.doesNotMatch(withoutComments(text), /operations\.transfers/);
 });
 
-test('a batch is readable by the account that authorized it', async () => {
+test('a batch is readable by the org that authorized it', async () => {
   const text = await route('app/api/batches/[id]/route.ts');
   assert.match(text, /requireSessionAccount/);
-  assert.match(text, /readBatchFor\(/);
-  // The record already carried the authorizing account. Nothing checked it.
-  assert.doesNotMatch(withoutComments(text), /readBatch\(/);
+  // Through the store, scoped by org — not by the on-chain account id, which
+  // falls back to a value shared across tenants.
+  assert.match(text, /readBatch\(accountCheck\.account\.orgId, id\)/);
+  assert.match(text, /from '@\/lib\/server\/batches-store'/);
 });
 
 test('rate holds are one customer’s corridor positions, not everyone’s', async () => {
