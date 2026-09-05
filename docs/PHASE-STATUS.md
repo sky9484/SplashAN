@@ -19,8 +19,10 @@ message; nothing is squashed.
 | **3 · Real users** | `users` split from `memberships` (no default role), scrypt password hashing, `createSignupSession` deleted, `resolveAuthorityForSession` fails closed, login rate limiting in Postgres, env credential pair removed |
 | **4 · zkLogin UI** | "Continue with Google", `max_epoch` +1/+2 rule computed server-side, 15-minute idle timeout independent of `max_epoch`, callback keeps the token out of URL and history |
 | **5 · Passkey authority** | SIP-9 enrolment at `/settings/security`, public key captured at creation and persisted, signature/sender/canon-hash verification, one active credential per origin |
+| **Membership admin** (not a numbered phase) | `/admin/memberships` — the operator surface for the grant Phase 3 removed. One grant path, no default role, no account creation from the form, and the two money-moving roles say so at the point of granting. `scripts/dev-db.mjs` runs it locally without a cluster |
 
-**289 tests across ten suites.** Lint, `tsc` and the production build are clean.
+**304 tests across eleven suites**, plus 36 Move tests that run on the CLI
+installed here (14 `splash_core` + 22 `splash_meter`). Lint, `tsc` and the production build are clean.
 
 ---
 
@@ -30,12 +32,25 @@ message; nothing is squashed.
 
 Blocked on three things, in this order:
 
-1. **The Sui CLI is not on PATH here.** Phase 6 is Move code, and `AGENTS.md`
-   requires `sui move build` and `sui move test` locally — Sui Pilot's review
-   "does not replace local verification". Writing Move that cannot be compiled,
-   on the file governing who can move money, is not worth doing.
-   `STATUS.md` records the working toolchain: **Sui CLI 1.77.2**, DeepBook
-   pinned at `daa5a951`.
+1. **The Sui CLI on this machine is 1.75.1, not the 1.77.2 the Move work was
+   verified on.** The binary is at `%LOCALAPPDATA%\bin\sui.exe` (not on PATH
+   by default). All three packages BUILD clean on it, and
+   `sui move test` is green for `splash_core` (**14/14**) and `splash_meter`
+   (**22/22**) — both have no dependencies. `splash_custody` fails **0/16**,
+   every test identically:
+
+   ```
+   VMError { major_status: MISSING_DEPENDENCY,
+             location: Module(0x2::object), indices: [(FunctionHandle, 2)] }
+   ```
+
+   A whole-package linkage failure before any assertion runs, in the only
+   package with git dependencies (DeepBook `daa5a951`, OpenZeppelin math) —
+   and its own `Move.toml` records that the pin moved forward only once the
+   CLI reached 1.77.2. `STATUS.md`'s mainnet gate claims 16/16 for custody;
+   that claim is not falsified, but it is **not reproducible here today**, and
+   a gate item that cannot be re-run is not a gate. Restore 1.77.2 first.
+
 2. **Sebastian confirms.** Protocol: Move changes are not self-approved.
 3. **`move/splash_core/Move.toml` has an empty `[dependencies]` block** — no
    pinned Sui framework, so whichever CLI is installed silently defines the
@@ -108,9 +123,17 @@ deployed.
 
 Existing `users` rows have no `password_hash`, so no previous credential works.
 The first real account is created through `/api/auth/signup` — which grants
-nothing by design — and then needs a membership. **There is no UI for granting
-one yet**; it is `grantMembership()` called directly. An admin screen for this
-is not built and is not in any phase of the brief.
+nothing by design — and then needs a membership.
+
+**The screen for that now exists**: `/admin/memberships` in the staff console.
+It calls the same `grantMembership()` and nothing else can create a membership
+(a test asserts `lib/server/memberships.ts` contains no `.insert(` of its own).
+It refuses to grant to an address with no account, has no default role, and
+names in plain words which roles release money. Revoking is a hard delete —
+a membership is current authority, not evidence.
+
+So the first-operator sequence is: sign up → a staff member grants the
+membership → the account can act. Nothing about it is implicit.
 
 ---
 
