@@ -135,6 +135,25 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+  // The beneficiary is resolved BEFORE the ceilings, because a payment that
+  // trips the dual-approval threshold becomes a proposal, and that proposal
+  // must name a beneficiary id the compliance screening store can resolve.
+  // Named in prose instead, the approval gate can never open — and a control
+  // nobody can pass is the dead end this change exists to close, wearing a
+  // different hat.
+  //
+  // The cost is that a refused payment leaves a beneficiary record. That is
+  // the operator's own input for a counterparty that exists either way, and
+  // it is scoped to their org.
+  const recipient = await persistRecipient(buildRecipient({
+    orgId,
+    name: body.recipient.name,
+    country: body.recipient.country,
+    swift: body.recipient.bank?.swift,
+    account: body.recipient.bank?.account,
+    tier: body.deliveryTier,
+  }));
+
   // Ceilings the operator configured in Settings. Until now the only amount
   // rule on this route was the $100 floor, so a $1,000 per-transfer limit
   // bounded nothing.
@@ -179,7 +198,10 @@ export async function POST(request: Request) {
       passedChecks: [
         { source: 'COMPLIANCE', ref: 'KYB org state is ACTIVE' },
         { source: 'BALANCE', ref: `Per-transfer and daily ceilings, ${limits.spentTodayUsd} USD spent today` },
-        { source: 'COUNTERPARTY', ref: `Beneficiary ${body.recipient.name} (${body.recipient.country})` },
+        // The beneficiary ID, not its name. `resolveComplianceForProposal`
+        // reads COUNTERPARTY refs as ids and looks up the screening record;
+        // an unresolvable ref blocks forever rather than failing closed once.
+        { source: 'COUNTERPARTY', ref: recipient.id },
       ],
       payload: { ...body, businessAccountId: undefined },
       idempotencyKey: `transfer:${orgId}:${body.amount.value}:${body.recipient.name}:${body.amount.targetCurrency}`,
@@ -294,14 +316,6 @@ export async function POST(request: Request) {
     ? null
     : sourceAmount > 0 ? await convertUsdToUsdc(sourceAmount) : null;
   const sourceStablecoin = 'USDC' as const;
-  const recipient = await persistRecipient(buildRecipient({
-    orgId,
-    name: body.recipient.name,
-    country: body.recipient.country,
-    swift: body.recipient.bank?.swift,
-    account: body.recipient.bank?.account,
-    tier: body.deliveryTier,
-  }));
   const intent = createTransferIntent({
     // From the SESSION, never the request. This is the field that decides
     // whose transfer it is and therefore who can read it back.

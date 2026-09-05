@@ -119,3 +119,54 @@ test('the submit route still enforces maker ≠ checker against the DB identity'
   assert.match(submit, /proposal\.createdBy === ctx\.userId/);
   assert.match(submit, /a second approver must sign from the queue/);
 });
+
+test('the compliance gate can actually open once the beneficiary is screened', async () => {
+  // Before this, the COUNTERPARTY evidence ref was the beneficiary's NAME.
+  // `resolveComplianceForProposal` reads those refs as ids and looks the
+  // screening record up by them, so a prose ref could never resolve — the gate
+  // blocked forever rather than failing closed once. A control nobody can pass
+  // is the same dead end this change exists to close.
+  delete process.env.DATABASE_URL;
+  const { resolveComplianceForProposal } = await import(
+    '../lib/compliance/proposal-screening.ts'
+  );
+  const { upsertOxwalCounterpartyFixture } = await import('../lib/agent/oxwal.ts');
+
+  const proposal = {
+    kind: 'PAYMENT',
+    explain: {
+      evidence: [{ source: 'COUNTERPARTY', ref: 'rcpt_unscreened_1', observedAt: '', trusted: true }],
+    },
+  };
+
+  const before = resolveComplianceForProposal(proposal);
+  assert.equal(before.kytPassed, false, 'an unscreened beneficiary is blocked');
+  assert.ok(before.flags.includes('COUNTERPARTY_NOT_FOUND'));
+
+  upsertOxwalCounterpartyFixture({
+    id: 'rcpt_unscreened_1',
+    name: 'Davao Freight Co',
+    country: 'PH',
+    kybStatus: 'VERIFIED',
+    kytPassed: true,
+    sanctionsClear: true,
+  });
+
+  const after = resolveComplianceForProposal(proposal);
+  assert.equal(after.kytPassed, true);
+  assert.equal(after.kybStatus, 'VERIFIED');
+  assert.deepEqual(after.flags, [], 'and it opens once the record exists');
+});
+
+test('the money route names the beneficiary by id, not by name', async () => {
+  const text = await source('app/api/transfers/authorize/route.ts');
+  const block = text.slice(text.indexOf('requiresSecondApproval'));
+  assert.match(block, /source: 'COUNTERPARTY', ref: recipient\.id/);
+
+  // Which means the beneficiary must be resolved BEFORE the ceiling check that
+  // creates the proposal.
+  const beneficiaryAt = text.indexOf('const recipient = await persistRecipient');
+  const ceilingAt = text.indexOf('const limits = checkAuthorizationLimits');
+  assert.ok(beneficiaryAt > 0 && beneficiaryAt < ceilingAt,
+    'the beneficiary must exist before the proposal that names it');
+});
