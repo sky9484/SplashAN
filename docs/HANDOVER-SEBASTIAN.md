@@ -231,6 +231,70 @@ Phase 7 is not started.
 
 ---
 
+## Phase 7 is built too, and it closes the hole Phase 6 opened
+
+`99dac52`. When Phase 6 deleted `mint_attestation_cap` I flagged the cost in
+this note: a LOST `AnchorCap` bricked anchoring permanently, and `splash_core`
+must not publish immutable until break-glass landed. It has landed.
+
+Every revocable capability now carries a GENERATION, and a shared
+`CapRegistry` holds the live one. A capability whose generation is not the
+registry's is dead — the object stays intact, well-formed and worthless.
+`AdminCap` can bump a generation, which mints one replacement and kills every
+outstanding cap of that kind in the same transaction. So it does not restore
+arbitrary minting: the bump that creates the new cap is the bump that kills the
+old, and there is never a second live one.
+
+It answers both holes with one lever, and the second one matters more than the
+first. Phase 6's containment for a STOLEN anchor cap was, in its own words,
+"off-chain rejection of anchors bearing the retired cap id" — a hope about what
+every future consumer would remember to check. Now the thief's cap simply stops
+working, without their cooperation, consent or knowledge. That is the test I
+would read first: `a_stolen_cap_is_dead_without_its_holders_cooperation`.
+
+**There is no timelock, and that is the decision I most want you to check.**
+Every other emergency lever here is delayed — 48h for a meter relaxation, 72h
+for an account recovery. I argue a third delay would be theatre: a delay
+protects against the lever's holder abusing it, and `AdminCap` gains nothing by
+rotating these two (an `AnchorCap` moves no value, and `AdminCap` already holds
+strictly larger versions of everything `ComplianceCap` does). Meanwhile the
+delay would cost the thing the module exists for, because a thief given a
+cancellation window would use it. The property that actually needs protecting —
+no duplicate live capability — is enforced by the generation, not by waiting.
+If you disagree, the change is small and localised to `cap_registry`.
+
+`AdminCap` and `TreasuryCap` deliberately have no generation. They are `store`
+capabilities on multisig addresses rather than servers, and `AdminCap` is the
+key that arms every break-glass here, so it cannot be the subject of one
+without something above it holding the lever. Their recovery stays a human
+procedure in the key-ceremony runbook.
+
+`scripts/check-cap-generations.mjs` fails the build if any function takes
+`&AnchorCap` or `&ComplianceCap` without also taking `&CapRegistry` and calling
+the matching assert. One forgetful consumer is a hole a stolen cap keeps
+signing through, and it is the kind found by an incident rather than a review —
+the function works perfectly until the day somebody revokes something. I
+verified it fails when the assert is removed from `anchor_audit_hash`.
+
+**One new deployment requirement**: `SPLASH_CAP_REGISTRY_ID`. Every call that
+uses a revocable capability passes it, so the peg refresh, anchor writes,
+receipt minting and every compliance operation refuse to build without it. That
+refusal is deliberate — an "optional registry" would mean a code path where a
+revoked capability still works, and it would be the path running in production
+the day you need the revocation.
+
+── State of the tree ──
+
+Phases 0 through 7 are complete. 107 Move tests (68 / 23 / 16), 304 Node tests
+across eleven suites, six CI guards, `tsc` clean, production build clean, and
+`npm run lint` now prints nothing but its guards passing — the three warnings
+that were carried as "pre-existing, left alone deliberately" are gone, because
+a clean-except-three build is one people stop reading.
+
+Still not merged. Still not published.
+
+---
+
 ## What I need from you, in order
 
 1. **Sanity-check the regenerated lock**, in particular DeepBook's `token` at

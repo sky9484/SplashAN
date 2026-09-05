@@ -249,6 +249,18 @@ answer to "who can move funds?" was thirty-odd functions. `TreasuryCap` is now
 the only capability through which value leaves a custodial object; `AdminCap`
 governs and cannot spend.
 
+**Every revocable capability can now be killed (Phase 7).** `AnchorCap` and
+`ComplianceCap` carry a generation checked against a shared `CapRegistry` on
+every use, and `AdminCap` can bump it — which mints one replacement and kills
+every outstanding cap of that kind in the same transaction. That closes the two
+holes Phase 6 created and named: a LOST anchor cap no longer bricks anchoring
+in an immutable package, and a STOLEN cap no longer relies on "off-chain
+rejection of the retired id", which was a hope rather than a control. There is
+no timelock and `cap_registry`'s module comment argues why at length.
+`AdminCap` and `TreasuryCap` have no generation — they are multisig-held, and
+`AdminCap` is the key that arms every break-glass, so it cannot be the subject
+of one.
+
 **May `AdminCap` and `AnchorCap` share an address? No — never.**
 `AnchorCap` exists *because* `update_peg` fires every ~30s, roughly 2,880
 signatures a day from an internet-facing host. Co-locating money or governance

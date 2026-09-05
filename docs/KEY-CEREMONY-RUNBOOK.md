@@ -25,8 +25,34 @@ any step below.
 
 All three of `AdminCap`, `TreasuryCap` and `AnchorCap` are minted by
 `business_account::init` at publish, to the publisher. The ceremony is about
-moving them apart, not about creating them — and `AnchorCap` can no longer be
-minted at all, only rotated one-in-one-out.
+moving them apart, not about creating them.
+
+**Phase 7 added break-glass.** `AnchorCap` and `ComplianceCap` carry a
+generation checked against the shared `CapRegistry` on every use, so a
+capability can be revoked:
+
+| Situation | Command | Effect |
+|---|---|---|
+| Routine handover, old cap in hand | `business_account::rotate_anchor_cap` | Custody moves. Generation carried, nothing revoked. |
+| Cap LOST | `business_account::break_glass_anchor_cap` | Generation bumps, one replacement minted. No old cap needed. |
+| Cap STOLEN | same | The thief's object stops working. They are not consulted. |
+| Compliance cap compromised | `compliance_config::break_glass_compliance_cap` | Same, for `ComplianceCap`. |
+
+Break-glass is immediate — no notice period. The reasoning is in
+`cap_registry`'s module comment; the short version is that the generation
+already makes a duplicate capability impossible, so a delay would protect
+nothing and would hand a thief a cancellation window.
+
+**Operational cost, and it is real**: the moment a break-glass lands, the
+operator server's cap is dead and anchoring fails until the new object id is
+deployed. Have `SPLASH_ANCHOR_CAP_ID` ready to update before you sign. Alert on
+`CapabilityRevoked` — it is the loudest event this package emits, and it means
+an operational capability was killed.
+
+`AdminCap` and `TreasuryCap` have NO generation and no break-glass. They are
+`store` capabilities held by multisig addresses, and `AdminCap` is the key that
+arms every break-glass above, so it cannot be the subject of one. Losing a
+quorum of those is what the ceremony below exists to make very unlikely.
 
 `AnchorCap` gates:
 
