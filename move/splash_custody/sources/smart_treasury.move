@@ -18,7 +18,7 @@
 ///   * All state changes emit events — no shared objects per call.
 module splash_custody::smart_treasury;
 
-use splash_core::business_account::{AdminCap, AttestationCap};
+use splash_core::business_account::{AdminCap, AnchorCap};
 use splash_meter::guardian::GuardianCap;
 use splash_meter::spend_meter::{Self, SpendMeter};
 use std::string::String;
@@ -299,12 +299,12 @@ public fun mint_treasury_guardian<T>(
 /// a separate shared object per call (M-04 fix). Use this when off-chain
 /// accounting wants to tag a particular deposit/withdraw as part of a
 /// rebalance flow.
-/// AttestationCap-gated (cap split S-10): this only emits an accounting event
+/// AnchorCap-gated (cap split S-10): this only emits an accounting event
 /// — `treasury` is an immutable reference and no balance moves — so it belongs
 /// with the hot attestation key, not the cold money-authority AdminCap.
 public fun emit_rebalance<T>(
     treasury: &SmartTreasury<T>,
-    _cap: &AttestationCap,
+    _cap: &AnchorCap,
     delta: u64,
     direction: u8,
     clock: &Clock,

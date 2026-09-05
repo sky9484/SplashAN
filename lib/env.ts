@@ -73,6 +73,11 @@ const removedFromEnv = z.preprocess(
   z.undefined({ error: 'no longer used — accounts are rows in `users`; remove it from .env.local and from the host' }),
 );
 
+const renamedAnchorCap = z.preprocess(
+  blankToUndefined,
+  z.undefined({ error: 'renamed to SPLASH_ANCHOR_CAP_ID with the Phase 6 cap split — set that instead, and remove this from .env.local and from the host' }),
+);
+
 const movedToSealFile = z.preprocess(
   blankToUndefined,
   z.undefined({ error: 'moved to config/seal.<env>.json — remove it from .env.local and from the host' }),
@@ -98,7 +103,13 @@ export const envSchema = z.object({
   SPLASH_PAYOUT_DELEGATION_ID: objectId,
   SPLASH_TREASURY_ID: objectId,
   SPLASH_ADMIN_CAP_ID: objectId,
-  SPLASH_ATTESTATION_CAP_ID: objectId,
+  SPLASH_ANCHOR_CAP_ID: objectId,
+  /** Renamed with the Phase 6 cap split (`AttestationCap` -> `AnchorCap`).
+   *  Declared must-be-unset rather than silently ignored: a stale object id
+   *  under the old name would point at a capability type that no longer
+   *  exists, and a key that governs nothing but still reads like a control
+   *  is worse than no key. */
+  SPLASH_ATTESTATION_CAP_ID: renamedAnchorCap,
   SPLASH_PEG_STATE_ID: objectId,
   SPLASH_COMPLIANCE_CONFIG_ID: objectId,
   SPLASH_COMPLIANCE_CAP_ID: objectId,

@@ -197,16 +197,16 @@ function optionalConfigId(field: ContractConfigField): string {
 }
 
 /**
- * Object id for the AttestationCap-gated calls — audit anchors, receipts, and
+ * Object id for the AnchorCap-gated calls — audit anchors, receipts, and
  * peg updates.
  *
  * The capability split (spec §5) moves those three off the money-authority
- * `AdminCap` and onto a hot `AttestationCap`, so a stolen server key can write
+ * `AdminCap` and onto a hot `AnchorCap`, so a stolen server key can write
  * attestations but cannot move a coin. The package currently deployed on
  * testnet is IMMUTABLE and still expects an `AdminCap` in that argument
  * position, so:
  *
- *   - `SPLASH_ATTESTATION_CAP_ID` set   → post-republish, pass the new cap.
+ *   - `SPLASH_ANCHOR_CAP_ID` set   → post-republish, pass the new cap.
  *   - unset                             → pass the AdminCap id, exactly as
  *                                         today, so the live deployment keeps
  *                                         working until Sebastian republishes.
@@ -256,18 +256,18 @@ async function assertSettlementPoolFunded(
  * The attestation capability — and ONLY the attestation capability.
  *
  * A-12 fix. This used to fall back to `adminCapId`, which is why the S-10 cap
- * split was written but not in effect: with `SPLASH_ATTESTATION_CAP_ID` unset
+ * split was written but not in effect: with `SPLASH_ANCHOR_CAP_ID` unset
  * (as `.env.example` shipped it), every attestation silently re-armed the hot
  * server with the money authority. The fallback was convenient precisely
  * because it made the split invisible, which is what made it the bug.
  *
- * `AttestationCap` exists because `update_peg` fires roughly every 30 seconds —
+ * `AnchorCap` exists because `update_peg` fires roughly every 30 seconds —
  * ~2,880 signatures a day from an internet-facing host. Letting `AdminCap` serve
  * that role puts the key that can drain the pool on the machine that signs most
  * often. It now throws instead.
  */
-function attestationCapObjectId(): string {
-  return configIdOrThrow('attestationCapId', 'SPLASH_ATTESTATION_CAP_ID');
+function anchorCapObjectId(): string {
+  return configIdOrThrow('anchorCapId', 'SPLASH_ANCHOR_CAP_ID');
 }
 
 /**
@@ -777,7 +777,7 @@ export async function confirmComposedPaymentOnSui(input: {
 }): Promise<ComposedSettlementResult> {
   await requireSdkExecution();
   const packageId = corePackageIdOrThrow();
-  const attestationCapId = attestationCapObjectId();
+  const anchorCapId = anchorCapObjectId();
   const businessAccountId = configIdOrThrow('businessAccountId', 'SPLASH_BUSINESS_ACCOUNT_ID');
   const smartTreasuryId = configuredSmartTreasuryId();
   const paymentMist = Math.max(1, Math.floor(input.paymentMist));
@@ -839,7 +839,7 @@ export async function confirmComposedPaymentOnSui(input: {
   tx.moveCall({
     target: `${packageId}::audit_anchor::anchor_audit_hash`,
     arguments: [
-      tx.object(attestationCapId),
+      tx.object(anchorCapId),
       tx.pure.string(input.auditHash),
       tx.pure.string(input.anchorId),
       tx.pure.string(input.backingBlobId),
@@ -903,14 +903,14 @@ export async function anchorAuditHashOnSui(input: {
 }) {
   await requireSdkExecution();
   const packageId = corePackageIdOrThrow();
-  const attestationCapId = attestationCapObjectId();
+  const anchorCapId = anchorCapObjectId();
   const businessAccountId = configIdOrThrow('businessAccountId', 'SPLASH_BUSINESS_ACCOUNT_ID');
   const tx = new Transaction();
   tx.setGasBudget(process.env.SUI_AUDIT_ANCHOR_GAS_BUDGET ?? '20000000');
   tx.moveCall({
     target: `${packageId}::audit_anchor::anchor_audit_hash`,
     arguments: [
-      tx.object(attestationCapId),
+      tx.object(anchorCapId),
       tx.pure.string(input.auditHash),
       tx.pure.string(input.anchorId),
       tx.pure.string(input.backingBlobId),
@@ -973,7 +973,7 @@ export async function refreshPegOnSui(input: { usdcPrice: number; usdtPrice: num
   await requireSdkExecution();
   const packageId = corePackageIdOrThrow();
   const pegStateId = configIdOrThrow('pegStateId', 'SPLASH_PEG_STATE_ID');
-  const attestationCapId = attestationCapObjectId();
+  const anchorCapId = anchorCapObjectId();
   const usdcDeviationPpm = Math.max(0, Math.round(Math.abs(input.usdcPrice - 1) * 1_000_000));
   const usdtDeviationPpm = Math.max(0, Math.round(Math.abs(input.usdtPrice - 1) * 1_000_000));
 
@@ -983,7 +983,7 @@ export async function refreshPegOnSui(input: { usdcPrice: number; usdtPrice: num
     target: `${packageId}::peg_monitor::update_peg`,
     arguments: [
       tx.object(pegStateId),
-      tx.object(attestationCapId),
+      tx.object(anchorCapId),
       tx.pure.u64(usdcDeviationPpm),
       tx.pure.u64(usdtDeviationPpm),
       tx.object('0x6'),
@@ -1097,10 +1097,10 @@ async function updatePegOnSui(): Promise<void> {
   const SPLASH_PEG_STATE_ID = optionalConfigId('pegStateId');
   // A-12: no adminCapId fallback. An unconfigured attestation cap must stop the
   // peg daemon, not silently promote the hot key to money authority.
-  const SPLASH_ATTESTATION_CAP_ID = optionalConfigId('attestationCapId');
+  const SPLASH_ANCHOR_CAP_ID = optionalConfigId('anchorCapId');
 
-  if (!SPLASH_ATTESTATION_CAP_ID) {
-    console.warn('[Sui Peg Update] SPLASH_ATTESTATION_CAP_ID is not set — skipping auto peg refresh. Settlement may fail with E_PEG_STALE. Mint an AttestationCap (business_account::mint_attestation_cap) rather than pointing this at SPLASH_ADMIN_CAP_ID.');
+  if (!SPLASH_ANCHOR_CAP_ID) {
+    console.warn('[Sui Peg Update] SPLASH_ANCHOR_CAP_ID is not set — skipping auto peg refresh. Settlement may fail with E_PEG_STALE. Point it at the AnchorCap minted by the package publish (business_account::init), rotated with business_account::rotate_anchor_cap — never at SPLASH_ADMIN_CAP_ID.');
     return;
   }
   if (!SPLASH_PACKAGE_ID || !SPLASH_PEG_STATE_ID) {
@@ -1129,7 +1129,7 @@ async function updatePegOnSui(): Promise<void> {
     '--package', SPLASH_PACKAGE_ID,
     '--module', 'peg_monitor',
     '--function', 'update_peg',
-    '--args', SPLASH_PEG_STATE_ID, SPLASH_ATTESTATION_CAP_ID, usdcDeviationPpm, usdtDeviationPpm, '0x6',
+    '--args', SPLASH_PEG_STATE_ID, SPLASH_ANCHOR_CAP_ID, usdcDeviationPpm, usdtDeviationPpm, '0x6',
     '--gas-budget', process.env.SUI_PEG_UPDATE_GAS_BUDGET ?? '10000000',
     '--json',
   ], 1024 * 1024 * 5);
@@ -1241,7 +1241,7 @@ export async function recordSingleTransferOnSui(input: {
   // Peg refresh is bundled into the same PTB below — no separate tx, no staleness race.
   // settle_payment takes no capability, so the only cap this PTB needs is the
   // attestation cap for the peg push — this path stays fully hot after the split.
-  const SPLASH_ATTESTATION_CAP_ID = attestationCapObjectId();
+  const SPLASH_ANCHOR_CAP_ID = anchorCapObjectId();
   // MEASURED, never a constant. Writing a hardcoded 0 here and reading it back
   // via assert_pegged one command later is what made the peg breaker inert.
   const pegAttestation = await resolvePegAttestation();
@@ -1265,7 +1265,7 @@ export async function recordSingleTransferOnSui(input: {
         target: `${SPLASH_PACKAGE_ID}::peg_monitor::update_peg`,
         arguments: [
           tx.object(SPLASH_PEG_STATE_ID),
-          tx.object(SPLASH_ATTESTATION_CAP_ID),
+          tx.object(SPLASH_ANCHOR_CAP_ID),
           tx.pure.u64(usdcDeviationPpm),
           tx.pure.u64(usdtDeviationPpm),
           tx.object('0x6'),
@@ -1317,7 +1317,7 @@ export async function recordSingleTransferOnSui(input: {
       '--move-call',
       `${SPLASH_PACKAGE_ID}::peg_monitor::update_peg`,
       `@${SPLASH_PEG_STATE_ID}`,
-      `@${SPLASH_ATTESTATION_CAP_ID}`,
+      `@${SPLASH_ANCHOR_CAP_ID}`,
       usdcDeviationPpm,
       usdtDeviationPpm,
       '@0x6',
@@ -1435,7 +1435,7 @@ export async function recordBatchSettlementOnSui(input: {
   // driven by the hot server alone. Resolving that (a bounded, hot
   // `SettlementCap` with per-batch limits) is an explicit follow-up decision —
   // see docs/KEY-CEREMONY-RUNBOOK.md. Single transfers are unaffected.
-  const SPLASH_ATTESTATION_CAP_ID = attestationCapObjectId();
+  const SPLASH_ANCHOR_CAP_ID = anchorCapObjectId();
   // The batch no longer takes an AdminCap. It takes a delegation the TENANT
   // granted, which the operator owns and can therefore name as an input.
   const SPLASH_PAYOUT_DELEGATION_ID = configIdOrThrow('payoutDelegationId', 'SPLASH_PAYOUT_DELEGATION_ID');
@@ -1479,7 +1479,7 @@ export async function recordBatchSettlementOnSui(input: {
         target: `${SPLASH_PACKAGE_ID}::peg_monitor::update_peg`,
         arguments: [
           tx.object(SPLASH_PEG_STATE_ID),
-          tx.object(SPLASH_ATTESTATION_CAP_ID),
+          tx.object(SPLASH_ANCHOR_CAP_ID),
           tx.pure.u64(usdcDeviationPpm),
           tx.pure.u64(usdtDeviationPpm),
           tx.object('0x6'),
@@ -1532,7 +1532,7 @@ export async function recordBatchSettlementOnSui(input: {
       '--move-call',
       `${SPLASH_PACKAGE_ID}::peg_monitor::update_peg`,
       `@${SPLASH_PEG_STATE_ID}`,
-      `@${SPLASH_ATTESTATION_CAP_ID}`,
+      `@${SPLASH_ANCHOR_CAP_ID}`,
       usdcDeviationPpm,
       usdtDeviationPpm,
       '@0x6',

@@ -301,22 +301,25 @@ fun verification_can_be_revoked_and_regranted() {
     let mut scenario = test_scenario::begin(SENDER);
     {
         let ctx = scenario.ctx();
+        let c = clock::create_for_testing(ctx);
         business_account::submit_application(
             b"SSM-202401012345".to_string(),
             b"bafy-kyb-cid".to_string(),
+            &c,
             ctx,
         );
+        c.destroy_for_testing();
     };
     scenario.next_tx(SENDER);
     {
-        let mut account = scenario.take_from_sender<business_account::BusinessAccount>();
+        let mut account = scenario.take_shared<business_account::BusinessAccount>();
         let ctx = scenario.ctx();
         let admin = business_account::admin_cap_for_testing(ctx);
 
         business_account::verify_business(&admin, &mut account, 20);
         assert_eq!(business_account::is_verified(&account), true);
 
-        business_account::revoke_verification(&admin, &mut account);
+        business_account::revoke_verification(&admin, &mut account, ctx);
         assert_eq!(business_account::is_verified(&account), false);
         // The stale score goes too — leaving it invites a later reader to treat
         // an unverified account as still assessed.
@@ -327,8 +330,8 @@ fun verification_can_be_revoked_and_regranted() {
         assert_eq!(business_account::is_verified(&account), true);
         assert_eq!(business_account::risk_score(&account), 35);
 
-        sui::test_utils::destroy(admin);
-        scenario.return_to_sender(account);
+        business_account::destroy_admin_cap_for_testing(admin);
+        test_scenario::return_shared(account);
     };
     scenario.end();
 }
@@ -341,16 +344,18 @@ fun revoking_an_unverified_account_aborts() {
     let mut scenario = test_scenario::begin(SENDER);
     {
         let ctx = scenario.ctx();
-        business_account::submit_application(b"SSM-1".to_string(), b"cid".to_string(), ctx);
+        let c = clock::create_for_testing(ctx);
+        business_account::submit_application(b"SSM-1".to_string(), b"cid".to_string(), &c, ctx);
+        c.destroy_for_testing();
     };
     scenario.next_tx(SENDER);
     {
-        let mut account = scenario.take_from_sender<business_account::BusinessAccount>();
+        let mut account = scenario.take_shared<business_account::BusinessAccount>();
         let ctx = scenario.ctx();
         let admin = business_account::admin_cap_for_testing(ctx);
-        business_account::revoke_verification(&admin, &mut account);
-        sui::test_utils::destroy(admin);
-        scenario.return_to_sender(account);
+        business_account::revoke_verification(&admin, &mut account, ctx);
+        business_account::destroy_admin_cap_for_testing(admin);
+        test_scenario::return_shared(account);
     };
     scenario.end();
 }
@@ -358,16 +363,16 @@ fun revoking_an_unverified_account_aborts() {
 // ── Capability separation (S-10) ───────────────────────────────────────────
 
 #[test]
-/// AttestationCap can attest. It cannot move value — and that is enforced by
-/// the type system, not by this test: splash_core contains no function that
-/// takes an AttestationCap and moves a Coin. There is nothing here to call.
-fun attestation_cap_attests_but_moves_no_money() {
+/// AnchorCap can attest. It cannot move value — and that is enforced by the
+/// type system, not by this test: splash_core contains no function that takes
+/// an AnchorCap and moves a Coin. There is nothing here to call.
+fun anchor_cap_attests_but_moves_no_money() {
     let mut scenario = test_scenario::begin(SENDER);
     let ctx = scenario.ctx();
     let mut c = clock::create_for_testing(ctx);
     c.set_for_testing(1_000_000);
 
-    let cap = business_account::attestation_cap_for_testing(ctx);
+    let cap = business_account::anchor_cap_for_testing(ctx);
     audit_anchor::anchor_audit_hash(
         &cap,
         b"audit-hash".to_string(),
@@ -377,7 +382,7 @@ fun attestation_cap_attests_but_moves_no_money() {
         &c,
         ctx,
     );
-    business_account::destroy_attestation_cap(cap);
+    business_account::destroy_anchor_cap(cap);
     c.destroy_for_testing();
     scenario.end();
 }
@@ -389,18 +394,25 @@ fun business_is_unverified_until_admin_verifies() {
     let mut scenario = test_scenario::begin(SENDER);
     {
         let ctx = scenario.ctx();
+        let c = clock::create_for_testing(ctx);
         business_account::submit_application(
             b"SSM-202401012345".to_string(),
             b"bafy-kyb-cid".to_string(),
+            &c,
             ctx,
         );
+        c.destroy_for_testing();
     };
 
     scenario.next_tx(SENDER);
     {
-        let mut account = scenario.take_from_sender<business_account::BusinessAccount>();
+        let mut account = scenario.take_shared<business_account::BusinessAccount>();
         assert_eq!(business_account::is_verified(&account), false);
         assert_eq!(business_account::owner(&account), SENDER);
+        // The founder is an owner. They are NOT an approver — an account that
+        // arrives able to approve its own payouts has no four-eyes rule.
+        assert_eq!(business_account::is_owner(&account, SENDER), true);
+        assert_eq!(business_account::is_approver(&account, SENDER), false);
 
         let ctx = scenario.ctx();
         let admin = business_account::admin_cap_for_testing(ctx);
@@ -408,8 +420,8 @@ fun business_is_unverified_until_admin_verifies() {
         assert_eq!(business_account::is_verified(&account), true);
         assert_eq!(business_account::risk_score(&account), 20);
 
-        sui::test_utils::destroy(admin);
-        scenario.return_to_sender(account);
+        business_account::destroy_admin_cap_for_testing(admin);
+        test_scenario::return_shared(account);
     };
     scenario.end();
 }
