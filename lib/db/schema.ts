@@ -807,3 +807,46 @@ export const ledgerPostings = pgTable('ledger_postings', {
    *  check. Carries the ordering so the read is a scan, not a sort. */
   index('postings_account_created_idx').on(table.account, table.currency, table.createdAt),
 ]);
+
+/**
+ * A business's KYB review case.
+ *
+ * Held in a `globalThis` Map until now, seeded with two invented companies, and
+ * read by routes that were authenticated but not scoped — any signed-in user
+ * could fetch any company's case by id, or find one by passing a business name
+ * in a query string. The row carries a registration number, the SHA-256 of
+ * every uploaded document, the reviewer's notes and the rejection reason, so
+ * that was a cross-tenant read of exactly the material KYB exists to protect.
+ *
+ * `orgId` is not nullable. A case with no owner cannot be filtered by owner,
+ * and one such row would escape every scope in the system.
+ */
+export const kybCases = pgTable('kyb_cases', {
+  id: text('id').primaryKey(),
+  orgId: text('org_id').notNull().references(() => organizations.id),
+  businessName: text('business_name').notNull(),
+  registrationNumber: text('registration_number').notNull(),
+  /** SUBMITTED | IN_REVIEW | NEEDS_INFORMATION | APPROVED | REJECTED.
+   *  Text rather than an enum: this is the reviewer's workflow, distinct from
+   *  the org lifecycle in lib/compliance/kyb-state.ts that gates money. */
+  state: text('state').notNull().default('SUBMITTED'),
+  riskTier: text('risk_tier').notNull().default('UNASSIGNED'),
+  corridorAccess: text('corridor_access').notNull().default('LOCKED'),
+  assignedTo: text('assigned_to'),
+  sumsubApplicantId: text('sumsub_applicant_id'),
+  /** Metadata only — name, type, size, hash, storage key. The files stay
+   *  encrypted behind `storageKey`. */
+  documents: jsonb('documents').notNull().default([]),
+  reviewNotes: text('review_notes'),
+  decisionReason: text('decision_reason'),
+  auditTrail: jsonb('audit_trail').notNull().default([]),
+  submittedAt: timestamp('submitted_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index('kyb_cases_org_idx').on(table.orgId),
+  index('kyb_cases_updated_idx').on(table.updatedAt),
+  /** One live case per registration number per org. Two rows for one company
+   *  mean two review histories, and a decision recorded against whichever the
+   *  reviewer happened to open. */
+  uniqueIndex('kyb_cases_org_registration_unique').on(table.orgId, table.registrationNumber),
+]);

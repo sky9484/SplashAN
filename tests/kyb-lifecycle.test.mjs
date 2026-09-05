@@ -16,18 +16,33 @@ const code = (text) => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*/g, 
 
 test('uploading documents moves the org, as SYSTEM', async () => {
   const route = await readFile(new URL('../app/api/kyb/upload/route.ts', import.meta.url), 'utf8');
-  assert.match(route, /setOrgKybState\(ctx\.orgId, 'KYB_SUBMITTED', 'SYSTEM'\)/);
+  assert.match(route, /setOrgKybState\(orgId, 'KYB_SUBMITTED', 'SYSTEM'\)/);
   // SYSTEM is the only actor permitted this transition: a provider cannot
   // declare a business submitted, and an admin signing off is a later step.
   assert.doesNotMatch(code(route), /'KYB_SUBMITTED', '(PROVIDER|ADMIN)'/);
 });
 
-test('a brand-new account can still submit', async () => {
+test('a brand-new account submits into its own workspace, not the demo one', async () => {
   const route = await readFile(new URL('../app/api/kyb/upload/route.ts', import.meta.url), 'utf8');
-  // A membership-less session is what a fresh sign-up IS. Refusing their
-  // documents would make onboarding impossible — the documents are recorded and
-  // the org transition waits.
+  // A membership-less session is what a fresh sign-up IS — password sign-up
+  // grants no membership on purpose — so refusing their documents would make
+  // onboarding impossible for the only people who need it.
   assert.match(route, /error instanceof UnauthorizedError/);
+
+  // But it used to file them under `orgId: 'demo-business'`, so every new
+  // business's KYB case landed in the demo namespace alongside the sample
+  // companies and each other. They get their own workspace, in REGISTERED.
+  assert.match(route, /ensureWorkspaceForEmail\(auth\.session\.email\)/);
+  assert.doesNotMatch(
+    route.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*/g, ''),
+    /'demo-business'/,
+  );
+
+  // And the org is resolved BEFORE the case is written, because it is stored
+  // on the row — a case with no owner cannot be scoped to one.
+  const orgAt = route.indexOf('orgId = (await resolveAuthorityForSession');
+  const writeAt = route.indexOf('recordKybSubmission({');
+  assert.ok(orgAt > 0 && orgAt < writeAt, 'the owning org is known before the case is written');
 });
 
 // ── The provider's verdict ─────────────────────────────────────────────────
