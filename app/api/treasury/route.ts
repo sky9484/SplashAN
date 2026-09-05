@@ -16,7 +16,7 @@ import { requireCustomerRequest } from '@/lib/server/customer-auth';
 import { assertCleanBody, ProvenanceViolationError, provenanceViolationResponse } from '@/lib/auth/provenance-guard';
 import { requireActiveOrg } from '@/lib/server/kyb-gate';
 import { readJsonBody } from '@/lib/server/http';
-import { resolveSessionAccount } from '@/lib/server/session-account';
+import { requireSessionAccount } from '@/lib/server/session-account';
 import {
   cancelTreasuryWithdrawal,
   getLedger,
@@ -59,7 +59,9 @@ export async function GET(request: Request) {
   const auth = await requireCustomerRequest(request);
   if (auth.response) return auth.response;
 
-  const { accountId } = await resolveSessionAccount(auth.session);
+  const accountCheck = await requireSessionAccount(auth.session);
+  if (accountCheck.response) return accountCheck.response;
+  const { accountId } = accountCheck.account;
   return NextResponse.json(snapshot(accountId));
 }
 
@@ -85,7 +87,9 @@ export async function POST(request: Request) {
 
   // Scoped to the caller's org. `getLedger()` with no argument defaults to a
   // single shared demo ledger, so every tenant read and mutated the same object.
-  const { accountId } = await resolveSessionAccount(auth.session);
+  const accountCheck = await requireSessionAccount(auth.session);
+  if (accountCheck.response) return accountCheck.response;
+  const { accountId } = accountCheck.account;
   const ledger = getLedger(accountId);
 
   // Cancel a still-pending withdrawal — returns reserved funds to Treasury.

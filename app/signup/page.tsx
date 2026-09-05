@@ -19,7 +19,7 @@ export default function SignUpPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  const strength = [password.length >= 8, /[A-Z]/.test(password), /\d/.test(password)].filter(Boolean).length;
+  const strength = [password.length >= 12, /[A-Z]/.test(password), /\d/.test(password)].filter(Boolean).length;
   const canSubmit = company.trim().length > 1 && email.includes('@') && strength === 3 && accepted && !submitting;
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -122,7 +122,7 @@ export default function SignUpPage() {
               type={showPassword ? 'text' : 'password'}
               required
               autoComplete="new-password"
-              placeholder="8+ characters, uppercase, and a number"
+              placeholder="12+ characters, uppercase, and a number"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
             />
@@ -139,7 +139,7 @@ export default function SignUpPage() {
 
         <div className="iso-password-strength" aria-label={`Password strength ${strength} of 3`}>
           {[1, 2, 3].map((level) => <span className={strength >= level ? 'is-active' : ''} key={level} />)}
-          <small>{strength === 3 ? 'Strong password' : 'Use 8+ characters, uppercase, and a number'}</small>
+          <small>{strength === 3 ? 'Strong password' : 'Use 12+ characters, uppercase, and a number'}</small>
         </div>
 
         <label className="iso-auth-consent">

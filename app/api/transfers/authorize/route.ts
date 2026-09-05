@@ -32,7 +32,7 @@ import { checkAuthorizationLimits } from '@/lib/policy/authorization-limits';
 import { verifyPayoutTotp } from '@/lib/auth/totp';
 import { readOperatingSettings } from '@/lib/server/operating-settings';
 import { readComplianceControls } from '@/lib/server/sui-settlement';
-import { isForeignAccountId, resolveSessionAccount } from '@/lib/server/session-account';
+import { isForeignAccountId, requireSessionAccount } from '@/lib/server/session-account';
 import { listLedgerEntries } from '@/lib/server/operations';
 import { readJsonBody } from '@/lib/server/http';
 
@@ -99,7 +99,9 @@ export async function POST(request: Request) {
   // The paying account is resolved from the SESSION. It used to come from
   // `body.businessAccountId`, which let any session holder name another org's
   // funded account and spend it.
-  const { accountId: businessAccountId } = await resolveSessionAccount(auth.session);
+  const accountCheck = await requireSessionAccount(auth.session);
+  if (accountCheck.response) return accountCheck.response;
+  const { accountId: businessAccountId } = accountCheck.account;
   if (isForeignAccountId(body.businessAccountId, businessAccountId)) {
     return NextResponse.json({ error: 'businessAccountId does not belong to this organization' }, { status: 403 });
   }
