@@ -47,6 +47,7 @@ function toRecord(row: repo.RecipientRow): RecipientRecord {
     createdVia: row.createdVia,
     sweepConfig: row.sweepConfig as RecipientRecord['sweepConfig'],
     kybInviteSent: row.kybInviteSent,
+    travelRule: row.travelRule as RecipientRecord['travelRule'],
     demo: row.demo,
     createdAt: row.createdAt,
   };
@@ -72,6 +73,7 @@ export async function persistRecipient(record: RecipientRecord): Promise<Recipie
       createdVia: record.createdVia,
       sweepConfig: record.sweepConfig as Record<string, unknown> | undefined,
       kybInviteSent: record.kybInviteSent,
+      travelRule: record.travelRule,
       demo: record.demo,
     }),
   );

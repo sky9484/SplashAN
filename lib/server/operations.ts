@@ -143,8 +143,45 @@ export type RecipientRecord = {
     sweepDelaySeconds: number;
   };
   kybInviteSent?: boolean;
+  /**
+   * The FATF R.16 beneficiary half.
+   *
+   * `suppliers` has had these columns since migration 0006 and nothing wrote
+   * them: the product collected a name, an account number and a SWIFT code,
+   * which is not enough for a partner who has to file a travel-rule record.
+   *
+   * Kept as its own object rather than flattened, because it is one thing —
+   * what accompanies the payment — and because `travelRuleSnapshot` freezes
+   * exactly this shape at authorization.
+   */
+  travelRule?: TravelRuleBeneficiary;
   demo?: boolean;
   createdAt: string;
+};
+
+/** Mirrors `BeneficiaryRecord` in lib/compliance/travel-rule.ts, which is the
+ *  authority on what each corridor requires. */
+export type TravelRuleBeneficiary = {
+  beneficiaryType?: 'INDIVIDUAL' | 'BUSINESS';
+  /** Named on the payment instruction, and used to confirm the routing
+   *  identifier resolves to the same bank. */
+  bankName?: string;
+  legalName?: string;
+  registrationNumber?: string;
+  dateOfBirth?: string;
+  nationalIdNumber?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  addressCity?: string;
+  addressState?: string;
+  addressPostalCode?: string;
+  addressCountry?: string;
+  bankIdScheme?: string;
+  bankIdValue?: string;
+  bankBranchCode?: string;
+  bankCountry?: string;
+  bankAccountNumber?: string;
+  bankAccountName?: string;
 };
 
 export type InvoiceStatusV2 = 'draft' | 'sent' | 'viewed' | 'paid' | 'settled' | 'overdue';
@@ -487,6 +524,7 @@ export function buildBatch(input: {
 export function buildRecipient(input: {
   /** Resolved from the SESSION by the caller, never from the request. */
   orgId: string;
+  travelRule?: TravelRuleBeneficiary;
   name: string;
   country: string;
   bank?: string;
@@ -514,6 +552,7 @@ export function buildRecipient(input: {
     createdVia: input.createdVia ?? 'manual',
     sweepConfig: input.sweepConfig,
     kybInviteSent: input.kybInviteSent,
+    travelRule: input.travelRule,
     demo: input.demo,
     createdAt: new Date().toISOString(),
   };

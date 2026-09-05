@@ -31,6 +31,29 @@ import type * as schemaModule from '../../db/schema.ts';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type DrizzleDb = PgDatabase<any, typeof schemaModule, any>;
 
+/** The FATF R.16 beneficiary half, one column each. Added by migration 0006
+ *  and never written until now. */
+export type TravelRuleColumns = {
+  beneficiaryType?: 'INDIVIDUAL' | 'BUSINESS';
+  bankName?: string;
+  legalName?: string;
+  registrationNumber?: string;
+  dateOfBirth?: string;
+  nationalIdNumber?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  addressCity?: string;
+  addressState?: string;
+  addressPostalCode?: string;
+  addressCountry?: string;
+  bankIdScheme?: string;
+  bankIdValue?: string;
+  bankBranchCode?: string;
+  bankCountry?: string;
+  bankAccountNumber?: string;
+  bankAccountName?: string;
+};
+
 export type RecipientRow = {
   id: string;
   orgId: string;
@@ -45,8 +68,16 @@ export type RecipientRow = {
   createdVia: 'manual' | 'invoice_link';
   sweepConfig?: Record<string, unknown>;
   kybInviteSent?: boolean;
+  travelRule?: TravelRuleColumns;
   demo?: boolean;
   createdAt: string;
+};
+
+/** Empty strings are absent, not present-and-blank: a travel-rule field that
+ *  holds "" satisfies a NOT NULL check while telling a partner nothing. */
+const trimmed = (value: string | null | undefined): string | undefined => {
+  const text = (value ?? '').trim();
+  return text.length > 0 ? text : undefined;
 };
 
 type SupplierSelect = typeof suppliers.$inferSelect;
@@ -76,20 +107,46 @@ function toRow(row: SupplierSelect): RecipientRow {
     createdVia?: RecipientRow['createdVia'];
     kybInviteSent?: boolean;
   };
+  const travelRule: TravelRuleColumns = {
+    beneficiaryType: row.beneficiaryType ?? undefined,
+    bankName: trimmed(row.bankName),
+    legalName: trimmed(row.legalName),
+    registrationNumber: trimmed(row.registrationNumber),
+    dateOfBirth: trimmed(row.dateOfBirth),
+    nationalIdNumber: trimmed(row.nationalIdNumber),
+    addressLine1: trimmed(row.addressLine1),
+    addressLine2: trimmed(row.addressLine2),
+    addressCity: trimmed(row.addressCity),
+    addressState: trimmed(row.addressState),
+    addressPostalCode: trimmed(row.addressPostalCode),
+    addressCountry: trimmed(row.addressCountry),
+    bankIdScheme: row.bankIdScheme ?? undefined,
+    bankIdValue: trimmed(row.bankIdValue),
+    bankBranchCode: trimmed(row.bankBranchCode),
+    bankCountry: trimmed(row.bankCountry),
+    bankAccountNumber: trimmed(row.bankAccountNumber),
+    bankAccountName: trimmed(row.bankAccountName),
+  };
+  const hasTravelRule = Object.values(travelRule).some((v) => v !== undefined);
+
   return {
     id: row.id,
     orgId: row.orgId,
     name: row.name,
     country: row.country,
     bank: row.bankName ?? '',
-    swift: row.swift ?? '',
-    account: row.accountRef ?? '',
+    // The legacy display fields are DERIVED from the routing columns where
+    // those are set, so the screen and the record a partner receives cannot
+    // disagree. Two writable copies of a SWIFT code is how they drift.
+    swift: (row.bankIdScheme === 'SWIFT_BIC' ? trimmed(row.bankIdValue) : undefined) ?? row.swift ?? '',
+    account: trimmed(row.bankAccountNumber) ?? row.accountRef ?? '',
     tier: row.tier ?? 'PAYOUT_ONLY',
     kybStatus: fromColumnKyb(row.kybStatus),
     orgEmail: metadata.orgEmail,
     createdVia: metadata.createdVia ?? 'manual',
     sweepConfig: (row.sweepConfig ?? undefined) as Record<string, unknown> | undefined,
     kybInviteSent: metadata.kybInviteSent,
+    travelRule: hasTravelRule ? travelRule : undefined,
     demo: row.demo,
     createdAt: row.createdAt.toISOString(),
   };
@@ -105,10 +162,30 @@ export async function insertRecipient(db: DrizzleDb, input: NewRecipient): Promi
       orgId: input.orgId,
       name: input.name,
       country: input.country,
-      bankName: input.bank || null,
+      bankName: input.travelRule?.bankName ?? input.bank ?? null,
       swift: input.swift || null,
       accountRef: input.account || null,
       kybStatus: toColumnKyb(input.kybStatus),
+      // The R.16 half, one column each rather than a blob: a partner asks for
+      // "the beneficiary's registration number", and a screening job filters
+      // on the country, so these are queried across records.
+      beneficiaryType: input.travelRule?.beneficiaryType ?? null,
+      legalName: input.travelRule?.legalName ?? null,
+      registrationNumber: input.travelRule?.registrationNumber ?? null,
+      dateOfBirth: input.travelRule?.dateOfBirth ?? null,
+      nationalIdNumber: input.travelRule?.nationalIdNumber ?? null,
+      addressLine1: input.travelRule?.addressLine1 ?? null,
+      addressLine2: input.travelRule?.addressLine2 ?? null,
+      addressCity: input.travelRule?.addressCity ?? null,
+      addressState: input.travelRule?.addressState ?? null,
+      addressPostalCode: input.travelRule?.addressPostalCode ?? null,
+      addressCountry: input.travelRule?.addressCountry ?? null,
+      bankIdScheme: (input.travelRule?.bankIdScheme ?? null) as SupplierSelect['bankIdScheme'],
+      bankIdValue: input.travelRule?.bankIdValue ?? null,
+      bankBranchCode: input.travelRule?.bankBranchCode ?? null,
+      bankCountry: input.travelRule?.bankCountry ?? null,
+      bankAccountNumber: input.travelRule?.bankAccountNumber ?? input.account ?? null,
+      bankAccountName: input.travelRule?.bankAccountName ?? null,
       tier: input.tier,
       sweepConfig: input.sweepConfig ?? null,
       demo: input.demo ?? false,

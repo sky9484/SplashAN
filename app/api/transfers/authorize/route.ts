@@ -10,6 +10,8 @@ import {
 } from '@/lib/server/operations';
 import { accountBalance, listMovementsSince, recordMovement } from '@/lib/server/ledger-store';
 import { persistRecipient } from '@/lib/server/recipients-store';
+import { missingTravelRuleFields, travelRuleSnapshot } from '@/lib/compliance/travel-rule';
+import { readOriginator } from '@/lib/server/originator';
 import { patchInvoice } from '@/lib/server/invoices-store';
 import { patchAuditReceipt, patchTransfer, persistTransfer } from '@/lib/server/transfers-store';
 import { proposeForApproval } from '@/lib/server/dual-approval';
@@ -43,7 +45,12 @@ const authorizeSchema = z.object({
     name: z.string().trim().min(2),
     country: z.string().trim().min(2),
     bank: z.object({ swift: z.string().optional(), account: z.string().trim().min(1) }).optional(),
+    /** The FATF R.16 beneficiary half. Optional in the schema and REQUIRED
+     *  by `missingTravelRuleFields` below — so an incomplete record is
+     *  refused with the specific fields named, not with "invalid body". */
+    travelRule: z.record(z.string(), z.unknown()).optional(),
   }),
+  travelRulePayment: z.record(z.string(), z.unknown()).optional(),
   amount: z.object({ value: z.string(), targetCurrency: z.string().length(3) }),
   quote: z.object({ netReceived: z.string() }).optional(),
   deliveryTier: z.enum(['PAYOUT_ONLY', 'SWEEP_ACCOUNT', 'STORED_BALANCE']).default('PAYOUT_ONLY'),
@@ -152,7 +159,41 @@ export async function POST(request: Request) {
     swift: body.recipient.bank?.swift,
     account: body.recipient.bank?.account,
     tier: body.deliveryTier,
+    travelRule: body.recipient.travelRule as Parameters<typeof buildRecipient>[0]['travelRule'],
   }));
+
+  // The travel rule, checked HERE and not only in the form.
+  //
+  // The same module the form asks — a client that skips the UI, or an
+  // integration posting straight to this route, meets the identical rule.
+  // The ORIGINATOR half is read from the org's own KYB record and never
+  // from the body: it is the payer's identity, and a request that could
+  // supply it is a request that could misstate who sent the money.
+  const { originator } = await readOriginator(orgId);
+  const travelRuleBeneficiary = {
+    name: recipient.name,
+    bankName: recipient.bank,
+    ...(body.recipient.travelRule ?? {}),
+  };
+  const travelRuleMissing = missingTravelRuleFields({
+    destinationCountry: body.recipient.country,
+    beneficiary: travelRuleBeneficiary,
+    originator,
+    payment: body.travelRulePayment ?? {},
+  });
+  if (travelRuleMissing.length > 0) {
+    return NextResponse.json(
+      {
+        error:
+          'This payment cannot be sent yet: the record that has to travel with it is incomplete.',
+        code: 'travel_rule_incomplete',
+        // Each one names the field AND why the corridor asks, so a caller
+        // can fix it without reading a regulation.
+        missing: travelRuleMissing,
+      },
+      { status: 400 },
+    );
+  }
 
   // Ceilings the operator configured in Settings. Until now the only amount
   // rule on this route was the $100 floor, so a $1,000 per-transfer limit
@@ -344,6 +385,21 @@ export async function POST(request: Request) {
     fundingKytStatus: fundingSelection.type === 'stablecoin' ? fundingSession?.status : undefined,
     fundingNormalizeVenue: fundingSession?.normalizeVenue,
     fundingEffectiveSlippageBps: fundingSession?.effectiveSlippageBps,
+  });
+
+  // Freeze what travelled with THIS payment.
+  //
+  // A snapshot rather than a join to the beneficiary: R.16 is about what
+  // accompanied this transfer, and a beneficiary edited next week must not
+  // silently rewrite the record of a payment already sent. It rides in the
+  // settlement metadata, which is where `travel_rule_snapshot` lands.
+  Object.assign(intent, {
+    travelRuleSnapshot: travelRuleSnapshot({
+      destinationCountry: body.recipient.country,
+      beneficiary: travelRuleBeneficiary,
+      originator,
+      payment: body.travelRulePayment ?? {},
+    }),
   });
 
   // Postgres when configured, this process only when not — one place decides,

@@ -68,6 +68,22 @@ export const organizations = pgTable('organizations', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
   legalName: text('legal_name'),
+
+  // ── The payer's own half of FATF R.16 ─────────────────────────────────
+  // Migration 0006 gave `suppliers` the whole beneficiary side and the
+  // originator nothing, so a complete travel-rule record could not be
+  // produced however carefully the beneficiary was filled in. Org-level
+  // facts, established once at KYB and reused by every payment.
+  /** SSM, UEN, ACRA, DTI, NPWP — the identifier a business normally has. */
+  registrationNumber: text('registration_number'),
+  addressLine1: text('address_line1'),
+  addressLine2: text('address_line2'),
+  addressCity: text('address_city'),
+  addressState: text('address_state'),
+  addressPostalCode: text('address_postal_code'),
+  /** ISO 3166-1 alpha-2. */
+  addressCountry: text('address_country'),
+
   kybStatus: kybStatus('kyb_status').notNull().default('none'),
   kybTier: text('kyb_tier'),
   /** Wallet spec §3 — the accountable onboarding lifecycle:
