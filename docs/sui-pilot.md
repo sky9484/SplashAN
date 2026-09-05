@@ -6,9 +6,9 @@ runtime dependency and is never bundled into the application.
 
 ## Install or update
 
-From the repository root on Windows:
+From the repository root, on any platform:
 
-```powershell
+```bash
 npm run setup:sui-pilot
 ```
 

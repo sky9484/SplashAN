@@ -14,7 +14,7 @@
     "lint": "npm run check:core && npm run check:copy && eslint",
     "check:core": "node scripts/check-core-no-balance.mjs",
     "check:copy": "node scripts/check-copy.mjs",
-    "setup:sui-pilot": "powershell -ExecutionPolicy Bypass -File scripts/setup-sui-pilot.ps1",
+    "setup:sui-pilot": "node scripts/setup-sui-pilot.mjs",
     "bootstrap:testnet": "node --use-system-ca --experimental-strip-types --env-file=.env.local scripts/bootstrap-testnet.ts",
     "test:auth": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test tests/customer-session.test.mjs tests/wallet-onboarding.test.mjs",
     "test:seal:integration": "node --use-system-ca --experimental-strip-types --env-file=.env.local tests/seal-decentralized.integration.mjs",
