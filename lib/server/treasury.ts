@@ -17,7 +17,7 @@
  */
 
 import { deriveYieldMicros, spreadOnGain } from '@/lib/policy/yield-accrual';
-import { getTreasuryRate, getUsdyRedemptionPrice, navIsDecidable, navPriceUsd, quoteSwap } from './usdy';
+import { getUsdyRedemptionPrice, navIsDecidable, navPriceUsd, quoteSwap } from './usdy';
 
 export type UserTreasuryLedger = {
   userId: string;

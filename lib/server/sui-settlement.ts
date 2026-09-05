@@ -1452,7 +1452,9 @@ export async function recordBatchSettlementOnSui(input: {
   const SPLASH_CUSTODY_PACKAGE_ID = custodyPackageIdOrThrow();
   const SPLASH_TREASURY_ID = configIdOrThrow('treasuryId', 'SPLASH_TREASURY_ID');
   const SPLASH_PEG_STATE_ID = configIdOrThrow('pegStateId', 'SPLASH_PEG_STATE_ID');
-  const SPLASH_BUSINESS_ACCOUNT_ID = configIdOrThrow('businessAccountId', 'SPLASH_BUSINESS_ACCOUNT_ID');
+  // Called for its side effect, not its value: it throws a named error if the
+  // id is unconfigured, which is the whole point of the pre-flight above.
+  configIdOrThrow('businessAccountId', 'SPLASH_BUSINESS_ACCOUNT_ID');
   // 2026-07-19 package (0xec3b06…): settle_sui_batch pays recipients from the
   // SUI SettlementPool but now ALSO requires the ComplianceConfig object, a
   // DeepBook Pool<SUI, QuoteAsset> reference for the liquidity guard, and the
