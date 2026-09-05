@@ -87,12 +87,18 @@ Do not publish `splash_core` until every line is checked.
       1_000_000_000` matching `DEEPBOOK_PRICE_SCALING`, the three view
       signatures byte-identical, and no `published-at`.
       **Minimum CLI for this repo is now 1.61.1.**
-      **2026-09-05: the CLI on the current dev machine is 1.75.1, and on it
-      `splash_custody` fails 0/16 with `MISSING_DEPENDENCY` in `0x2::object`
-      — a linkage failure, not a code failure (`splash_core` 14/14 and
-      `splash_meter` 22/22 still pass; both have no dependencies). The two
-      checkboxes above were ticked on 1.77.2 and are not reproducible below
-      it. Restore 1.77.2 before treating them as verified.**
+      **2026-09-05: re-verified.** The dev machine had drifted to 1.75.1, on
+      which `splash_custody` fails 0/16 with `MISSING_DEPENDENCY` in
+      `0x2::object` — a whole-package linkage failure, not a code failure
+      (`splash_core` and `splash_meter` have no dependencies and stayed
+      green). 1.77.2 was reinstalled and all three suites re-run: **14 + 22 +
+      16 = 52, no failures.** The checkboxes above hold, on 1.77.2 and not
+      below it.
+      Note the committed `Move.lock` still records `compiler-version =
+      "1.59.1"` and pins framework `494fa6ed`. Any `sui move build` rewrites
+      it to lock format 4 with that CLI's own framework rev (1.75.1 →
+      `b9149cbf`, 1.77.2 → `06734f6f`); those rewrites have been reverted, so
+      the pin on record is not the framework these tests ran against.
 - [x] No value-bearing field in `splash_core` — `scripts/check-core-no-balance.mjs`,
       run by `.github/workflows/core-invariant.yml` on every push and PR, and by
       `npm run lint` locally. The checker parses struct BODIES out of

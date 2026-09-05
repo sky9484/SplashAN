@@ -21,8 +21,8 @@ message; nothing is squashed.
 | **5 · Passkey authority** | SIP-9 enrolment at `/settings/security`, public key captured at creation and persisted, signature/sender/canon-hash verification, one active credential per origin |
 | **Membership admin** (not a numbered phase) | `/admin/memberships` — the operator surface for the grant Phase 3 removed. One grant path, no default role, no account creation from the form, and the two money-moving roles say so at the point of granting. `scripts/dev-db.mjs` runs it locally without a cluster |
 
-**304 tests across eleven suites**, plus 36 Move tests that run on the CLI
-installed here (14 `splash_core` + 22 `splash_meter`). Lint, `tsc` and the production build are clean.
+**304 tests across eleven suites**, plus **52 Move tests** (14 `splash_core` +
+22 `splash_meter` + 16 `splash_custody`) on Sui CLI 1.77.2. Lint, `tsc` and the production build are clean.
 
 ---
 
@@ -30,31 +30,31 @@ installed here (14 `splash_core` + 22 `splash_meter`). Lint, `tsc` and the produ
 
 ### Phase 6 · Move authority — not started
 
-Blocked on three things, in this order:
+Blocked on two things now. The first blocker is cleared:
 
-1. **The Sui CLI on this machine is 1.75.1, not the 1.77.2 the Move work was
-   verified on.** The binary is at `%LOCALAPPDATA%\bin\sui.exe` (not on PATH
-   by default). All three packages BUILD clean on it, and
-   `sui move test` is green for `splash_core` (**14/14**) and `splash_meter`
-   (**22/22**) — both have no dependencies. `splash_custody` fails **0/16**,
-   every test identically:
+1. ~~**The Sui CLI.**~~ **Cleared.** Sui 1.77.2 (`51d177ad7d65`) is installed
+   at `%LOCALAPPDATA%\bin\sui.exe`; the 1.75.1 binary it replaced is kept at
+   `D:\sui-install\sui-1.75.1-backup.exe`. All three packages build clean and
+   all three suites pass — `splash_core` **14/14**, `splash_meter` **22/22**,
+   `splash_custody` **16/16**. With build output present, `npm run check:core`
+   now cross-checks the no-`Balance<T>` invariant against compiled bytecode
+   rather than source alone.
 
-   ```
-   VMError { major_status: MISSING_DEPENDENCY,
-             location: Module(0x2::object), indices: [(FunctionHandle, 2)] }
-   ```
-
-   A whole-package linkage failure before any assertion runs, in the only
-   package with git dependencies (DeepBook `daa5a951`, OpenZeppelin math) —
-   and its own `Move.toml` records that the pin moved forward only once the
-   CLI reached 1.77.2. `STATUS.md`'s mainnet gate claims 16/16 for custody;
-   that claim is not falsified, but it is **not reproducible here today**, and
-   a gate item that cannot be re-run is not a gate. Restore 1.77.2 first.
+   On 1.75.1 `splash_custody` failed 0/16 with `MISSING_DEPENDENCY` in
+   `0x2::object` — a whole-package linkage failure in the only package with
+   git dependencies, which is a trap worth remembering: a CLI downgrade takes
+   out exactly that package, with an error that reads like a code fault.
 
 2. **Sebastian confirms.** Protocol: Move changes are not self-approved.
 3. **`move/splash_core/Move.toml` has an empty `[dependencies]` block** — no
-   pinned Sui framework, so whichever CLI is installed silently defines the
-   toolchain. Worth pinning explicitly whether or not Phase 6 proceeds.
+   pinned Sui framework, so the `Move.lock` is the only pin, and every
+   `sui move build` rewrites it to that CLI's own framework rev (committed:
+   `494fa6ed`, compiler 1.59.1; 1.75.1 writes `b9149cbf`; 1.77.2 writes
+   `06734f6f`). All rewrites reverted, so the pin on record is not the
+   framework the 52 green tests ran against. On Windows the regenerated lock
+   also writes backslashes into `subdir`, which would not resolve on Linux CI.
+   Worth settling whether or not Phase 6 proceeds — as its own commit, not
+   folded into an authority change.
 
 Scope, unchanged from the brief: delete `mint_attestation_cap`
 (`business_account.move:149` — it lets Splash mint a capability to an arbitrary

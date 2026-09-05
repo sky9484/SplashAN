@@ -17,8 +17,8 @@ claims, exact money arithmetic, real user accounts that fail closed, zkLogin
 sign-in, and passkey approval authority. Since the last note, the staff console
 gained the screen that grants memberships — Phase 3 removed every implicit
 grant, which was right, and left no way to give a real account access short of
-a SQL client. **Phase 6 (Move authority) is blocked on you and on a toolchain
-regression on this machine**, both described below.
+a SQL client. Sui 1.77.2 is now installed and all 52 Move tests are green
+(14 + 22 + 16), so **Phase 6 (Move authority) is blocked on you alone.**
 
 ---
 
@@ -79,20 +79,25 @@ staff session.
 
 ---
 
-## `sui move build` and `sui move test` — run today, results below
+## `sui move build` and `sui move test` — run on 1.77.2
 
-The CLI on this machine is **1.75.1**. `STATUS.md` records the working
-toolchain as **1.77.2**, so this is a downgrade relative to what the Move work
-was verified on.
+Sui 1.77.2 (`51d177ad7d65`, the `testnet-v1.77.2` Windows build) is now
+installed at `%LOCALAPPDATA%\bin\sui.exe`. The 1.75.1 binary that was there is
+kept at `D:\sui-install\sui-1.75.1-backup.exe`.
+
+All three suites are green, and they match STATUS.md's gate exactly:
 
 | Package | `build` | `test` |
 |---|---|---|
-| `splash_core` | clean | **14 / 14 pass** |
-| `splash_meter` | clean | **22 / 22 pass** |
-| `splash_custody` | clean | **0 / 16 — all fail** |
+| `splash_core` | clean | **14 / 14** |
+| `splash_meter` | clean | **22 / 22** |
+| `splash_custody` | clean | **16 / 16** |
 
-**The custody failures are the toolchain, not the code.** Every one of the 16
-fails identically before reaching any assertion:
+52 tests, no failures. The gate is reproducible again.
+
+Worth recording what the failure was, because it is a trap that will recur.
+On 1.75.1 the same `splash_custody` suite failed **0/16**, every test
+identically and before any assertion:
 
 ```
 VMError { major_status: MISSING_DEPENDENCY,
@@ -100,45 +105,56 @@ VMError { major_status: MISSING_DEPENDENCY,
 ```
 
 That is the test VM's framework failing to link a function the compiled
-bytecode expects — a whole-package linkage failure, which is why the count is
-0/16 and not "some pass". `splash_custody` is the only package with git
-dependencies (DeepBook at `daa5a951`, OpenZeppelin math), and its own
-`Move.toml` documents that the pin was moved forward *only once the CLI reached
-1.77.2*. `splash_core` and `splash_meter` have no dependencies at all, and both
-are green.
+bytecode expects — whole-package, which is why it was 0/16 and not "some
+pass". `splash_custody` is the only package with git dependencies (DeepBook
+`daa5a951`, OpenZeppelin math); `splash_core` and `splash_meter` have none and
+were green on both CLIs. So a CLI downgrade takes out only the package whose
+dependencies were pinned against a newer toolchain, and it does so with an
+error that looks like a code fault. It is not one.
 
-STATUS.md's mainnet gate claims 16/16 green for custody. That claim was true on
-1.77.2 and I have not falsified it — but it is **not reproducible on this
-machine today**, and a gate item that cannot be re-run is not a gate. Restoring
-CLI 1.77.2 is the fix. I have not downloaded or installed it; that is a change
-to your machine and it should be your call.
+With the build output now present, `npm run check:core` also cross-checks the
+no-`Balance<T>` invariant against **compiled bytecode**, not just source — 6
+modules, holds. Previously it printed "no build output to cross-check".
 
-### One more thing the build turned up
+### The lockfiles are stale, and every CLI rewrites them
 
-Running `sui move build` on 1.75.1 **rewrote all three `Move.lock` files** — new
-lockfile format (`version = 3` → `version = 4`), a different pinned Sui
-framework rev, and Windows backslashes inside the `subdir` paths, which would
-not resolve on Linux CI. I reverted all three; none of that is committed. But
-two things are worth your eye:
+`sui move build` on **1.77.2 also rewrites `Move.lock`** — I first saw this on
+1.75.1 and wrote it up as a 1.75.1 artifact; that was wrong. Both versions
+convert the committed lock from `version = 3` to `version = 4`, and each pins a
+*different* Sui framework rev while doing it:
 
-- The committed lock records `compiler-version = "1.59.1"` and pins the
-  framework at `494fa6ed`. So the lockfile was never regenerated on 1.77.2
-  either — the 1.77.2 verification ran against a lock written by 1.59.1.
-- This is blocker 3 restated with teeth: with `[dependencies]` empty in
-  `splash_core/Move.toml`, the *lock* is the only thing pinning the framework,
-  and any `sui move build` on a mismatched CLI silently rewrites it.
+| Written by | Lock version | Framework rev |
+|---|---|---|
+| committed (1.59.1) | 3 | `494fa6ed` |
+| 1.75.1 | 4 | `b9149cbf` |
+| 1.77.2 | 4 | `06734f6f` |
+
+I have reverted it every time; nothing of this is committed. Two conclusions:
+
+- **The committed lock records `compiler-version = "1.59.1"`.** It was never
+  regenerated on 1.77.2 either, so the framework it pins is not the framework
+  the 52 green tests just ran against.
+- **This is blocker 3 with teeth.** With `[dependencies]` empty in
+  `splash_core/Move.toml`, the lock is the only thing pinning the framework,
+  and whichever CLI runs a build silently repins it.
+
+One practical wrinkle if you decide to regenerate: on Windows the new lock
+writes `subdir = 'crates\sui-framework\packages\move-stdlib'` with
+backslashes, which will not resolve on Linux CI. Regenerate it on Linux/WSL,
+or hand-correct the separators.
 
 ---
 
 ## What I need from you, in order
 
-1. **Confirm the CLI restore.** Sui 1.77.2 back on PATH, then re-run all three
-   suites. Expect 14 / 22 / 16. If custody does not go green on 1.77.2, the
-   problem is not the toolchain and Phase 6 should wait until we know what it
-   is.
+1. **Decide what to do about the lockfiles**, before any Move is written.
+   Regenerating them on 1.77.2 makes the pin match what the tests actually
+   run against; leaving them means the next person on a different CLI gets a
+   silent repin. Either is defensible; drifting is not. Doing it as part of
+   Phase 6 would mix a toolchain change into an authority change, so it wants
+   to be its own commit either way.
 
-2. **Confirm the Phase 6 scope before any Move is written.** Unchanged from the
-   build list:
+2. **Confirm the Phase 6 scope.** Unchanged from the build list:
    - delete `mint_attestation_cap` (`business_account.move:149`) — it lets
      Splash mint a capability to an arbitrary address, which is the inverse of
      canon;
