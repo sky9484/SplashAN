@@ -331,6 +331,18 @@ export const envSchema = z.object({
   /** Overrides lib/ai/model.ts. The old default here was a model id that does
    *  not exist, so every call threw and fell back to canned text. */
   ANTHROPIC_MODEL: withDefault(str, DEFAULT_COPILOT_MODEL),
+
+  // WhatsApp approvals, through Twilio. All three are needed together —
+  // `whatsappConfigured()` is false unless every one is set, because a
+  // half-configured sender fails at the moment an approval is requested.
+  TWILIO_ACCOUNT_SID: optional,
+  TWILIO_AUTH_TOKEN: optional,
+  /** The WhatsApp-enabled sender, E.164. */
+  TWILIO_WHATSAPP_FROM: optional,
+  /** The URL Twilio was configured to call. Twilio signs the URL it was
+   *  given, which behind a proxy is not the URL the request arrives at — so
+   *  signature verification uses this when set, and the request URL when not. */
+  TWILIO_WEBHOOK_URL: optional,
   MEMWAL_PRIVATE_KEY: optional,
   MEMWAL_ACCOUNT_ID: objectId,
   MEMWAL_SERVER_URL: url,

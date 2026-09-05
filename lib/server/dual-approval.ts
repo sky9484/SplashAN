@@ -193,7 +193,38 @@ export async function proposeForApproval(
     rememberPayload(stored.id, input.payload);
 
     await store.flush();
-    return store.get(stored.id) ?? stored;
+    const created = store.get(stored.id) ?? stored;
+
+    // Ask the approvers. Fire-and-forget on purpose: a notification that
+    // cannot be delivered must not fail the payment path that raised it.
+    // The proposal exists, the queue shows it, and an approver can still act
+    // in the app — WhatsApp is a faster route to the same decision, not the
+    // only one.
+    void (async () => {
+      try {
+        const { requestApprovals } = await import('./approval-requests.ts');
+        const outcome = await requestApprovals({
+          proposal: created,
+          orgName: input.orgId,
+          amountUsd: input.amountUsd,
+          // The maker never votes on their own payment.
+          excludeUserId: input.createdBy,
+          now: new Date(),
+        });
+        if (outcome.unreachable.length > 0) {
+          console.info(
+            '[approvals] %d of %d approvers were not reachable on WhatsApp: %s',
+            outcome.unreachable.length,
+            outcome.approversAsked,
+            outcome.unreachable.join(', '),
+          );
+        }
+      } catch (error) {
+        console.error('[approvals] could not notify approvers', error);
+      }
+    })();
+
+    return created;
   } catch (error) {
     console.error(
       '[dual-approval] could not create the approval proposal — the payment stays refused',

@@ -541,6 +541,42 @@ export const orgSettings = pgTable('org_settings', {
  * reply is accepted only when its number resolves to a row here, and the
  * approval is recorded against that USER — never against the number.
  */
+/**
+ * One approver, one proposal, one chance.
+ *
+ * A token is bound to one proposal AND one user, single-use and short-lived.
+ * Per-approver rather than one code per proposal, because unanimous consent
+ * means N distinct people must each act: a single shared code makes "three
+ * approvers agreed" satisfiable by one person entering it three times, which
+ * is exactly the control being claimed and exactly what it would not deliver.
+ */
+export const approvalTokens = pgTable('approval_tokens', {
+  id: text('id').primaryKey(),
+  proposalId: text('proposal_id').notNull().references(() => proposals.id, { onDelete: 'cascade' }),
+  orgId: text('org_id').notNull().references(() => organizations.id),
+  /** Whose ballot this is. A token arriving from anyone else is refused. */
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  /** The digits typed back into Splash in `code` mode. Short enough to read off
+   *  a phone, and single-use, which is what makes short safe. */
+  code: text('code').notNull(),
+  channel: text('channel').notNull().default('code'),
+  sentTo: text('sent_to'),
+  sentAt: timestamp('sent_at', { withTimezone: true }),
+  /** An approval request is a claim about the world at a moment — this balance,
+   *  this corridor, this beneficiary. A code that still works next week
+   *  approves a payment nobody re-examined. */
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  /** APPROVE or REJECT. A rejection has no row in `approvals` and is the most
+   *  important answer that can come back, so it is recorded here. */
+  decision: text('decision'),
+  decidedAt: timestamp('decided_at', { withTimezone: true }),
+  ...timestamps,
+}, (table) => [
+  uniqueIndex('approval_tokens_proposal_user_unique').on(table.proposalId, table.userId),
+  index('approval_tokens_user_idx').on(table.userId, table.decidedAt),
+  index('approval_tokens_code_idx').on(table.code),
+]);
+
 export const approverChannels = pgTable('approver_channels', {
   id: text('id').primaryKey(),
   orgId: text('org_id').notNull().references(() => organizations.id),
