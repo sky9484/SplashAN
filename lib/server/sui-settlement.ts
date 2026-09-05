@@ -312,6 +312,7 @@ const ABORT_CODES: Record<number, string> = {
   104: 'E_INVALID_RECIPIENT — settlement recipient is the zero address.',
   105: 'E_INVALID_AMOUNT — settlement amount or deposit coin value is zero.',
   106: 'E_NOT_ACCOUNT_OWNER — BusinessAccount object was transferred away from its recorded owner; verified status is not transferable (audit S-01).',
+  108: 'E_BATCH_TOO_LARGE — settle_batch exceeded MAX_BATCH_ROWS (256). Above roughly 1,023 rows Sui’s per-transaction event and command ceilings make the call unexecutable at any gas budget; 256 keeps it well inside them.',
   109: 'E_INSUFFICIENT_CREDIT — the tenant has not funded enough credit in the SettlementPool for this run. Credits are per-tenant (audit A-11): fund with settlement::deposit_for, not a bare deposit.',
   110: 'E_NOT_ACCOUNT_OWNER — grant_delegation must be signed by the BusinessAccount owner.',
   111: 'E_NOT_VERIFIED — cannot grant a payout delegation from an unverified BusinessAccount.',
@@ -330,7 +331,7 @@ const ABORT_CODES: Record<number, string> = {
   301: 'E_PEG_BROKEN_USDT — USDT deviation > 30 bps. Update peg with valid data.',
   302: 'E_PEG_STALE — Peg price update is older than 60 seconds OR no real update_peg has fired since init. The app refreshes it automatically; verify SPLASH_ADMIN_CAP_ID and SPLASH_PEG_STATE_ID if this appears.',
   303: 'E_TIMESTAMP_REGRESSION — peg_monitor::update_peg called with a Clock timestamp older than the stored one. Indicates a clock bug or replay.',
-  304: 'E_INSUFFICIENT_DEPTH — DeepBook cannot fill this settlement amount inside the configured depth window. Common causes, in order: (1) the batch total is BELOW the pool\'s minSize (SUI/DBUSDC testnet minSize = 1 SUI — anything smaller returns a zero quote); (2) the SettlementPool is underfunded (fund it with scripts/fund-settlement-pool.mjs); (3) the book genuinely lacks depth in the [mid*(1-slippage), mid] band. NOTE: the package deployed on testnet still carries the pre-S-11 guard, which requires a PERFECT fill (remaining_base == 0) — unsatisfiable on a lot-quantized book, so batch cannot settle live until the fixed contract is published.',
+  304: 'E_INSUFFICIENT_DEPTH — DeepBook cannot fill this settlement amount inside the configured depth window. Common causes, in order: (1) the batch total is BELOW the pool\’s minSize (SUI/DBUSDC testnet minSize = 1 SUI — anything smaller returns a zero quote); (2) the SettlementPool is underfunded (fund it with scripts/fund-settlement-pool.mjs); (3) the book genuinely lacks depth in the [mid*(1-slippage), mid] band. NOTE: the package deployed on testnet still carries the pre-S-11 guard, which requires a PERFECT fill (remaining_base == 0) — unsatisfiable on a lot-quantized book, so batch cannot settle live until the fixed contract is published.',
   305: 'E_SLIPPAGE_EXCEEDED — DeepBook amount-sized execution price exceeds the configured slippage limit.',
   306: 'E_INVALID_MARKET_PRICE — DeepBook returned an invalid zero mid-price.',
   // ── splash_meter (900-block) ─────────────────────────────────────────────
@@ -370,6 +371,7 @@ const ABORT_CODES: Record<number, string> = {
   409: 'E_EMPTY_BENEFICIARY_REF — payment_intent::create called without a verified counterparty reference hash.',
   410: 'E_EMPTY_CURRENCY — payment_intent::create called without a currency tag.',
   411: 'E_EMPTY_CORRIDOR — payment_intent::create called without a corridor tag.',
+  413: 'E_UNAUTHORIZED_RECEIPT_CONSUMER — a module other than audit_anchor tried to unpack a SettleReceipt. Only the anchoring path can construct the witness, which is what makes “every settlement is anchored” a type-system guarantee.',
   414: 'E_WRONG_SETTLEMENT_ASSET — the coin type offered does not match the asset the intent was opened in. The intent binds its settlement asset at creation; check SPLASH_SETTLEMENT_COIN_TYPE and how the payment coin is sourced.',
   412: 'E_STILL_PENDING — payment_intent::delete_finalized called on a pending intent; confirm or cancel it first.',
 
@@ -397,6 +399,43 @@ const ABORT_CODES: Record<number, string> = {
   704: 'E_RECIPIENT_NOT_ALLOWED — smart_treasury withdrawal destination is not on the treasury allowlist. Add it with allow_recipient (AdminCap).',
   705: 'E_REQUIRES_PAUSE — lowering the treasury operating floor requires the treasury to be paused first, so a floor reduction cannot be slipped between two normal withdrawals.',
   706: 'E_LAST_RECIPIENT — refused to empty the withdrawal allowlist; that bricks the treasury rather than securing it. Use the pause switch.',
+
+  // ── business_account (Phase 6 authority) ─────────────────────────────────
+  4: 'E_INVALID_HOLDER — business_account::rotate_anchor_cap called with holder = 0x0.',
+  5: 'E_NOT_VERIFIED_YET — revoke_verification called on an account that was never verified.',
+  20: 'E_NOT_AN_OWNER — the signer is not an owner of this business account. Membership is read from the account’s own `owners` set on every call; being a Splash admin does not substitute.',
+  21: 'E_NOT_AN_APPROVER — the signer is not in this account’s approver set. Owners are not approvers by default: separation of duties is set membership, not seniority.',
+  22: 'E_FROZEN — the account is stopped. Two independent flags: an owner freeze, which any owner can lift, and a compliance freeze, which only the AdminCap can. Membership cannot change while either is set.',
+  23: 'E_NOT_FROZEN — unfreeze called on an account that is not frozen by that authority. An owner cannot clear a compliance freeze by lifting their own.',
+  24: 'E_LAST_OWNER — refused to remove the only owner. An account with no owners has no path back except a recovery party, which is optional.',
+  25: 'E_ALREADY_A_MEMBER — that address is already an owner or approver, or a pending recovery has already been performed by the owners themselves.',
+  26: 'E_NOT_A_MEMBER — that address is not in the set you are removing it from.',
+  27: 'E_NOT_RECOVERY_PARTY — only the nominated recovery party can request, execute or cancel a recovery.',
+  28: 'E_INVALID_ADDRESS — an owner, approver, recovery party or maker was given as 0x0.',
+  29: 'E_SELF_APPROVAL — the approver is the maker. Four eyes is enforced on chain: whoever initiated a payment cannot release it.',
+  30: 'E_STALE_AUTHORITY — the approval was minted under an authority set that has since changed. Every membership change, freeze, recovery and KYB withdrawal bumps the account’s authority epoch, so a revoked approver’s approval is dead even though the object still exists — and re-granting the same address does not revive it. Ask for a fresh approval.',
+  31: 'E_WRONG_ACCOUNT — the approval belongs to a different business account than the one passed.',
+  32: 'E_APPROVAL_EXPIRED — the approval is past its fifteen-minute TTL.',
+  33: 'E_AMOUNT_MISMATCH — the approval’s amount does not match the intent’s, or an approval was requested for zero.',
+  34: 'E_TOO_MANY_MEMBERS — the owner or approver set is at its cap (16). An unbounded set is a gas cliff and an object-size risk.',
+  35: 'E_RECOVERY_IS_INSIDER — the recovery party cannot also be an owner or approver. A recovery party drawn from the same people is not a recovery path.',
+  36: 'E_NOT_VERIFIED — the business account is not KYB-verified, so no payout can be approved or released from it.',
+  37: 'E_NO_RECOVERY_PARTY — no recovery party has been nominated on this account.',
+  38: 'E_RECOVERY_PENDING — a recovery is already running. It cannot be replaced, and the nominee cannot be changed mid-notice.',
+  39: 'E_NO_PENDING_RECOVERY — there is no recovery to cancel or execute; an owner may already have cancelled it.',
+  40: 'E_RECOVERY_NOT_DUE — the 72-hour recovery notice has not elapsed. The delay is what makes it a defence rather than a countdown: any owner can cancel during it.',
+  41: 'E_WRONG_INTENT — the approval was minted for a different payment intent.',
+
+  415: 'E_APPROVAL_REQUIRED — this intent is bound to a business account, so it settles only through confirm_with_approval. confirm_payment_intent would bypass the approver, the freeze flags and the 24h ceiling.',
+  416: 'E_NOT_ACCOUNT_BOUND — confirm_with_approval or approve_payout called on an intent that is not bound to any business account.',
+  417: 'E_WRONG_BUSINESS_ACCOUNT — the account passed is not the account the intent was opened against.',
+  418: 'E_NOT_A_MEMBER — the signer is neither an owner nor an approver of the account, so cannot open an intent in its name.',
+  419: 'E_ACCOUNT_NOT_PAYABLE — the account is frozen or not KYB-verified.',
+
+  // ── daily_limit (per-account 24h ceiling) ────────────────────────────────
+  200: 'E_ZERO_AMOUNT — daily_limit::charge called with a zero payout.',
+  201: 'E_CAP_EXCEEDED — the payout would push this business account past its 24h ceiling, or the ceiling was lowered below what it has already spent inside the window. Read business_account::daily_remaining before retrying; the allowance returns as the window slides.',
+  202: 'E_INVALID_CAP — business_account::set_daily_cap called with zero. A zero ceiling is a brick, not a limit.',
 
   // ── receipt_v2 ───────────────────────────────────────────────────────────
   800: 'E_EMPTY_RECEIPT_ID — receipt_v2::create_receipt called with empty receipt_id.',

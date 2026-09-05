@@ -542,6 +542,69 @@ fun the_last_owner_cannot_be_removed() {
 }
 
 #[test]
+#[expected_failure(abort_code = 20, location = splash_core::business_account)]
+/// A co-owner cannot expel the founder.
+///
+/// This is the difference between a compromised co-owner key being a nuisance
+/// and being a complete takeover: remove every other owner, add two addresses
+/// you control as approvers, and four eyes is satisfied by two halves of the
+/// same person.
+fun a_co_owner_cannot_remove_the_founder() {
+    let mut scenario = setup();
+    scenario.next_tx(OWNER);
+    {
+        let mut account = scenario.take_shared<BusinessAccount>();
+        let ctx = scenario.ctx();
+        business_account::add_owner(&mut account, OWNER2, ctx);
+        ts::return_shared(account);
+    };
+    scenario.next_tx(OWNER2);
+    {
+        let mut account = scenario.take_shared<BusinessAccount>();
+        let ctx = scenario.ctx();
+        business_account::remove_owner(&mut account, OWNER, ctx);
+        ts::return_shared(account);
+    };
+    scenario.end();
+}
+
+#[test]
+/// Co-owners can still be removed by each other, and the founder can still
+/// leave under their own signature. The rule pins one address, not the whole
+/// membership model.
+fun co_owners_remain_removable_and_the_founder_can_leave() {
+    let mut scenario = setup();
+    scenario.next_tx(OWNER);
+    {
+        let mut account = scenario.take_shared<BusinessAccount>();
+        let ctx = scenario.ctx();
+        business_account::add_owner(&mut account, OWNER2, ctx);
+        business_account::add_owner(&mut account, APPROVER, ctx);
+        ts::return_shared(account);
+    };
+    scenario.next_tx(OWNER2);
+    {
+        let mut account = scenario.take_shared<BusinessAccount>();
+        let ctx = scenario.ctx();
+        // One co-owner removes another.
+        business_account::remove_owner(&mut account, APPROVER, ctx);
+        assert_eq!(business_account::is_owner(&account, APPROVER), false);
+        ts::return_shared(account);
+    };
+    scenario.next_tx(OWNER);
+    {
+        let mut account = scenario.take_shared<BusinessAccount>();
+        let ctx = scenario.ctx();
+        // And the founder resigns under their own signature.
+        business_account::remove_owner(&mut account, OWNER, ctx);
+        assert_eq!(business_account::is_owner(&account, OWNER), false);
+        assert_eq!(business_account::is_owner(&account, OWNER2), true);
+        ts::return_shared(account);
+    };
+    scenario.end();
+}
+
+#[test]
 /// Every authority change bumps the epoch. This is the invariant the whole
 /// revocation story rests on, so it is asserted directly rather than only
 /// through its consequences.
@@ -737,7 +800,7 @@ fun set_cap(scenario: &mut Scenario, cap: u64) {
 }
 
 #[test]
-#[expected_failure(abort_code = 601, location = splash_core::daily_limit)]
+#[expected_failure(abort_code = 201, location = splash_core::daily_limit)]
 /// Two payments that each fit, and together do not. The second aborts rather
 /// than settling partially — a half-paid payroll is worse than none.
 fun the_daily_ceiling_stops_the_second_payment() {
@@ -755,7 +818,7 @@ fun the_daily_ceiling_stops_the_second_payment() {
 }
 
 #[test]
-#[expected_failure(abort_code = 601, location = splash_core::daily_limit)]
+#[expected_failure(abort_code = 201, location = splash_core::daily_limit)]
 /// The tumbling double-spend, denied. Spend the ceiling, wait ONE hour, spend
 /// it again — which a `(window_start, spent)` pair with a lazy reset would
 /// eventually allow at the boundary and which a sliding window does not.
@@ -830,7 +893,7 @@ fun raising_the_cap_does_not_forgive_spend_already_made() {
 }
 
 #[test]
-#[expected_failure(abort_code = 601, location = splash_core::daily_limit)]
+#[expected_failure(abort_code = 201, location = splash_core::daily_limit)]
 /// Lowering the ceiling BELOW what has already been spent inside the window.
 ///
 /// The window can then hold more than the cap, and `cap - spent` underflows.

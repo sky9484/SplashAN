@@ -48,11 +48,22 @@ module splash_core::daily_limit;
 
 use sui::clock::{Self, Clock};
 
-// ─── Abort codes (600-block, reserved for daily_limit) ──────────────────────
-const E_ZERO_AMOUNT: u64 = 600;
+// ─── Abort codes (200-block, reserved for daily_limit) ──────────────────────
+//
+// Move abort codes are per-module and the VM would never confuse two modules
+// using the same number — but the off-chain table in
+// `lib/server/sui-settlement.ts` maps a bare code to a sentence, and it is
+// FLAT. This module first took the 600s, which `dual_treasury` already owns,
+// so a tenant hitting their 24h ceiling would have been told
+// "E_USDT_BUFFER_EMPTY — emergency_sweep called with zero balance": a wrong
+// explanation during a failed payment, which is worse than none.
+//
+// The 200s are the only free block. `scripts/check-abort-codes.mjs` now keeps
+// them globally unique so the next one fails the build instead of shipping.
+const E_ZERO_AMOUNT: u64 = 200;
 /// The payout would push this account past its 24h ceiling.
-const E_CAP_EXCEEDED: u64 = 601;
-const E_INVALID_CAP: u64 = 602;
+const E_CAP_EXCEEDED: u64 = 201;
+const E_INVALID_CAP: u64 = 202;
 
 // ─── Window shape: CONSTANTS, not parameters ────────────────────────────────
 // A configurable window is a configurable bypass. "How long is a day here?"

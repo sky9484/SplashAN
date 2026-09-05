@@ -461,6 +461,22 @@ public fun add_owner(account: &mut BusinessAccount, who: address, ctx: &TxContex
     bump(account, b"add_owner", who, ctx);
 }
 
+/// Remove an owner.
+///
+/// The FOUNDING owner (`account.owner`) can only be removed by themselves.
+///
+/// Without that rule, one compromised owner key is a complete account
+/// takeover: remove every co-owner, add two addresses you control as
+/// approvers, and the four-eyes check is satisfied by two halves of the same
+/// person. The 24h ceiling bounds what that is worth and `admin_freeze` stops
+/// it — but both of those are recovery, and this is prevention. Pinning the
+/// founder means a co-owner compromise leaves someone standing who can freeze,
+/// revoke and re-grant.
+///
+/// It is not symmetric and cannot be: if the FOUNDER's key is the compromised
+/// one, they can still remove everyone else. Something has to be the anchor.
+/// Choosing the address that opened the account — the one the KYB file is
+/// against — makes the anchor the party the licence already knows.
 public fun remove_owner(account: &mut BusinessAccount, who: address, ctx: &TxContext) {
     assert_owner(account, ctx);
     assert_thawed(account);
@@ -468,6 +484,7 @@ public fun remove_owner(account: &mut BusinessAccount, who: address, ctx: &TxCon
     // The last owner cannot remove themselves. An account with no owners has no
     // path back except the recovery party, and `recovery_party` is optional.
     assert!(account.owners.length() > 1, E_LAST_OWNER);
+    assert!(who != account.owner || tx_context::sender(ctx) == account.owner, E_NOT_AN_OWNER);
 
     account.owners.remove(&who);
     bump(account, b"remove_owner", who, ctx);
