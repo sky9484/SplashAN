@@ -18,7 +18,7 @@
 ///   * All state changes emit events — no shared objects per call.
 module splash_custody::smart_treasury;
 
-use splash_core::business_account::{AdminCap, AnchorCap};
+use splash_core::business_account::{AdminCap, AnchorCap, TreasuryCap};
 use splash_meter::guardian::GuardianCap;
 use splash_meter::spend_meter::{Self, SpendMeter};
 use std::string::String;
@@ -172,7 +172,7 @@ public fun deposit<T>(
 /// defeatable guard, is strictly worse than one that is correct.
 public fun withdraw<T>(
     treasury: &mut SmartTreasury<T>,
-    _admin: &AdminCap,
+    _treasury: &TreasuryCap,
     recipient: address,
     amount: u64,
     clock: &Clock,

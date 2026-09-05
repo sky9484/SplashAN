@@ -71,11 +71,13 @@ fun the_stored_operating_floor_cannot_be_argued_away() {
     c.set_for_testing(1_000 * DAY);
 
     let admin = business_account::admin_cap_for_testing(ctx);
+    let treasury = business_account::treasury_cap_for_testing(ctx);
     // 1,000 funded, floor of 500. Withdrawing 600 would leave 400.
     let mut t = treasury(ctx, &c, 1_000, 500);
-    smart_treasury::withdraw(&mut t, &admin, PAYEE, 600, &c, ctx);
+    smart_treasury::withdraw(&mut t, &treasury, PAYEE, 600, &c, ctx);
 
     sui::test_utils::destroy(admin);
+    sui::test_utils::destroy(treasury);
     let _ = smart_treasury::destroy_for_testing(t);
     c.destroy_for_testing();
     scenario.end();
@@ -92,10 +94,12 @@ fun withdrawals_only_reach_allowlisted_recipients() {
     c.set_for_testing(1_000 * DAY);
 
     let admin = business_account::admin_cap_for_testing(ctx);
+    let treasury = business_account::treasury_cap_for_testing(ctx);
     let mut t = treasury(ctx, &c, 5_000, 0);
-    smart_treasury::withdraw(&mut t, &admin, OUTSIDER, 100, &c, ctx);
+    smart_treasury::withdraw(&mut t, &treasury, OUTSIDER, 100, &c, ctx);
 
     sui::test_utils::destroy(admin);
+    sui::test_utils::destroy(treasury);
     let _ = smart_treasury::destroy_for_testing(t);
     c.destroy_for_testing();
     scenario.end();
@@ -112,10 +116,12 @@ fun a_withdrawal_above_the_per_tx_cap_aborts() {
     c.set_for_testing(1_000 * DAY);
 
     let admin = business_account::admin_cap_for_testing(ctx);
+    let treasury = business_account::treasury_cap_for_testing(ctx);
     let mut t = treasury(ctx, &c, PER_TX * 10, 0);
-    smart_treasury::withdraw(&mut t, &admin, PAYEE, PER_TX + 1, &c, ctx);
+    smart_treasury::withdraw(&mut t, &treasury, PAYEE, PER_TX + 1, &c, ctx);
 
     sui::test_utils::destroy(admin);
+    sui::test_utils::destroy(treasury);
     let _ = smart_treasury::destroy_for_testing(t);
     c.destroy_for_testing();
     scenario.end();
@@ -133,10 +139,12 @@ fun lowering_the_floor_requires_a_pause() {
     c.set_for_testing(1_000 * DAY);
 
     let admin = business_account::admin_cap_for_testing(ctx);
+    let treasury = business_account::treasury_cap_for_testing(ctx);
     let mut t = treasury(ctx, &c, 5_000, 1_000);
     smart_treasury::set_operating_floor(&admin, &mut t, 0);
 
     sui::test_utils::destroy(admin);
+    sui::test_utils::destroy(treasury);
     let _ = smart_treasury::destroy_for_testing(t);
     c.destroy_for_testing();
     scenario.end();
@@ -152,11 +160,13 @@ fun raising_the_floor_is_instant() {
     c.set_for_testing(1_000 * DAY);
 
     let admin = business_account::admin_cap_for_testing(ctx);
+    let treasury = business_account::treasury_cap_for_testing(ctx);
     let mut t = treasury(ctx, &c, 5_000, 1_000);
     smart_treasury::set_operating_floor(&admin, &mut t, 2_000);
     assert_eq!(smart_treasury::operating_floor(&t), 2_000);
 
     sui::test_utils::destroy(admin);
+    sui::test_utils::destroy(treasury);
     let _ = smart_treasury::destroy_for_testing(t);
     c.destroy_for_testing();
     scenario.end();
@@ -172,11 +182,13 @@ fun a_compliant_withdrawal_succeeds() {
     c.set_for_testing(1_000 * DAY);
 
     let admin = business_account::admin_cap_for_testing(ctx);
+    let treasury = business_account::treasury_cap_for_testing(ctx);
     let mut t = treasury(ctx, &c, 5_000, 1_000);
-    smart_treasury::withdraw(&mut t, &admin, PAYEE, 1_000, &c, ctx);
+    smart_treasury::withdraw(&mut t, &treasury, PAYEE, 1_000, &c, ctx);
     assert_eq!(smart_treasury::balance(&t), 4_000);
 
     sui::test_utils::destroy(admin);
+    sui::test_utils::destroy(treasury);
     let _ = smart_treasury::destroy_for_testing(t);
     c.destroy_for_testing();
     scenario.end();

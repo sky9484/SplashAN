@@ -103,6 +103,10 @@ export const envSchema = z.object({
   SPLASH_PAYOUT_DELEGATION_ID: objectId,
   SPLASH_TREASURY_ID: objectId,
   SPLASH_ADMIN_CAP_ID: objectId,
+  /** Phase 6 split the money authority out of `AdminCap`. This is the cap that
+   *  can take value out of a custodial object, and the ONLY one — it belongs on
+   *  the cold 2-of-3 and must never be online. */
+  SPLASH_TREASURY_CAP_ID: objectId,
   SPLASH_ANCHOR_CAP_ID: objectId,
   /** Renamed with the Phase 6 cap split (`AttestationCap` -> `AnchorCap`).
    *  Declared must-be-unset rather than silently ignored: a stale object id

@@ -1,6 +1,6 @@
 module splash_custody::dual_treasury;
 
-use splash_core::business_account::AdminCap;
+use splash_core::business_account::{AdminCap, TreasuryCap};
 use splash_meter::guardian::GuardianCap;
 use splash_meter::spend_meter::{Self, SpendMeter};
 use sui::balance::{Self, Balance};
@@ -135,7 +135,7 @@ public fun deposit<USDT>(
 
 public fun settle_usdt<USDT>(
     buffer: &mut UsdtBuffer<USDT>,
-    _admin: &AdminCap,
+    _treasury: &TreasuryCap,
     recipient: address,
     amount: u64,
     payout_id: vector<u8>,
@@ -181,7 +181,7 @@ public fun settle_usdt<USDT>(
 /// one.
 public fun emergency_sweep<USDT>(
     buffer: &mut UsdtBuffer<USDT>,
-    _admin: &AdminCap,
+    _treasury: &TreasuryCap,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {

@@ -124,6 +124,30 @@ public struct AdminCap has key, store {
     id: UID,
 }
 
+/// TreasuryCap — MONEY authority. The ONLY capability that can take value out
+/// of a custodial object in `splash_custody`.
+///
+/// Not `sui::coin::TreasuryCap`, which mints a currency. This one spends one.
+/// Different module path, and they never appear in the same signature, but the
+/// collision is worth naming rather than discovering.
+///
+/// Before Phase 6 this was `AdminCap`, which also gated KYB verification, the
+/// compliance config, guardian minting, pause and unpause, every limit change
+/// and every allowlist. Auditing "who can move money" therefore meant auditing
+/// thirty-odd functions across three modules and concluding that they all
+/// could. Now it is a grep: `&TreasuryCap` appears five times, and
+/// `scripts/check-treasury-cap.mjs` fails the build if any function taking
+/// `&AdminCap` learns to split a balance.
+///
+/// The key ceremony changes with it. `TreasuryCap` is the cold 2-of-3 that
+/// must never be online; `AdminCap` governs, and a governance action that
+/// cannot move a coin does not need the same ceremony.
+///
+/// `store`, so it can be transferred to a multisig address.
+public struct TreasuryCap has key, store {
+    id: UID,
+}
+
 /// AnchorCap — hot-key authority for routine, NON-FINANCIAL attestations:
 /// `audit_anchor::anchor_audit_hash`, `receipt_v2::create_receipt`,
 /// `peg_monitor::update_peg`.
@@ -293,6 +317,7 @@ public struct AnchorCapDestroyed has copy, drop {
 fun init(ctx: &mut TxContext) {
     let publisher = tx_context::sender(ctx);
     transfer::transfer(AdminCap { id: object::new(ctx) }, publisher);
+    transfer::transfer(TreasuryCap { id: object::new(ctx) }, publisher);
     transfer::transfer(AnchorCap { id: object::new(ctx) }, publisher);
 }
 
@@ -843,6 +868,17 @@ public fun approval_expires_at_ms(approval: &PayoutApproval): u64 { approval.exp
 #[test_only]
 public fun admin_cap_for_testing(ctx: &mut TxContext): AdminCap {
     AdminCap { id: object::new(ctx) }
+}
+
+#[test_only]
+public fun treasury_cap_for_testing(ctx: &mut TxContext): TreasuryCap {
+    TreasuryCap { id: object::new(ctx) }
+}
+
+#[test_only]
+public fun destroy_treasury_cap_for_testing(cap: TreasuryCap) {
+    let TreasuryCap { id } = cap;
+    object::delete(id);
 }
 
 #[test_only]
