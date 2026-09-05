@@ -604,7 +604,7 @@ function ExtractionPanel({
             <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#326273]/45">Extracted facts</div>
             <strong className="mt-2 block text-lg text-[#1F4452]">{extraction.recipient || selected?.payerOrgName}</strong>
             <div className="mt-3 grid grid-cols-2 gap-2">
-              <ProofPill label="Amount" value={`$${extraction.amount.toLocaleString()}`} />
+              <ProofPill label="Amount" value={`${extraction.amount}`} />
               <ProofPill label="Currency" value={extraction.currency} />
             </div>
             <div className="mt-3 text-sm font-bold text-[#326273]">{Math.round(suggestion.confidence * 100)}% confidence</div>

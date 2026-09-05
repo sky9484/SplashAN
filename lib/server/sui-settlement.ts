@@ -1,3 +1,4 @@
+import { MICRO_DECIMALS, MIST_DECIMALS, formatMinor, parseMinor, sumMinor } from '../money.ts';
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { promisify } from 'node:util';
@@ -98,9 +99,9 @@ function parseCliGasCoins(stdout: string): OperatorGasCoin[] {
   if (jsonStart === -1) throw new Error(`'sui client gas --json' returned no JSON. stdout: ${stdout.substring(0, 200)}`);
   const coins = JSON.parse(stdout.slice(jsonStart)) as Array<{ gasCoinId: string; mistBalance: number | string }>;
   return coins
-    .map((coin) => ({ id: coin.gasCoinId, balance: Number(coin.mistBalance) }))
-    .filter((coin) => Number.isFinite(coin.balance) && coin.balance > 0)
-    .sort((a, b) => b.balance - a.balance);
+    .map((coin) => ({ id: coin.gasCoinId, balance: toMist(coin.mistBalance) }))
+    .filter((coin) => coin.balance > 0n)
+    .sort((a, b) => (b.balance > a.balance ? 1 : b.balance < a.balance ? -1 : 0));
 }
 
 async function getCliReadiness(): Promise<CliReadiness> {
@@ -226,11 +227,11 @@ async function assertSettlementPoolFunded(
   poolId: string,
   rows: Array<{ amount?: string }>,
 ): Promise<void> {
-  const requiredMicro = rows.reduce(
-    (sum, row) => sum + moneyToMicro(Number.parseFloat(row.amount ?? '0')),
-    0,
-  );
-  if (requiredMicro <= 0) return;
+  // Each row is a decimal string. Parsing to a double and rounding to micro
+  // per row, then summing the doubles, is how a hundred-row batch ends up a
+  // unit short of the sum the ledger computed from the same rows.
+  const requiredMicro = sumMinor(rows.map((row) => parseMinor(row.amount ?? '0', MICRO_DECIMALS, 'half-up')));
+  if (requiredMicro <= 0n) return;
 
   let balance: bigint;
   try {
@@ -242,10 +243,10 @@ async function assertSettlementPoolFunded(
     return;
   }
 
-  if (balance < BigInt(requiredMicro)) {
+  if (balance < requiredMicro) {
     throw new Error(
-      `SettlementPool ${poolId.slice(0, 12)}… holds ${Number(balance) / 1e9} SUI but this batch needs ` +
-      `${requiredMicro / 1e9} SUI. Batch payouts are paid FROM the pool, not from the operator wallet — ` +
+      `SettlementPool ${poolId.slice(0, 12)}… holds ${formatMinor(balance, MIST_DECIMALS)} SUI but this batch needs ` +
+      `${formatMinor(requiredMicro, MIST_DECIMALS)} SUI. Batch payouts are paid FROM the pool, not from the operator wallet — ` +
       'fund it first: node --use-system-ca --env-file=.env.local scripts/fund-settlement-pool.mjs <SUI>',
     );
   }
@@ -489,7 +490,7 @@ async function runSuiCommand(args: string[], maxBuffer = 1024 * 1024 * 10) {
   }
 }
 
-type OperatorGasCoin = { id: string; balance: number };
+type OperatorGasCoin = { id: string; balance: bigint };
 
 type SuiExecutionError = {
   message: string;
@@ -999,7 +1000,9 @@ export async function refreshPegOnSui(input: { usdcPrice: number; usdtPrice: num
 
 export async function getOperatorWalletInfo(): Promise<{
   address: string;
-  totalMist: number;
+  /** u64 MIST as a decimal string — beyond Number.MAX_SAFE_INTEGER above
+   *  ~9M SUI, and a wallet total is not worth rounding. */
+  totalMist: string;
   totalSui: string;
   coinCount: number;
 }> {
@@ -1007,11 +1010,11 @@ export async function getOperatorWalletInfo(): Promise<{
   if (signer) {
     const address = signer.toSuiAddress();
     const coins = await listSdkGasCoins(address);
-    const totalMist = coins.reduce((sum, coin) => sum + coin.balance, 0);
+    const totalMist = coins.reduce((sum, coin) => sum + coin.balance, 0n);
     return {
       address,
-      totalMist,
-      totalSui: (totalMist / 1_000_000_000).toFixed(6),
+      totalMist: totalMist.toString(),
+      totalSui: formatMinor(totalMist, MIST_DECIMALS),
       coinCount: coins.length,
     };
   }
@@ -1019,18 +1022,18 @@ export async function getOperatorWalletInfo(): Promise<{
   const cli = await getCliReadiness();
   if (cli.ready) {
     const coins = await listOperatorGasCoins();
-    const totalMist = coins.reduce((sum, coin) => sum + coin.balance, 0);
+    const totalMist = coins.reduce((sum, coin) => sum + coin.balance, 0n);
     return {
       address: cli.address,
-      totalMist,
-      totalSui: (totalMist / 1_000_000_000).toFixed(6),
+      totalMist: totalMist.toString(),
+      totalSui: formatMinor(totalMist, MIST_DECIMALS),
       coinCount: coins.length,
     };
   }
 
   return {
     address: configuredOperatorAddress() || '0x0000000000000000000000000000000000000000000000000000000000000000',
-    totalMist: 0,
+    totalMist: '0',
     totalSui: '0.000000',
     coinCount: 0,
   };
@@ -1049,13 +1052,13 @@ async function listSdkGasCoins(address: string): Promise<OperatorGasCoin[]> {
     const page = await suiClient.listCoins({ owner: address, cursor, coinType: '0x2::sui::SUI' });
     coins.push(
       ...page.objects
-        .map((coin) => ({ id: coin.objectId, balance: Number(coin.balance) }))
-        .filter((coin) => Number.isFinite(coin.balance) && coin.balance > 0),
+        .map((coin) => ({ id: coin.objectId, balance: toMist(coin.balance) }))
+        .filter((coin) => coin.balance > 0n),
     );
     cursor = page.hasNextPage ? page.cursor : null;
   } while (cursor);
 
-  return coins.sort((a, b) => b.balance - a.balance);
+  return coins.sort((a, b) => (b.balance > a.balance ? 1 : b.balance < a.balance ? -1 : 0));
 }
 
 /**
@@ -1070,8 +1073,8 @@ async function planGasCoin(neededMist: number): Promise<{ primaryId: string; mer
     throw new Error('Operator wallet has no SUI coins. Fund the operator address.');
   }
 
-  const total = coins.reduce((sum, coin) => sum + coin.balance, 0);
-  if (total < neededMist) {
+  const total = coins.reduce((sum, coin) => sum + coin.balance, 0n);
+  if (total < BigInt(neededMist)) {
     throw new Error(`Operator wallet has ${total} MIST but transfer needs ${neededMist} MIST (payment + gas). Top up the operator wallet.`);
   }
 
@@ -1162,8 +1165,22 @@ type SuiCliCallOutput = {
   };
 };
 
-function moneyToMicro(value: number) {
-  return Math.max(0, Math.round(value * 1_000_000));
+/**
+ * A SUI/MIST quantity from an unknown source. The SDK returns balances as
+ * strings; the CLI returns them as either. Both are integers already, so
+ * this only widens them — it never parses a decimal.
+ */
+function toMist(value: string | number | bigint): bigint {
+  if (typeof value === 'bigint') return value;
+  if (typeof value === 'number') {
+    if (!Number.isSafeInteger(value)) return 0n;
+    return BigInt(value);
+  }
+  try {
+    return BigInt(value.trim());
+  } catch {
+    return 0n;
+  }
 }
 
 function requireSuiAddress(value: string, label: string) {
@@ -1445,7 +1462,7 @@ export async function recordBatchSettlementOnSui(input: {
   await assertSettlementPoolFunded(SPLASH_TREASURY_ID, input.rows);
 
   const paymentObjects = input.rows.map((row) => {
-    const amount = moneyToMicro(Number.parseFloat(row.amount ?? '0'));
+    const amount = parseMinor(row.amount ?? '0', MICRO_DECIMALS, 'half-up');
     const recipient = requireSuiAddress(resolvePayoutRecipient(row.address, `Batch recipient ${row.name ?? row.address ?? ''}`.trim()), `Batch recipient ${row.name ?? row.address ?? ''}`.trim());
     return { recipient, amount };
   });
@@ -1606,7 +1623,7 @@ export type ComplianceControls = {
   minDepthBaseUnits: number;
   /// Gross settlement floor in the settled coin's minor units. `null` when the
   /// deployed package predates it (see the ABI straddle below).
-  minSettlementAmount: number | null;
+  minSettlementAmount: bigint | null;
   /// DeepBook venues the on-chain liquidity guard will accept (audit S-12).
   /// Empty array means the deployed package predates the whitelist — NOT that
   /// every pool is allowed.
@@ -1643,8 +1660,10 @@ export async function readComplianceControls(): Promise<ComplianceControls> {
       maxStalenessMs: Number(fields.max_staleness_ms),
       maxSlippageBps: Number(fields.max_slippage_bps),
       minDepthBaseUnits: Number(fields.min_depth_base_units),
+      // A settlement floor is an amount, so it is read as one. The other
+      // fields here are bounds and durations, which are counts.
       minSettlementAmount:
-        fields.min_settlement_amount === undefined ? null : Number(fields.min_settlement_amount),
+        fields.min_settlement_amount === undefined ? null : BigInt(String(fields.min_settlement_amount)),
       allowedDeepbookPools: whitelist ?? [],
       poolWhitelistEnforced: whitelist !== null,
       paused: fields.paused === true || fields.paused === 'true',
@@ -1702,7 +1721,15 @@ export async function assertDeepbookPoolWhitelisted(): Promise<void> {
 }
 
 export async function updateComplianceControls(
-  input: Omit<ComplianceControls, 'configured' | 'allowedDeepbookPools' | 'poolWhitelistEnforced'>,
+  input: {
+    maxDeviationPpm: number;
+    maxStalenessMs: number;
+    maxSlippageBps: number;
+    minDepthBaseUnits: number;
+    /** A settlement floor in base units. Bounded by the API schema. */
+    minSettlementAmount: number | null;
+    paused: boolean;
+  },
 ) {
   const packageId = corePackageIdOrThrow();
   const configId = configIdOrThrow('complianceConfigId', 'SPLASH_COMPLIANCE_CONFIG_ID');
@@ -1715,8 +1742,11 @@ export async function updateComplianceControls(
   // an arity mismatch is a hard MoveCall failure, not a graceful degrade.
   const onChain = await readComplianceControls();
   const supportsMinSettlement = onChain.minSettlementAmount !== null;
-  const minSettlement = input.minSettlementAmount ?? onChain.minSettlementAmount;
-  if (supportsMinSettlement && !(typeof minSettlement === 'number' && minSettlement > 0)) {
+  const minSettlement =
+    input.minSettlementAmount !== undefined && input.minSettlementAmount !== null
+      ? BigInt(input.minSettlementAmount)
+      : onChain.minSettlementAmount;
+  if (supportsMinSettlement && !(minSettlement !== null && minSettlement > 0n)) {
     throw new Error('minSettlementAmount must be greater than zero — a zero floor disables the minimum on chain.');
   }
 
@@ -1730,7 +1760,7 @@ export async function updateComplianceControls(
       tx.pure.u64(input.maxStalenessMs),
       tx.pure.u64(input.maxSlippageBps),
       tx.pure.u64(input.minDepthBaseUnits),
-      ...(supportsMinSettlement ? [tx.pure.u64(minSettlement as number)] : []),
+      ...(supportsMinSettlement && minSettlement !== null ? [tx.pure.u64(minSettlement)] : []),
     ],
   });
   tx.moveCall({

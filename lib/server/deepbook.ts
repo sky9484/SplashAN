@@ -1,3 +1,4 @@
+import { divRound, parseRate, type Rate } from '../money.ts';
 /**
  * DeepBook V3 — Sui's native central-limit order book — as a SECOND peg source.
  *
@@ -27,10 +28,10 @@ const STABLES = ['USDC', 'WUSDC', 'USDT', 'WUSDT', 'AUSD', 'USDY', 'USDD', 'BUSD
 export interface DeepbookStable {
   pair: string;
   /** Mid-price of the stable/stable pair (≈ 1.0 when pegged). */
-  midPrice: number;
-  lastPrice: number;
+  midPrice: Rate;
+  lastPrice: Rate;
   /** |mid − 1| × 10_000 — peg deviation in basis points. */
-  deviationBps: number;
+  deviationBps: bigint;
   source: 'deepbook' | 'mock';
   asOf: string;
 }
@@ -55,7 +56,7 @@ function indexerUrl(): string {
  */
 export async function getDeepbookStablePrice(): Promise<DeepbookStable | null> {
   if (process.env.USE_MOCK_APIS === 'true') {
-    return { pair: 'MOCK_USDT_USDC', midPrice: 1, lastPrice: 1, deviationBps: 0, source: 'mock', asOf: new Date().toISOString() };
+    return { pair: 'MOCK_USDT_USDC', midPrice: parseRate('1'), lastPrice: parseRate('1'), deviationBps: 0n, source: 'mock', asOf: new Date().toISOString() };
   }
 
   const controller = new AbortController();
@@ -92,17 +93,33 @@ export async function getDeepbookStablePrice(): Promise<DeepbookStable | null> {
     }
     if (!item) return null;
 
-    const bid = Number(item.highest_bid);
-    const ask = Number(item.lowest_ask);
-    const last = Number(item.last_price);
-    const mid = (bid + ask) / 2; // book validated as sane above
-    if (!Number.isFinite(mid) || mid <= 0) return null;
+    // The book quotes decimal strings. Parsing them as rates keeps the mid
+    // and the peg deviation exact: deviationBps decides whether settlement
+    // halts, so it is the last number that should be approximate.
+    let bid: Rate;
+    let ask: Rate;
+    let last: Rate;
+    try {
+      bid = parseRate(String(item.highest_bid));
+      ask = parseRate(String(item.lowest_ask));
+      last = parseRate(String(item.last_price));
+    } catch {
+      return null;
+    }
+    // (bid + ask) / 2, in the shared scale.
+    const midScaled = divRound(bid.scaled + ask.scaled, 2n, 'half-even');
+    if (midScaled <= 0n) return null;
+    const mid: Rate = { scaled: midScaled, scale: bid.scale };
+    // |mid - 1| in basis points, exactly. ONE is 1.0 at the same scale.
+    const ONE = 10n ** BigInt(mid.scale);
+    const drift = midScaled > ONE ? midScaled - ONE : ONE - midScaled;
+    const deviationBps = divRound(drift * 10_000n, ONE, 'half-even');
 
     return {
       pair: item.trading_pairs,
       midPrice: mid,
-      lastPrice: Number.isFinite(last) && last > 0 ? last : mid,
-      deviationBps: Math.abs(mid - 1) * 10_000,
+      lastPrice: last.scaled > 0n ? last : mid,
+      deviationBps,
       source: 'deepbook',
       asOf: new Date().toISOString(),
     };

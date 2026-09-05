@@ -1,3 +1,4 @@
+import { divRound, formatRate, parseRate, type Rate } from '../money.ts';
 import { getDeepbookStablePrice } from '@/lib/server/deepbook';
 
 const HERMES_BASE = 'https://hermes.pyth.network';
@@ -9,7 +10,9 @@ const PRICE_IDS = {
 
 export interface PriceData {
   symbol: string;
+  /** Display value. `priceRate` is the exact one; compare with that. */
   price: number;
+  priceRate: Rate;
   confidence: number;
   publishTime: number;
   source: 'pyth' | 'mock';
@@ -42,14 +45,32 @@ export interface PegStatus {
   primary: 'deepbook' | 'pyth';
 }
 
-function parseHermesPrice(priceStr: string, expo: number): number {
-  return Number.parseFloat(priceStr) * Math.pow(10, expo);
+/**
+ * A Hermes price is an integer string plus a base-10 exponent — already a
+ * scaled integer, and exactly what a Rate is. This used to compute
+ * `parseFloat(priceStr) * Math.pow(10, expo)`, converting a value that
+ * arrived exact into a double before anything compared it. A peg gate that
+ * halts settlement should not be deciding on rounding noise.
+ *
+ * Pyth exponents are negative (−8 is typical). A positive one would mean a
+ * whole-number price, which is still representable.
+ */
+function parseHermesPrice(priceStr: string, expo: number): Rate {
+  const digits = BigInt(priceStr);
+  if (expo <= 0) return { scaled: digits, scale: -expo };
+  return { scaled: digits * 10n ** BigInt(expo), scale: 0 };
+}
+
+/** Rates for display and for the JSON body, where a bigint cannot go. */
+function rateToNumber(rate: Rate): number {
+  return Number(formatRate(rate));
 }
 
 function mockPrice(symbol: string): PriceData {
   return {
     symbol,
     price: 1.0,
+    priceRate: parseRate('1'),
     confidence: 0.0001,
     publishTime: Math.floor(Date.now() / 1000),
     source: 'mock',
@@ -80,8 +101,9 @@ async function fetchHermesPrice(ids: string[]): Promise<Record<string, PriceData
 
     out[id] = {
       symbol: id,
-      price: normalised,
-      confidence,
+      price: rateToNumber(normalised),
+      priceRate: normalised,
+      confidence: rateToNumber(confidence),
       publishTime: item.price.publish_time,
       source: 'pyth',
     };
@@ -117,25 +139,39 @@ export class PythAdapter {
     ]);
 
     const maxDeviationPpm = 3_000;
-    const usdcDevPpm = Math.abs(usdc.price - 1.0) * 1_000_000;
-    const usdtDevPpm = Math.abs(usdt.price - 1.0) * 1_000_000;
+    // |price − 1| in parts per million, exactly, at the feed’s own scale.
+    const ppmFromOne = (r: Rate): number => {
+      const one = 10n ** BigInt(r.scale);
+      const drift = r.scaled > one ? r.scaled - one : one - r.scaled;
+      return Number(divRound(drift * 1_000_000n, one, 'half-even'));
+    };
+    const usdcDevPpm = ppmFromOne(usdc.priceRate);
+    const usdtDevPpm = ppmFromOne(usdt.priceRate);
     // Peg health is judged on price deviation from $1.00. We intentionally do
     // NOT block the off-chain pre-check on Pyth publish-time staleness: demo/CI
     // clocks can skew far from Pyth's real publish times and produce false
     // "stale" positives that wrongly block every transfer. Staleness is still
     // enforced on-chain by peg_monitor::assert_pegged (60s) at real settlement.
     const pythPegged = usdcDevPpm <= maxDeviationPpm && usdtDevPpm <= maxDeviationPpm;
-    const spreadBps = Math.round(((usdc.price - usdt.price) / usdc.price) * 10_000);
-    const deviationPpm = Math.round((Math.abs(usdc.price - usdt.price) / usdc.price) * 1_000_000);
+    // (usdc − usdt) / usdc, in bps and ppm. Both feeds share a scale, so the
+    // ratio is one integer division.
+    const usdcScaled = usdc.priceRate.scaled;
+    const usdtScaled = usdt.priceRate.scaled;
+    const diff = usdcScaled - usdtScaled;
+    const absDiff = diff < 0n ? -diff : diff;
+    const spreadBps =
+      usdcScaled === 0n ? 0 : Number(divRound(diff * 10_000n, usdcScaled < 0n ? -usdcScaled : usdcScaled, 'half-even'));
+    const deviationPpm =
+      usdcScaled === 0n ? 0 : Number(divRound(absDiff * 1_000_000n, usdcScaled < 0n ? -usdcScaled : usdcScaled, 'half-even'));
 
     // DeepBook V3 stable-pair mid as a second peg source.
     const dbToleranceBps = Number(process.env.DEEPBOOK_PEG_TOLERANCE_BPS ?? 100);
     const deepbook: DeepbookPeg | null = dbStable
       ? {
           pair: dbStable.pair,
-          midPrice: dbStable.midPrice,
-          deviationBps: Math.round(dbStable.deviationBps * 100) / 100,
-          pegged: dbStable.deviationBps <= dbToleranceBps,
+          midPrice: rateToNumber(dbStable.midPrice),
+          deviationBps: Number(dbStable.deviationBps),
+          pegged: dbStable.deviationBps <= BigInt(Math.trunc(dbToleranceBps)),
           source: dbStable.source,
         }
       : null;
@@ -149,10 +185,16 @@ export class PythAdapter {
     const confirmedBy = (deepbook?.pegged ? 1 : 0) + (pythPegged ? 1 : 0);
 
     // Cross-source divergence: DeepBook USDT/USDC mid vs Pyth-implied USDT/USDC.
-    const pythUsdtPerUsdc = usdc.price > 0 ? usdt.price / usdc.price : 1;
-    const divergenceBps = deepbook
-      ? Math.round(Math.abs(deepbook.midPrice - pythUsdtPerUsdc) * 10_000 * 100) / 100
-      : null;
+    // DeepBook mid against the Pyth-implied USDT/USDC, in bps. Integer
+    // throughout so a divergence alarm cannot be triggered by rounding.
+    const divergenceBps = ((): number | null => {
+      if (!dbStable || usdcScaled === 0n) return null;
+      const scale = dbStable.midPrice.scale;
+      const unit = 10n ** BigInt(scale);
+      const pythImplied = divRound(usdtScaled * unit, usdcScaled, 'half-even');
+      const d = dbStable.midPrice.scaled - pythImplied;
+      return Number(divRound((d < 0n ? -d : d) * 10_000n, unit, 'half-even'));
+    })();
 
     return {
       usdcUsd: usdc,
