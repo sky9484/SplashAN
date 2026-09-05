@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 
 import { composeAndSimulateProposal } from '../chain/compose.ts';
+import { copilotModel } from '../ai/model.ts';
 import { estimateNettingSavedUsd, getCorridorFeeBps, getUsdCorridorByCurrency } from '../fx/corridors.ts';
 import { getUsdyNetApyPct } from '../server/usdy.ts';
 import { checkMinimumSettlement } from '../policy/limits.ts';
@@ -1161,7 +1162,7 @@ async function* runClaudeToolLoop(request: OxwalAgentRequest): AsyncGenerator<Ox
 
   for (let round = 0; round < 4; round += 1) {
     const response = await client.messages.create({
-      model: process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-4-6',
+      model: copilotModel(),
       max_tokens: 1000,
       system: OXWAL_SYSTEM_PROMPT,
       messages,

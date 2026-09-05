@@ -9,15 +9,16 @@
  *   3. Remember the user's message in MemWal (fire-and-forget).
  *
  * SSE events (one JSON object per `data:` frame):
- *   { type: 'meta',  memories, memoryCount, memwalEnabled, source }
+ *   { type: 'meta',  memories, memoryCount, memwalEnabled, attempting }
  *   { type: 'delta', text }
- *   { type: 'done' }
+ *   { type: 'done',  source }   <- who actually answered, known only now
  *
  * Degrades gracefully — if MemWal/Claude are unavailable it still streams a
  * useful grounded answer, so the chat UI never breaks.
  */
 
 import { recallMemories, rememberFact, memwalConfigured, type RecalledMemory } from '@/lib/server/memwal';
+import { copilotModel } from '@/lib/ai/model';
 import { requireCustomerRequest } from '@/lib/server/customer-auth';
 import { readJsonBody } from '@/lib/server/http';
 import { getTreasuryRate } from '@/lib/server/usdy';
@@ -205,20 +206,27 @@ export async function POST(request: Request) {
     async start(controller) {
       const send = (obj: unknown) => controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
 
+      // `source` is what we are ABOUT to try, not what answered. It used to
+      // say 'claude' whenever a key was present — and with a model id that
+      // did not exist, every one of those calls threw and was served from the
+      // canned responder instead. The client was told Claude wrote it.
+      //
+      // The truth arrives in the `done` frame, once we know.
       send({
         type: 'meta',
         memories: memories.map((m) => m.text),
         memoryCount: memories.length,
         memwalEnabled: memwalConfigured(),
-        source: apiKey ? 'claude' : 'grounded',
+        attempting: apiKey ? 'claude' : 'grounded',
       });
+      let answeredBy: 'claude' | 'grounded' = apiKey ? 'claude' : 'grounded';
 
       try {
         if (apiKey) {
           const { default: Anthropic } = await import('@anthropic-ai/sdk');
           const client = new Anthropic({ apiKey });
           const mstream = client.messages.stream({
-            model: process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-4-6',
+            model: copilotModel(),
             max_tokens: 800,
             system: buildSystemPrompt(memories),
             messages: [
@@ -233,7 +241,10 @@ export async function POST(request: Request) {
               send({ type: 'delta', text: event.delta.text });
             }
           }
-          if (!any) send({ type: 'delta', text: await groundedReply(message, memories) });
+          if (!any) {
+            answeredBy = 'grounded';
+            send({ type: 'delta', text: await groundedReply(message, memories) });
+          }
         } else {
           // Grounded — stream word-by-word so the chat feels alive.
           const reply = await groundedReply(message, memories);
@@ -245,10 +256,13 @@ export async function POST(request: Request) {
         }
       } catch (error) {
         console.warn('[copilot] generation failed:', (error as Error)?.message ?? String(error));
+        answeredBy = 'grounded';
         send({ type: 'delta', text: await groundedReply(message, memories) });
       }
 
-      send({ type: 'done' });
+      // Who actually answered. A client that renders an "AI" badge can now
+      // render the truth instead of the intention.
+      send({ type: 'done', source: answeredBy });
       controller.close();
     },
   });

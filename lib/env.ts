@@ -37,6 +37,7 @@
  * on or mocks are off. Development requires nothing and defaults everything,
  * which is what a fresh clone needs to boot.
  */
+import { DEFAULT_COPILOT_MODEL } from './ai/model.ts';
 import { z } from 'zod';
 
 /* ── Shapes ───────────────────────────────────────────────────────────── */
@@ -327,7 +328,9 @@ export const envSchema = z.object({
 
   /* Copilot and memory. */
   ANTHROPIC_API_KEY: optional,
-  ANTHROPIC_MODEL: withDefault(str, 'claude-sonnet-4-6'),
+  /** Overrides lib/ai/model.ts. The old default here was a model id that does
+   *  not exist, so every call threw and fell back to canned text. */
+  ANTHROPIC_MODEL: withDefault(str, DEFAULT_COPILOT_MODEL),
   MEMWAL_PRIVATE_KEY: optional,
   MEMWAL_ACCOUNT_ID: objectId,
   MEMWAL_SERVER_URL: url,
