@@ -31,6 +31,12 @@ export type TransferIntentState =
 
 export type TransferIntentRecord = {
   id: string;
+  /** The org this transfer belongs to.
+   *
+   *  Absent until now, which is why one process-global map served every tenant
+   *  with no scoping on read. Required, not optional: an optional owner is an
+   *  owner somebody forgets to set. */
+  orgId: string;
   state: TransferIntentState;
   recipientName: string;
   targetCurrency: string;
@@ -272,6 +278,9 @@ export const operations = globalStore.splashOperations ?? {
 
 globalStore.splashOperations = operations;
 
+/** The org that owns seeded demo rows. Never a real tenant. */
+export const DEMO_ORG_ID = 'demo-workspace';
+
 export function createId(prefix: string) {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
 }
@@ -288,6 +297,9 @@ function explorerLinks(digest: string | null) {
 }
 
 export function createTransferIntent(input: {
+  /** The org this transfer belongs to. Resolved from the SESSION by the caller,
+   *  never from the request — see lib/server/session-account.ts. */
+  orgId: string;
   recipientName: string;
   targetCurrency: string;
   targetAmount: string;
@@ -317,6 +329,7 @@ export function createTransferIntent(input: {
   const now = new Date().toISOString();
   const record: TransferIntentRecord = {
     id: createId('ti'),
+    orgId: input.orgId,
     state: 'AUTHORIZED',
     recipientName: input.recipientName,
     targetCurrency: input.targetCurrency,
@@ -352,7 +365,9 @@ export function createTransferIntent(input: {
     createdAt: now,
     updatedAt: now,
   };
-  operations.transfers.set(record.id, record);
+  // Builds the record; does NOT decide where it lives. The caller persists it
+  // through lib/server/transfers-store.ts, which writes to Postgres when one is
+  // configured and to this map only when there is not.
   operations.auditReceipts.set(record.id, {
     transferIntentId: record.id,
     invoiceId: input.invoiceId,
@@ -375,27 +390,11 @@ export function createTransferIntent(input: {
   return record;
 }
 
-export function readTransferIntent(intentId: string) {
-  return operations.transfers.get(intentId) ?? null;
-}
-
-export function updateTransferIntent(intentId: string, patch: Partial<TransferIntentRecord>): void {
-  const record = operations.transfers.get(intentId);
-  if (!record) return;
-  const stateChanged = patch.state && patch.state !== record.state;
-  const now = new Date().toISOString();
-  Object.assign(record, patch, { updatedAt: now });
-  operations.transfers.set(intentId, record);
-  const audit = operations.auditReceipts.get(intentId) ?? { transferIntentId: intentId, statusHistory: [] };
-  if (stateChanged) audit.statusHistory.push({ state: patch.state as string, at: now });
-  if (patch.suiTxDigest) audit.suiTxDigest = patch.suiTxDigest;
-  if (patch.sweepJobId) audit.sweepJobId = patch.sweepJobId;
-  operations.auditReceipts.set(intentId, audit);
-}
-
-export function listTransfers(): TransferIntentRecord[] {
-  return [...operations.transfers.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-}
+// `readTransferIntent`, `updateTransferIntent` and `listTransfers` used to live
+// here, reading a process-global map by id with no org scoping at all. They are
+// gone rather than deprecated: a scoped replacement beside an unscoped original
+// is a choice somebody makes wrongly at 2am. Use `lib/server/transfers-store.ts`,
+// where every read takes an orgId and cross-tenant reach is spelled `*ForStaff`.
 
 export function createBatch(input: {
   rowCount: number;
@@ -653,8 +652,12 @@ export function analyticsSummary() {
   return Object.fromEntries(operations.analytics.entries());
 }
 
-export function listTransactions(): TransactionRecord[] {
-  const fromTransfers: TransactionRecord[] = listTransfers().map((transfer) => ({
+/** Staff-console aggregate across every tenant. Async because transfers now
+ *  live in Postgres; cross-tenant on purpose, which is why it is only reachable
+ *  from the admin console. */
+export async function listTransactions(): Promise<TransactionRecord[]> {
+  const { listTransfersForStaff } = await import('./transfers-store.ts');
+  const fromTransfers: TransactionRecord[] = (await listTransfersForStaff()).map((transfer) => ({
     id: transfer.id,
     kind: 'transfer',
     state: transfer.state,
@@ -729,6 +732,9 @@ function seedDemoData() {
   createInvoice({ issuerOrg: 'Splash Workspace', payerOrgName: 'Manila Textiles', amountUsd: '1800.00', targetCurrency: 'PHP', dueDate: oldDue, memo: 'Overdue textile invoice', status: 'overdue', demo: true });
 
   const transfer = createTransferIntent({
+    // The seeded demo data belongs to a named demo org, so it can never be
+    // mistaken for — or read alongside — a real tenant's transfers.
+    orgId: DEMO_ORG_ID,
     recipientName: acme.name,
     recipientId: acme.id,
     invoiceId: invoice.id,
@@ -741,7 +747,9 @@ function seedDemoData() {
     pegChecked: true,
     demo: true,
   });
-  updateTransferIntent(transfer.id, { state: 'SETTLED' });
+  // Demo seed data, in this process only — never persisted, and owned by
+  // DEMO_ORG_ID so it can never be read alongside a real tenant's transfers.
+  Object.assign(transfer, { state: 'SETTLED' });
   const job = createSweepJob({
     transferIntentId: transfer.id,
     recipientId: acme.id,
@@ -755,7 +763,8 @@ function seedDemoData() {
     completedAt: new Date().toISOString(),
     demo: true,
   });
-  updateTransferIntent(transfer.id, { state: 'DISBURSED', sweepJobId: job.id });
+  Object.assign(transfer, { state: 'DISBURSED', sweepJobId: job.id });
+  operations.transfers.set(transfer.id, transfer);
   updateAuditReceipt(transfer.id, {
     invoiceId: invoice.id,
     walrusBlobId: invoice.walrusBlobId,

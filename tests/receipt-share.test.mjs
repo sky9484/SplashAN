@@ -11,7 +11,11 @@ test('receipt share module: unguessable slug, idempotent mint, single-record sco
   // A token that does not resolve returns null — nothing else is reachable.
   assert.match(source, /if \(!record\) return null/);
   // Minting refuses unknown intents.
-  assert.match(source, /if \(!readTransferIntent\(transferIntentId\)\) return null/);
+  // Same property, new store: a share token cannot be minted for a transfer
+  // that does not exist. The read moved to transfers-store when transfers moved
+  // to Postgres; `ForStaff` because minting a share is a system action on a
+  // transfer whose owner has already been established.
+  assert.match(source, /if \(!await readTransferForStaff\(transferIntentId\)\) return null/);
 
   const route = await readFile(new URL('../app/api/receipts/share/route.ts', import.meta.url), 'utf8');
   // Mint is auth-gated; the public page itself is not.

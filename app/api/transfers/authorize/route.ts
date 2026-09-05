@@ -11,8 +11,8 @@ import {
   getLedgerBalance,
   updateAuditReceipt,
   updateInvoice,
-  updateTransferIntent,
 } from '@/lib/server/operations';
+import { patchTransfer, persistTransfer } from '@/lib/server/transfers-store';
 import { pythAdapter } from '@/lib/server/pyth';
 import { calculateQuote } from '@/lib/server/quote';
 import { completeDeliveryForTransfer } from '@/lib/server/sweep';
@@ -101,7 +101,7 @@ export async function POST(request: Request) {
   // funded account and spend it.
   const accountCheck = await requireSessionAccount(auth.session);
   if (accountCheck.response) return accountCheck.response;
-  const { accountId: businessAccountId } = accountCheck.account;
+  const { accountId: businessAccountId, orgId } = accountCheck.account;
   if (isForeignAccountId(body.businessAccountId, businessAccountId)) {
     return NextResponse.json({ error: 'businessAccountId does not belong to this organization' }, { status: 403 });
   }
@@ -251,6 +251,9 @@ export async function POST(request: Request) {
     tier: body.deliveryTier,
   });
   const intent = createTransferIntent({
+    // From the SESSION, never the request. This is the field that decides
+    // whose transfer it is and therefore who can read it back.
+    orgId,
     recipientName: recipient.name,
     recipientId: recipient.id,
     invoiceId: body.invoiceId,
@@ -276,6 +279,10 @@ export async function POST(request: Request) {
     fundingNormalizeVenue: fundingSession?.normalizeVenue,
     fundingEffectiveSlippageBps: fundingSession?.effectiveSlippageBps,
   });
+
+  // Postgres when configured, this process only when not — one place decides,
+  // and every read of this transfer goes back through the same store.
+  await persistTransfer(intent);
   if (fundingSession) updateFundingSession(fundingSession.id, { transferIntentId: intent.id });
 
   // Debit the PAYER for every funding source, not only `held`.
@@ -303,7 +310,7 @@ export async function POST(request: Request) {
   // negative until the provider's credit posts; a coin or held source going
   // negative means we just spent money the ledger says is not there.
   if (payerDebit.balanceAfterMicro < 0 && fundingSelection.type !== 'fiat') {
-    updateTransferIntent(intent.id, {
+    await patchTransfer(intent.id, {
       state: 'FAILED',
       failureReason: 'Ledger balance would go negative for this funding source',
       failedAtState: 'QUEUED',
@@ -325,9 +332,9 @@ export async function POST(request: Request) {
   }
 
   after(async () => {
-    updateTransferIntent(intent.id, { state: 'QUEUED' });
+    await patchTransfer(intent.id, { state: 'QUEUED' });
     try {
-      updateTransferIntent(intent.id, { state: 'SETTLING' });
+      await patchTransfer(intent.id, { state: 'SETTLING' });
       const result = await executeComposedPayment({
         transferId: intent.id,
         recipientAddress: '',
@@ -349,7 +356,7 @@ export async function POST(request: Request) {
           effectiveSlippageBps: intent.fundingEffectiveSlippageBps,
         },
       });
-      updateTransferIntent(intent.id, {
+      await patchTransfer(intent.id, {
         state: 'SETTLED',
         suiTxDigest: result.digest,
         verificationReference: result.digest,
@@ -378,7 +385,7 @@ export async function POST(request: Request) {
       });
       await completeDeliveryForTransfer(intent.id);
     } catch (error) {
-      updateTransferIntent(intent.id, {
+      await patchTransfer(intent.id, {
         state: 'FAILED',
         failureReason: error instanceof Error ? error.message : 'Unknown settlement error',
         failedAtState: 'SETTLING',

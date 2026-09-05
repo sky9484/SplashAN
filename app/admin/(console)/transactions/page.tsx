@@ -1,5 +1,6 @@
 import { suiScanTxUrl, suiVisionTxUrl } from '@/lib/explorer';
-import { listBatches, listTransfers, listTransactions } from '@/lib/server/operations';
+import { listBatches, listTransactions } from '@/lib/server/operations';
+import { listTransfersForStaff } from '@/lib/server/transfers-store';
 import { pythAdapter } from '@/lib/server/pyth';
 import { readComplianceControls } from '@/lib/server/sui-settlement';
 import ComplianceControlForm from '@/components/admin/ComplianceControlForm';
@@ -11,8 +12,8 @@ export const dynamic = 'force-dynamic';
 
 export default async function AdminTransactionsPage() {
   const batches = listBatches();
-  const transfers = listTransfers();
-  const transactions = listTransactions();
+  const transfers = await listTransfersForStaff();
+  const transactions = await listTransactions();
   const fundingSessions = listFundingSessions();
   const pegStatus = await pythAdapter.getPegStatus();
   const complianceControls = await readComplianceControls();

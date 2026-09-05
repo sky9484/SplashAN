@@ -411,12 +411,32 @@ export const paymentIntents = pgTable('payment_intents', {
    */
   travelRuleSnapshot: jsonb('travel_rule_snapshot'),
 
+  // ── Settlement detail ────────────────────────────────────────────────────
+  /** The beneficiary as the operator typed it, before it resolves to a supplier. */
+  recipientName: text('recipient_name'),
+  /** PAYOUT_ONLY, SWEEP_ACCOUNT or STORED_BALANCE — read on the settlement path. */
+  deliveryTier: text('delivery_tier'),
+  /**
+   * The rest of one settlement's own detail: stablecoin and rail chosen, DAX
+   * tier, peg-check verdict, Seal policy id, the composed on-chain actions.
+   *
+   * One jsonb rather than twenty sparse columns because these are attributes of
+   * a single settlement, not dimensions anyone queries across. Anything that
+   * later needs an index earns a column of its own.
+   */
+  settlementMetadata: jsonb('settlement_metadata'),
+
   ...timestamps,
 }, (table) => [
   index('intents_org_idx').on(table.orgId),
+  index('intents_org_created_idx').on(table.orgId, table.createdAt),
   index('intents_supplier_idx').on(table.supplierId),
   index('intents_state_idx').on(table.state),
-  uniqueIndex('intents_idempotency_unique').on(table.idempotencyKey),
+  /** Scoped to the org, like `proposals_idempotency_unique` already is.
+   *  Unscoped, the first tenant to use "payroll-friday" would block every
+   *  other tenant from that key forever — a cross-tenant denial of service
+   *  through a field the client chooses. */
+  uniqueIndex('intents_idempotency_unique').on(table.orgId, table.idempotencyKey),
 ]);
 
 /** Lifecycle audit trail — one row per state transition (statusHistory). */
@@ -425,6 +445,8 @@ export const intentTransitions = pgTable('intent_transitions', {
   intentId: text('intent_id').notNull().references(() => paymentIntents.id),
   fromState: text('from_state'),
   toState: text('to_state').notNull(),
+  /** Why. FAILED without one sends an operator to a restarted process's logs. */
+  reason: text('reason'),
   actor: text('actor'),
   ...timestamps,
 }, (table) => [index('transitions_intent_idx').on(table.intentId)]);

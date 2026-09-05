@@ -1,20 +1,14 @@
-import {
-  createLedgerEntry,
-  createSweepJob,
-  findRecipient,
-  readTransferIntent,
-  updateSweepJob,
-  updateTransferIntent,
-} from '@/lib/server/operations';
+import { createLedgerEntry, createSweepJob, findRecipient, updateSweepJob } from '@/lib/server/operations';
+import { patchTransfer, readTransferForStaff } from '@/lib/server/transfers-store';
 import { pdaxAdapter } from '@/lib/server/pdax';
 
 export async function completeDeliveryForTransfer(intentId: string) {
-  const intent = readTransferIntent(intentId);
+  const intent = await readTransferForStaff(intentId);
   if (!intent) throw new Error('Transfer intent not found');
   const accountId = intent.recipientId ?? intent.recipientName;
 
   if (intent.deliveryTier === 'PAYOUT_ONLY') {
-    updateTransferIntent(intent.id, { state: 'DISBURSED' });
+    await patchTransfer(intent.id, { state: 'DISBURSED' });
     return { state: 'DISBURSED' as const };
   }
 
@@ -27,7 +21,7 @@ export async function completeDeliveryForTransfer(intentId: string) {
     suiTxDigest: intent.suiTxDigest ?? undefined,
   });
   if (intent.deliveryTier === 'STORED_BALANCE') {
-    updateTransferIntent(intent.id, { state: 'CREDITED' });
+    await patchTransfer(intent.id, { state: 'CREDITED' });
     return { state: 'CREDITED' as const };
   }
 
@@ -42,7 +36,7 @@ export async function completeDeliveryForTransfer(intentId: string) {
     targetCurrency: intent.targetCurrency,
     fxRate: quote.fxRate,
   });
-  updateTransferIntent(intent.id, { state: 'SWEEPING', sweepJobId: job.id });
+  await patchTransfer(intent.id, { state: 'SWEEPING', sweepJobId: job.id });
   updateSweepJob(job.id, { state: 'EXECUTING' });
 
   try {
@@ -51,11 +45,11 @@ export async function completeDeliveryForTransfer(intentId: string) {
     const heldDurationMs = completedAt.getTime() - new Date(job.createdAt).getTime();
     createLedgerEntry({ accountId, direction: 'DEBIT', amountUsdcMicro: intent.stablecoinAmountMicro, refType: 'SWEEP', refId: job.id, suiTxDigest: intent.suiTxDigest ?? undefined });
     updateSweepJob(job.id, { state: 'COMPLETED', partnerPayoutRef: result.partnerPayoutRef, heldDurationMs, completedAt: completedAt.toISOString() });
-    updateTransferIntent(intent.id, { state: 'DISBURSED' });
+    await patchTransfer(intent.id, { state: 'DISBURSED' });
     return { state: 'DISBURSED' as const, heldDurationMs, partnerPayoutRef: result.partnerPayoutRef };
   } catch (error) {
     updateSweepJob(job.id, { state: 'FAILED' });
-    updateTransferIntent(intent.id, { state: 'FAILED', failedAtState: 'SWEEPING', failureReason: error instanceof Error ? error.message : 'Sweep failed' });
+    await patchTransfer(intent.id, { state: 'FAILED', failedAtState: 'SWEEPING', failureReason: error instanceof Error ? error.message : 'Sweep failed' });
     throw error;
   }
 }
