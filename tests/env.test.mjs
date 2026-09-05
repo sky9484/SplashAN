@@ -20,8 +20,6 @@ const PROD_OK = {
   SPLASH_PACKAGE_ID: OBJ,
   NEXT_PUBLIC_APP_URL: 'https://v1.splashz.xyz',
   USDC_TYPE: `${OBJ}::usdc::USDC`,
-  CUSTOMER_EMAIL: 'ops@example.com',
-  CUSTOMER_PASSWORD: 'not-the-demo-value',
   ADMIN_PASSWORD: 'not-the-demo-value-either',
   // Sandbox posture: mocks on, demo on, so no vendor key is demanded.
   USE_MOCK_APIS: 'true',
@@ -65,9 +63,12 @@ test('production: an empty environment refuses to start and names every missing 
   }
 });
 
-test('production: the demo credentials from .env.example are refused by name', () => {
-  const keys = keysOf(() => parseEnv({ ...PROD_OK, CUSTOMER_EMAIL: 'splash@demo', CUSTOMER_PASSWORD: 'splash@123', ADMIN_PASSWORD: 'splash-admin-demo' }));
-  assert.deepEqual(keys.sort(), ['ADMIN_PASSWORD', 'CUSTOMER_EMAIL', 'CUSTOMER_PASSWORD']);
+test('a credential key removed with the single-credential login is refused if still set', () => {
+  // Accounts are rows in `users` now. A password left in .env.local governs
+  // nothing, so leaving it there silently would misrepresent a control.
+  const keys = keysOf(() => parseEnv({ NODE_ENV: 'development', CUSTOMER_PASSWORD: 'anything' }));
+  assert.deepEqual(keys, ['CUSTOMER_PASSWORD']);
+  assert.doesNotThrow(() => parseEnv({ NODE_ENV: 'development', CUSTOMER_PASSWORD: '' }));
 });
 
 test('production: a complete sandbox environment passes', () => {

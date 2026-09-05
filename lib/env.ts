@@ -67,6 +67,12 @@ const num = (def: number) => withDefault(z.coerce.number(), def);
 /** The code tests `=== 'true'`; anything else is false. */
 /** A key that moved into config/seal.<env>.json. Unset is the only valid
  *  state; a value means a stale .env.local or host panel, and boot names it. */
+/** A key whose feature was removed. Unset is the only valid state. */
+const removedFromEnv = z.preprocess(
+  blankToUndefined,
+  z.undefined({ error: 'no longer used — accounts are rows in `users`; remove it from .env.local and from the host' }),
+);
+
 const movedToSealFile = z.preprocess(
   blankToUndefined,
   z.undefined({ error: 'moved to config/seal.<env>.json — remove it from .env.local and from the host' }),
@@ -169,8 +175,13 @@ export const envSchema = z.object({
   /* Sessions and staff auth. lib/server/customer-auth.ts, admin-auth.ts.
      The demo values are refused in production below. */
   CUSTOMER_SESSION_SECRET: optional,
-  CUSTOMER_EMAIL: opt(str.email().or(str.regex(/^[^\s@]+@[^\s@]+$/))),
-  CUSTOMER_PASSWORD: optional,
+  /* Removed with the single-credential login. Accounts are rows in `users`
+     with a scrypt hash, so these two governed nothing after that — and a
+     password sitting in an environment file that no longer decides anything
+     is worse than none, because it reads as a control. Declared so a stale
+     value fails boot by name. */
+  CUSTOMER_EMAIL: removedFromEnv,
+  CUSTOMER_PASSWORD: removedFromEnv,
   CUSTOMER_ORGANIZATION: optional,
   CUSTOMER_SELF_SIGNUP_ENABLED: flag('false'),
   CUSTOMER_RECOVERY_EMAIL: opt(str.email()),
@@ -305,8 +316,6 @@ export const ENV_KEY_PREFIXES: readonly string[] = ['SPLASH_TOTP_SECRET_', 'OXWA
 
 /** The values .env.example ships for local demo. Never acceptable in prod. */
 const DEMO_VALUES: Partial<Record<keyof Env, string[]>> = {
-  CUSTOMER_EMAIL: ['splash@demo'],
-  CUSTOMER_PASSWORD: ['splash@123'],
   ADMIN_PASSWORD: ['splash-admin-demo'],
 };
 
@@ -330,8 +339,6 @@ function productionIssues(env: Env): Issue[] {
   need('CRON_SECRET', 'every /api/cron route would accept any caller');
   need('DATABASE_URL', 'authority and persistence require Postgres');
   need('SPLASH_PACKAGE_ID', 'nothing can be composed against 0x0');
-  notDemo('CUSTOMER_EMAIL');
-  notDemo('CUSTOMER_PASSWORD');
   notDemo('ADMIN_PASSWORD');
   if (!env.NEXT_PUBLIC_APP_URL.startsWith('https://')) {
     issues.push({ key: 'NEXT_PUBLIC_APP_URL', message: 'must be https in production' });

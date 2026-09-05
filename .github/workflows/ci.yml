@@ -42,7 +42,7 @@ jobs:
         # come first because they are the ones with the regulatory weight.
         run: npm run lint
 
-      - name: test — auth
+      - name: test — auth, accounts and fail-closed authority
         run: npm run test:auth
 
       - name: test — funding

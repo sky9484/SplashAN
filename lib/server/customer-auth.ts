@@ -10,13 +10,10 @@ import { customerRequestOriginAllowed } from '@/lib/auth/customer-request';
 import { isKilledEntityEmail } from '@/lib/auth/killed-entities';
 import {
   CUSTOMER_SESSION_COOKIE,
-  FALLBACK_CUSTOMER_EMAIL,
   FALLBACK_CUSTOMER_ORGANIZATION,
-  FALLBACK_CUSTOMER_PASSWORD,
   createCustomerSessionFromIdentity,
   createCustomerSessionToken,
   readCustomerSessionToken,
-  timingSafeStrEqual,
   type CustomerSession,
   type CustomerWorkspaceRole,
 } from '@/lib/auth/customer-session';
@@ -85,40 +82,32 @@ function sessionFromIdentity(input: {
   });
 }
 
-export function validateCustomerCredentials(email: string, password: string): CustomerSession | null {
-  if (isProduction) {
-    const envEmail = process.env.CUSTOMER_EMAIL?.trim();
-    const envPassword = process.env.CUSTOMER_PASSWORD;
-    const envSecret = process.env.CUSTOMER_SESSION_SECRET?.trim();
-    if (!envEmail || !envPassword || !envSecret) {
-      console.error(
-        '[customer-auth] Refusing login: CUSTOMER_EMAIL, CUSTOMER_PASSWORD and ' +
-          'CUSTOMER_SESSION_SECRET must all be set in production.',
-      );
-      return null;
-    }
-  }
-
-  const expectedEmail = String(process.env.CUSTOMER_EMAIL || FALLBACK_CUSTOMER_EMAIL).trim().toLowerCase();
-  const expectedPassword = String(process.env.CUSTOMER_PASSWORD || FALLBACK_CUSTOMER_PASSWORD);
-
-  if (String(email ?? '').trim().toLowerCase() !== expectedEmail) return null;
-  if (!timingSafeStrEqual(String(password ?? ''), expectedPassword)) return null;
+/**
+ * A session for an account whose password has already been verified against
+ * the database by lib/auth/accounts.ts.
+ *
+ * This replaces two functions.
+ *
+ * `validateCustomerCredentials` compared the submitted pair against
+ * CUSTOMER_EMAIL / CUSTOMER_PASSWORD: one plaintext credential for the whole
+ * deployment, so whoever held the .env file was the user, and there was no
+ * way to have two of them.
+ *
+ * `createSignupSession` minted a valid session from any email with no
+ * verification at all — the entry point of the approval bypass.
+ *
+ * A session proves identity. It carries no role: authority is read from a
+ * membership row on every request, so a session cannot be a stale grant.
+ */
+export function sessionForAccount(account: { email: string; name?: string }): CustomerSession {
+  const email = account.email.trim().toLowerCase();
 
   // Wallet spec §2.4 — a killed entity must not bind in through the auth layer.
-  if (isKilledEntityEmail(expectedEmail)) {
-    console.error('[customer-auth] Refusing login: killed-entity domain.');
-    return null;
+  if (isKilledEntityEmail(email)) {
+    throw new Error('killed-entity domain');
   }
 
-  return sessionFromIdentity({ email: expectedEmail });
-}
-
-export function createSignupSession(input: { email: string; organization: string }): CustomerSession {
-  return sessionFromIdentity({
-    email: input.email,
-    organization: input.organization,
-  });
+  return sessionFromIdentity({ email });
 }
 
 export async function getCustomerSession(): Promise<CustomerSession | null> {

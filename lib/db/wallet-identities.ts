@@ -114,17 +114,24 @@ export async function listOrgWalletIdentities(db: DrizzleDb, orgId: string) {
   return db.select().from(walletIdentities).where(eq(walletIdentities.orgId, orgId));
 }
 
-/** Ensure the user + org rows a wallet identity references actually exist. */
+/**
+ * Ensure the identity and organisation rows a wallet identity references
+ * exist. Identity only — this grants nothing.
+ *
+ * It used to insert a `users` row carrying an org and a role, defaulting to
+ * `viewer`, because the old schema could not express a user without one. So
+ * signing in with zkLogin created a membership as a side effect of creating
+ * an identity. A zkLogin address is identity; authority is a separate,
+ * deliberate grant, and `grantMembership` is the only thing that makes one.
+ */
 export async function ensureUserForIdentity(
   db: DrizzleDb,
-  input: { userId: string; orgId: string; email: string; name?: string; role?: 'maker' | 'checker' | 'admin' | 'viewer' },
+  input: { userId: string; orgId: string; email: string; name?: string },
 ): Promise<void> {
   await db.insert(organizations).values({ id: input.orgId, name: input.orgId }).onConflictDoNothing();
   await db.insert(users).values({
     id: input.userId,
-    orgId: input.orgId,
     email: input.email.trim().toLowerCase(),
     name: input.name ?? input.email.split('@')[0] ?? 'operator',
-    role: (input.role ?? 'viewer') as typeof users.$inferInsert.role,
   }).onConflictDoNothing();
 }

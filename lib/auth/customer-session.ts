@@ -42,8 +42,9 @@ type CustomerTokenPayload = CustomerSession & {
 };
 
 export const CUSTOMER_SESSION_COOKIE = 'splash_customer_session';
-export const FALLBACK_CUSTOMER_EMAIL = 'splash@demo';
-export const FALLBACK_CUSTOMER_PASSWORD = 'splash@123';
+/* FALLBACK_CUSTOMER_EMAIL and FALLBACK_CUSTOMER_PASSWORD are gone. They were
+   a working login for anyone with the source, guarded only by a NODE_ENV
+   check; accounts live in the database now. */
 export const FALLBACK_CUSTOMER_ORGANIZATION = 'Splash Workspace';
 
 export function timingSafeStrEqual(a: string, b: string): boolean {

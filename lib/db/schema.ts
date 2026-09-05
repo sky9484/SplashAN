@@ -61,16 +61,81 @@ export const organizations = pgTable('organizations', {
   ...timestamps,
 });
 
+/**
+ * A person. Identity only.
+ *
+ * This table used to carry `org_id` and `role` directly, which made every row
+ * simultaneously an identity and a membership — so a user could not exist
+ * without belonging to an organisation with a role. That is what made the auth
+ * bypass structural rather than a slip: signup needed a row, a row needed a
+ * role, and the role it got was one that can approve payments.
+ *
+ * Membership is its own table now. A user with no membership row is exactly
+ * what signup produces: able to log in, able to see an empty workspace, and
+ * able to authorise nothing.
+ */
 export const users = pgTable('users', {
   id: text('id').primaryKey(),
-  orgId: text('org_id').notNull().references(() => organizations.id),
   email: text('email').notNull(),
   name: text('name').notNull(),
-  role: userRole('role').notNull().default('viewer'),
+  /**
+   * scrypt, formatted by lib/auth/password.ts. Nullable because an identity
+   * can exist without one — an invited user before they set a password, or a
+   * zkLogin identity that never has one at all.
+   */
+  passwordHash: text('password_hash'),
+  /** Null until the address is proven. Not a boolean: when it happened is the
+   *  auditable fact, and `true` cannot answer that. */
+  emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
   ...timestamps,
 }, (table) => [
   uniqueIndex('users_email_unique').on(table.email),
-  index('users_org_idx').on(table.orgId),
+]);
+
+/**
+ * Who belongs to which organisation, and as what.
+ *
+ * There is deliberately no default role. Drizzle would accept
+ * `.default('viewer')` and the previous schema did exactly that, which means
+ * an insert that forgets the role still produces a member. Every membership
+ * here states its role, or the insert fails.
+ *
+ * A row in this table is a grant. Nothing creates one implicitly: not signup,
+ * not login, and not a failed authority lookup.
+ */
+export const memberships = pgTable('memberships', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  orgId: text('org_id').notNull().references(() => organizations.id),
+  role: userRole('role').notNull(),
+  /** Who granted it. Null for the first membership in a new organisation,
+   *  which has no prior member to do the granting. */
+  grantedBy: text('granted_by'),
+  ...timestamps,
+}, (table) => [
+  uniqueIndex('memberships_user_org_unique').on(table.userId, table.orgId),
+  index('memberships_org_idx').on(table.orgId),
+  index('memberships_user_idx').on(table.userId),
+]);
+
+/**
+ * Failed login attempts, for the rate limit.
+ *
+ * Postgres rather than Redis: Redis is cache-only here by rule, and a lockout
+ * that evaporates when the cache restarts is not a lockout. Rows are pruned by
+ * the limiter as it reads them, so the table stays small without a separate
+ * job.
+ */
+export const loginAttempts = pgTable('login_attempts', {
+  id: text('id').primaryKey(),
+  /** Lowercased email as submitted. Scopes the per-email limit; it is a login
+   *  identifier, not proof anyone owns the address. */
+  email: text('email').notNull(),
+  ip: text('ip').notNull(),
+  attemptedAt: timestamp('attempted_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index('login_attempts_email_idx').on(table.email, table.attemptedAt),
+  index('login_attempts_ip_idx').on(table.ip, table.attemptedAt),
 ]);
 
 /**

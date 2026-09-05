@@ -1,7 +1,7 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { PgDatabase } from 'drizzle-orm/pg-core';
 
-import { users } from '../db/schema.ts';
+import { memberships, users } from '../db/schema.ts';
 import type * as schemaModule from '../db/schema.ts';
 import { loadOrgPolicy } from '../policy/org-policy.ts';
 import type { OrgPolicy, UserRole } from '../agent/types.ts';
@@ -13,11 +13,25 @@ import type { CustomerSession } from './customer-session.ts';
  *
  * Server derives (never accepts from the request body):
  * - userId / orgId — from the authenticated session and the users table
- * - role           — from the membership row in the database, NOT the claim
+ * - role           — from the membership row, NOT the claim
  * - policy         — from the org's persisted policy record
  *
- * Without DATABASE_URL (local demo), the membership comes from this module's
- * explicit server-side registry — still server state, still never the client.
+ * This resolver FAILS CLOSED. An authenticated identity with no membership
+ * gets no authority — not a default role, not a provisioned one. Previously
+ * the catch block below called `provisionOperatorMembership(db, email,
+ * 'checker')`, and `checker` maps to APPROVER, which is in APPROVAL_ROLES. So
+ * the complete path from an unauthenticated stranger to approving a payment
+ * was:
+ *
+ *   POST /api/auth/signup (any email, password never stored)
+ *     → createSignupSession → a valid session cookie
+ *     → resolveAuthorityForSession → UnauthorizedError → caught
+ *     → provisionOperatorMembership('checker') → mapDbRole → APPROVER
+ *     → APPROVAL_ROLES.has('APPROVER') → approves payments
+ *
+ * The comment on that catch block described it as "explicit, logged — not a
+ * permissive default". It logged, and it was a permissive default: logging an
+ * escalation does not stop it. Both are gone.
  */
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -53,82 +67,125 @@ export function mapDbRole(role: string): UserRole {
   return DB_ROLE_MAP[role] ?? 'VIEWER';
 }
 
-function demoOperatorRole(): UserRole {
-  const configured = (process.env.OXWAL_OPERATOR_ROLE ?? 'APPROVER').toUpperCase();
-  const valid: UserRole[] = ['OWNER', 'FINANCE_ADMIN', 'MAKER', 'APPROVER', 'VIEWER', 'AUDITOR', 'DEVELOPER'];
-  return valid.includes(configured as UserRole) ? (configured as UserRole) : 'APPROVER';
-}
-
 function operatorIdFromEmail(email: string) {
   return `op_${email.trim().toLowerCase()}`;
 }
 
 /**
- * Pure, DB-injected resolution — the SAME code runs against DigitalOcean
- * Postgres in production and pglite in tests (14.12: role is provably
- * DB-derived, re-read on every request, never cached, never claimed).
+ * Pure, DB-injected resolution — the SAME code runs against Postgres in
+ * production and pglite in tests (14.12: role is provably DB-derived, re-read
+ * on every request, never cached, never claimed).
+ *
+ * Two rows are required: an identity, and a membership granting it a role in
+ * an organisation. A user with no membership raises UnauthorizedError, which
+ * is the intended outcome for everyone who has signed up and not yet been
+ * granted anything.
  */
 export async function resolveAuthorityFromDb(db: DrizzleDb, email: string): Promise<AuthorityContext> {
   const normalized = email.trim().toLowerCase();
-  const rows = await db.select().from(users).where(eq(users.email, normalized)).limit(1);
+
+  const rows = await db
+    .select({
+      userId: users.id,
+      orgId: memberships.orgId,
+      role: memberships.role,
+    })
+    .from(users)
+    .innerJoin(memberships, eq(memberships.userId, users.id))
+    .where(eq(users.email, normalized))
+    .limit(1);
+
   if (rows.length === 0) {
-    throw new UnauthorizedError(`no membership row for ${normalized}`);
+    throw new UnauthorizedError(`no membership for ${normalized}`);
   }
+
   const membership = rows[0];
   const policy = await loadOrgPolicy(db, membership.orgId);
   return {
     orgId: membership.orgId,
-    userId: membership.id,
+    userId: membership.userId,
     role: mapDbRole(membership.role),
     policy,
     resolvedAt: new Date().toISOString(),
   };
 }
 
-/** DB-less demo path: explicit server-side membership for the single
- *  credentialed operator (login already proved identity). */
-export async function resolveAuthorityLocal(session: CustomerSession): Promise<AuthorityContext> {
-  return {
-    orgId: DEFAULT_ORG_ID,
-    userId: operatorIdFromEmail(session.email),
-    role: demoOperatorRole(),
-    policy: await loadOrgPolicy(null, DEFAULT_ORG_ID),
-    resolvedAt: new Date().toISOString(),
-  };
-}
-
 /**
- * Entry point for routes. With DATABASE_URL the membership row is required;
- * the one credentialed demo operator is provisioned on first touch so a
- * fresh cluster still boots (explicit, logged — not a permissive default).
+ * Entry point for routes.
+ *
+ * There is no DB-less path any more. `resolveAuthorityLocal` used to return
+ * `OXWAL_OPERATOR_ROLE ?? 'APPROVER'` for any authenticated session whenever
+ * DATABASE_URL was unset — so the bypass did not even need the database, and
+ * an unconfigured deployment was the most permissive one. Authority now comes
+ * from a membership row or it does not come at all.
  */
 export async function resolveAuthorityForSession(session: CustomerSession): Promise<AuthorityContext> {
-  if (!process.env.DATABASE_URL) return resolveAuthorityLocal(session);
+  if (!process.env.DATABASE_URL) {
+    throw new UnauthorizedError(
+      'DATABASE_URL is not configured, so no membership can be read. Authority is never assumed.',
+    );
+  }
 
   const { getDb } = await import('../db/client.ts');
   const db = getDb() as unknown as DrizzleDb;
-  try {
-    return await resolveAuthorityFromDb(db, session.email);
-  } catch (error) {
-    if (!(error instanceof UnauthorizedError)) throw error;
-    console.warn(`[authority] provisioning membership for credentialed operator ${session.email}`);
-    await provisionOperatorMembership(db, session.email);
-    return resolveAuthorityFromDb(db, session.email);
-  }
+  return resolveAuthorityFromDb(db, session.email);
 }
 
-export async function provisionOperatorMembership(db: DrizzleDb, email: string, role = 'checker'): Promise<void> {
-  const normalized = email.trim().toLowerCase();
+/**
+ * Grant a membership. Administrative, and never reachable from the auth path.
+ *
+ * This exists for seeding an organisation's first member and for the
+ * invitation flow. It takes an explicit role because there is no safe default
+ * — the old signature defaulted to `checker`, which is APPROVER, so a caller
+ * that passed nothing granted payment-approval authority.
+ *
+ * tests/auth-fail-closed.test.mjs asserts that no module under the auth path
+ * calls this.
+ */
+export async function grantMembership(
+  db: DrizzleDb,
+  input: { email: string; orgId: string; role: 'maker' | 'checker' | 'admin' | 'viewer'; grantedBy?: string },
+): Promise<void> {
+  const normalized = input.email.trim().toLowerCase();
   const { ensureOrganization } = await import('../db/proposal-repo.ts');
-  await ensureOrganization(db, DEFAULT_ORG_ID);
+  await ensureOrganization(db, input.orgId);
+
+  const userId = operatorIdFromEmail(normalized);
   await db
     .insert(users)
     .values({
-      id: operatorIdFromEmail(normalized),
-      orgId: DEFAULT_ORG_ID,
+      id: userId,
       email: normalized,
-      name: normalized.split('@')[0] || 'operator',
-      role: role as typeof users.$inferInsert.role,
+      name: normalized.split('@')[0] || 'member',
     })
     .onConflictDoNothing();
+
+  const existing = await db.select({ id: users.id }).from(users).where(eq(users.email, normalized)).limit(1);
+  const resolvedUserId = existing[0]?.id ?? userId;
+
+  await db
+    .insert(memberships)
+    .values({
+      id: `mem_${resolvedUserId}_${input.orgId}`,
+      userId: resolvedUserId,
+      orgId: input.orgId,
+      role: input.role,
+      grantedBy: input.grantedBy ?? null,
+    })
+    .onConflictDoNothing();
+}
+
+/** Read a user's membership in one organisation, or null. */
+export async function findMembership(
+  db: DrizzleDb,
+  input: { email: string; orgId: string },
+): Promise<{ userId: string; role: string } | null> {
+  const normalized = input.email.trim().toLowerCase();
+  const rows = await db
+    .select({ userId: users.id, role: memberships.role })
+    .from(users)
+    .innerJoin(memberships, eq(memberships.userId, users.id))
+    .where(and(eq(users.email, normalized), eq(memberships.orgId, input.orgId)))
+    .limit(1);
+  return rows[0] ?? null;
 }
