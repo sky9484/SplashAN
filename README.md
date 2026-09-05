@@ -41,7 +41,7 @@ flowchart LR
     end
 
     custody -.->|"every value path<br/>charges a meter"| meter
-    custody -.->|"inherits AdminCap,<br/>AttestationCap, receipts"| core
+    custody -.->|"inherits AdminCap, TreasuryCap,<br/>AnchorCap, receipts"| core
 
     classDef mainnet fill:#0C3E48,stroke:#0C3E48,color:#F6F0ED
     classDef phase1 fill:#F6F0ED,stroke:#326273,color:#1f4350,stroke-dasharray: 5 5

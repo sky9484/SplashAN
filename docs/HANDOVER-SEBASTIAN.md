@@ -150,6 +150,87 @@ on WSL and commit that — same content, no local churn.
 
 ---
 
+## Phase 6 is built. It needs your review, not your permission to have started.
+
+Phase 6 is Move, and the protocol is that Move changes are confirmed by you.
+That is a review gate on merging and publishing, so the code is written, tested
+and pushed on this branch — and **not merged, not published**. Nothing has been
+self-approved. If you want any of it differently, it is four commits and they
+are separable.
+
+`3940b7a` **Authority the chain enforces.** `BusinessAccount` is now a SHARED
+object holding `owners`, `approvers`, two independent freeze flags, a
+`recovery_party` and an `authority_epoch`. Four eyes is asserted on chain — an
+approver cannot release a payment they initiated. Revocation kills work in
+flight, including the revoke-then-regrant case a "is this address currently an
+approver?" check gets wrong. An account-bound intent has no unapproved
+settlement path: `confirm_payment_intent` aborts on one, which is what makes
+the rest a control rather than advice. `mint_attestation_cap` is deleted;
+`AnchorCap` is minted at publish and rotated one-in-one-out, so the cold key can
+MOVE anchor authority and can never manufacture a second holder. Each account
+gets a 24h ceiling, default USD 1,000 in six-decimal minor units, as 24 hourly
+buckets so the tumbling-window double-spend does not work.
+
+`93d339a` **A bug in `spend_meter::remaining_at`**, found by checking my new
+window's arithmetic against the existing one rather than copying it. The
+virtual roll counted buckets forwards from the head, which wraps onto the ones
+the roll is about to zero and skips the same number of live ones. A view, not
+the enforcing path — `charge` always summed all 24 — so the ceiling itself
+always held and the harm was the batcher over-estimating free capacity. Fixed
+with a regression test that fails against the old code.
+
+`702919f` **`AdminCap` governs, `TreasuryCap` spends.** One capability used to
+gate KYB, the compliance config, guardian minting, every pause, every limit,
+every allowlist AND every withdrawal, so "who can move money?" had thirty-odd
+answers. Five functions now take `TreasuryCap`; nothing else can take value out
+of a custodial object. `scripts/check-treasury-cap.mjs` fails the build if an
+`AdminCap` function learns to split a balance, and I verified it fails rather
+than assuming it would. **This changes the key ceremony** —
+`docs/KEY-CEREMONY-RUNBOOK.md` §0 is rewritten: the cold 2-of-3 holds
+`TreasuryCap`, not `AdminCap`.
+
+`adaa92a` **`ComplianceCap` is subtractive by type.** It could previously set
+five risk parameters freely, resume as easily as halt, and add a DeepBook venue
+— which is S-12's exact attack. It now only tightens, only pauses, and only
+removes venues; every loosening is `AdminCap`.
+`scripts/check-compliance-subtractive.mjs` enforces it on the SIGNATURE, and I
+checked it fails on all three shapes it is meant to catch.
+
+`1b5d67b` **The adversarial pass**, which found three things. The largest: an
+approver was signing an intent id and an amount supplied BESIDE it, because
+`business_account` cannot import `payment_intent`. The entry point moved to
+`payment_intent::approve_payout`, which sees both objects, so the amount and
+the maker are derived from the intent and the mismatch is unrepresentable
+rather than merely checked.
+
+**Two limitations are written into the code rather than left to be found.**
+Four eyes is a check on addresses — one person with two approver keys satisfies
+it and no on-chain rule can see that. And the 24h ceiling bounds what can be
+RELEASED under a tenant's approval; since `splash_core` holds no `Balance<T>` by
+design, it cannot bound what a private key sends from its own address.
+
+**What I would most like you to push back on**, in order:
+
+1. **The velocity cap's unit.** `DEFAULT_DAILY_CAP_MINOR = 1_000_000_000` reads
+   as USD 1,000 only if the settled coin has six decimals. On a 9-decimal SUI
+   pool it is USD 1. The brief said "USD 1,000" and I made it a scaled integer
+   with the assumption stated at the constant, but the right answer may be to
+   denominate the cap per settlement asset. This is the same class as A-14.
+2. **`AnchorCap` recovery.** Removing arbitrary minting was right and it
+   created a permanent brick if the cap is lost. Phase 7's job — and until it
+   lands, `splash_core` must not publish immutable.
+3. **The 72-hour recovery notice and `MAX_MEMBERS = 16`.** Both are numbers I
+   chose. An account with 16 owners cannot be recovered at all, which is stated
+   but may still be wrong.
+4. **Whether an approver should be allowed to open an intent.** Today owners
+   and approvers can both be makers, and four eyes is preserved because the
+   approval must come from a different address. A stricter reading would say
+   makers and approvers are disjoint sets.
+
+Phase 7 is not started.
+
+---
+
 ## What I need from you, in order
 
 1. **Sanity-check the regenerated lock**, in particular DeepBook's `token` at

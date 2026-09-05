@@ -19,65 +19,56 @@ message; nothing is squashed.
 | **3 · Real users** | `users` split from `memberships` (no default role), scrypt password hashing, `createSignupSession` deleted, `resolveAuthorityForSession` fails closed, login rate limiting in Postgres, env credential pair removed |
 | **4 · zkLogin UI** | "Continue with Google", `max_epoch` +1/+2 rule computed server-side, 15-minute idle timeout independent of `max_epoch`, callback keeps the token out of URL and history |
 | **5 · Passkey authority** | SIP-9 enrolment at `/settings/security`, public key captured at creation and persisted, signature/sender/canon-hash verification, one active credential per origin |
+| **6 · Move authority** | `BusinessAccount` is shared and holds `owners` / `approvers` / two freeze flags / `recovery_party` / `authority_epoch`; four eyes and revoke-then-regrant enforced on chain; `mint_attestation_cap` deleted; 24h per-account ceiling (`daily_limit`); `ComplianceCap` subtractive by type; `TreasuryCap` split out of `AdminCap`; two CI guards; adversarial pass |
 | **Membership admin** (not a numbered phase) | `/admin/memberships` — the operator surface for the grant Phase 3 removed. One grant path, no default role, no account creation from the form, and the two money-moving roles say so at the point of granting. `scripts/dev-db.mjs` runs it locally without a cluster |
 
-**304 tests across eleven suites**, plus **52 Move tests** (14 `splash_core` +
-22 `splash_meter` + 16 `splash_custody`) on Sui CLI 1.77.2. Lint, `tsc` and the production build are clean.
+**304 tests across eleven suites**, plus **94 Move tests** (55 `splash_core` +
+23 `splash_meter` + 16 `splash_custody`) on Sui CLI 1.77.2. Lint, `tsc` and the production build are clean.
 
 ---
 
 ## Not done
 
-### Phase 6 · Move authority — not started
-
-Blocked on Sebastian. The other two blockers are cleared:
-
-1. ~~**The Sui CLI.**~~ **Cleared.** Sui 1.77.2 (`51d177ad7d65`) is installed
-   at `%LOCALAPPDATA%\bin\sui.exe`; the 1.75.1 binary it replaced is kept at
-   `D:\sui-install\sui-1.75.1-backup.exe`. All three packages build clean and
-   all three suites pass — `splash_core` **14/14**, `splash_meter` **22/22**,
-   `splash_custody` **16/16**. With build output present, `npm run check:core`
-   now cross-checks the no-`Balance<T>` invariant against compiled bytecode
-   rather than source alone.
-
-   On 1.75.1 `splash_custody` failed 0/16 with `MISSING_DEPENDENCY` in
-   `0x2::object` — a whole-package linkage failure in the only package with
-   git dependencies, which is a trap worth remembering: a CLI downgrade takes
-   out exactly that package, with an error that reads like a code fault.
-
-2. **Sebastian confirms.** Protocol: Move changes are not self-approved.
-3. ~~**The framework pin.**~~ **Settled.** All three `Move.lock` files are
-   regenerated on 1.77.2 and committed: lock format 4, Sui framework
-   `06734f6f`, DeepBook `daa5a951`, OpenZeppelin math `a9703fe8`. The pin on
-   record is now the framework the 52 green tests actually ran against, which
-   it was not before — the committed lock had been written by compiler 1.59.1
-   and pinned `494fa6ed`.
-
-   Two things came out of the regeneration:
-
-   * **DeepBook's `token` package is now pinned** (`c43c84a4`). It is a
-     transitive dependency that `Move.toml` never named, so nothing had it on
-     record before.
-   * **The committed separators are forward slashes, and Windows will fight
-     you over it.** The generator writes the platform separator, so on Windows
-     every `sui move build` and `sui move test` rewrites `subdir` and `local`
-     paths back to backslashes and leaves the three files dirty. A backslash
-     lock does not resolve on Linux, so the portable form is the one that is
-     committed — verified to build and to pass all 52 tests on Windows too.
-     `git checkout -- move/*/Move.lock` after a local Move build; a Linux
-     build leaves them alone.
-Scope, unchanged from the brief: delete `mint_attestation_cap`
-(`business_account.move:149` — it lets Splash mint a capability to an arbitrary
-address, the inverse of canon); add `owners` / `approvers` / `frozen` /
-`recovery_party`; revocation that kills in-flight approvals including
-revoke-then-regrant; the 24h / USD 1,000 velocity cap; `ComplianceCap`
-subtractive **by type**, with a CI check greping every `&ComplianceCap`
-signature; the `TreasuryCap` / `AnchorCap` / `ComplianceCap` / `AdminCap` split;
-then the adversarial pass in §7 of the build list.
-
 ### Phase 7 · Break-glass — not started
 
-Depends on Phase 6.
+Depends on Phase 6, which is now done — and Phase 6 created the dependency
+rather than merely inheriting it.
+
+`mint_attestation_cap` is deleted, so `AnchorCap` is minted once at publish and
+rotated one-in-one-out. A cap that is LOST rather than rotated now bricks
+anchoring permanently, and in an immutable package there is no way back. That
+is stated at `rotate_anchor_cap` and it is the reason **`splash_core` must not
+be published as immutable until Phase 7 lands.**
+
+Scope: a recovery path for a lost `AnchorCap` that does not restore the
+arbitrary minting Phase 6 removed; the same question for `ComplianceCap`, which
+has the identical shape (`admin_set_paused` is today's partial answer); and
+whatever §8 of the build list adds.
+
+---
+
+## Deploy consequences of Phase 6 — read before publishing
+
+Phase 6 is a **breaking ABI change**. There is no migration from the deployed
+package; it needs a fresh publish and fresh object ids for everything.
+
+1. `submit_application` takes a `&Clock` (the account carries a 24h window
+   whose first bucket is stamped at creation).
+2. `BusinessAccount` is a SHARED object. Anything holding one as an owned
+   object breaks; `take_from_sender` becomes `take_shared`.
+3. `mint_attestation_cap` is gone. `AnchorCap` is minted at publish and moved
+   with `rotate_anchor_cap` (one in, one out).
+4. `AttestationCap` is `AnchorCap`. `SPLASH_ATTESTATION_CAP_ID` is declared
+   must-be-unset and boot fails by name if it is still set on the host — set
+   `SPLASH_ANCHOR_CAP_ID` instead.
+5. `SPLASH_TREASURY_CAP_ID` is new and required for every withdrawal path.
+6. `compliance_config::update` is `tighten` (and refuses a loosening),
+   `set_paused` is `pause` (halt only), `allow_pool` is `admin_allow_pool`
+   (`&AdminCap`). The server and `scripts/set-compliance-config.mjs` refuse a
+   loosening locally and print the `admin_set_parameters` command instead.
+7. An account-bound intent can ONLY settle through `confirm_with_approval`.
+   Existing off-chain flows that call `confirm_payment_intent` keep working for
+   unbound intents and will abort (415) on a bound one.
 
 ---
 
