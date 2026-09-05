@@ -28,8 +28,8 @@ test('an unknown org gets a treasury of its own, not the demo one', async () => 
   delete process.env.DATABASE_URL;
   const { getLedger } = await import('../lib/server/treasury.ts');
 
-  const acme = getLedger('acme');
-  const northwind = getLedger('northwind');
+  const acme = await getLedger('acme');
+  const northwind = await getLedger('northwind');
 
   assert.equal(acme.userId, 'acme');
   assert.equal(northwind.userId, 'northwind');
@@ -40,7 +40,7 @@ test('an unknown org gets a treasury of its own, not the demo one', async () => 
 
   // And they are genuinely distinct objects, not one shared row.
   assert.notEqual(acme, northwind);
-  const demo = getLedger('demo-business');
+  const demo = await getLedger('demo-business');
   assert.notEqual(demo, acme);
   assert.ok(demo.treasuryPrincipalMicro > 0, 'the demo org keeps its seeded figures');
 });
@@ -49,14 +49,14 @@ test('moving one org’s treasury does not move another’s', async () => {
   delete process.env.DATABASE_URL;
   const { getLedger } = await import('../lib/server/treasury.ts');
 
-  const acme = getLedger('acme');
-  const northwind = getLedger('northwind');
+  const acme = await getLedger('acme');
+  const northwind = await getLedger('northwind');
   const before = northwind.treasuryPrincipalMicro;
 
   acme.treasuryPrincipalMicro += 5_000_000_000;
 
-  assert.equal(getLedger('northwind').treasuryPrincipalMicro, before);
-  assert.equal(getLedger('acme').treasuryPrincipalMicro, 5_000_000_000);
+  assert.equal((await getLedger('northwind')).treasuryPrincipalMicro, before);
+  assert.equal((await getLedger('acme')).treasuryPrincipalMicro, 5_000_000_000);
 });
 
 test('the treasury route now carries the full payout guard stack', async () => {

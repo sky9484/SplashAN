@@ -43,8 +43,9 @@ const toUsd = (micro: number) => Math.round(micro / 10_000) / 100;
 
 /** Keyed by ORG. Keyed by accountId, every tenant read the same demo ledger.
  *  See lib/server/treasury.ts for why that fell through. */
-function snapshot(orgId: string) {
-  const ledger = getLedger(orgId);
+async function snapshot(orgId: string) {
+  const ledger = await getLedger(orgId);
+  const pending = (await listNotices(orgId)).filter((n) => n.state === 'PENDING');
   const rate = getTreasuryRate();
   return {
     available: toUsd(ledger.availableMicro),
@@ -54,8 +55,7 @@ function snapshot(orgId: string) {
     rate: { apy: rate.netApyPct, label: rate.label, introductory: rate.introductory },
     withdrawalWindowDays: noticeWindowDays(),
     withdrawalWindowLabel: noticeWindowLabel(),
-    notices: listNotices(ledger.userId)
-      .filter((n) => n.state === 'PENDING')
+    notices: pending
       .map((n) => ({
         id: n.id,
         amount: toUsd(n.amountMicro),
@@ -101,7 +101,7 @@ export async function POST(request: Request) {
   const { accountId, orgId } = accountCheck.account;
   // The ledger belongs to the ORG. Keyed by accountId it fell through to a
   // single shared demo ledger for every tenant — see lib/server/treasury.ts.
-  const ledger = getLedger(orgId);
+  const ledger = await getLedger(orgId);
   const settings = await readOrgSettings(orgId);
 
   // Cancel a still-pending withdrawal — returns reserved funds to Treasury.
@@ -109,11 +109,11 @@ export async function POST(request: Request) {
     const noticeId = typeof body.noticeId === 'string' ? body.noticeId : '';
     if (!noticeId) return NextResponse.json({ error: 'noticeId is required to cancel a withdrawal' }, { status: 400 });
     try {
-      cancelTreasuryWithdrawal(noticeId, ledger.userId);
+      await cancelTreasuryWithdrawal(noticeId, ledger.userId);
     } catch (error) {
       return NextResponse.json({ error: (error as Error).message }, { status: 400 });
     }
-    return NextResponse.json(snapshot(orgId));
+    return NextResponse.json(await snapshot(orgId));
   }
 
   const amountUsd = Number(body.amountUsd);
@@ -216,7 +216,7 @@ export async function POST(request: Request) {
     if (body.action === 'move') {
       await moveToTreasury(ledger.userId, amountMicro);
     } else if (body.action === 'withdraw') {
-      requestTreasuryWithdrawal(ledger.userId, amountMicro);
+      await requestTreasuryWithdrawal(ledger.userId, amountMicro);
     } else {
       return NextResponse.json({ error: "action must be 'move', 'withdraw', or 'cancel'" }, { status: 400 });
     }
@@ -224,5 +224,5 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: (error as Error).message }, { status: 400 });
   }
 
-  return NextResponse.json(snapshot(orgId));
+  return NextResponse.json(await snapshot(orgId));
 }

@@ -850,3 +850,61 @@ export const kybCases = pgTable('kyb_cases', {
    *  reviewer happened to open. */
   uniqueIndex('kyb_cases_org_registration_unique').on(table.orgId, table.registrationNumber),
 ]);
+
+/**
+ * One organisation's treasury balances.
+ *
+ * Held in `new Map()` until now, so a restart set every balance to zero except
+ * the demo org's, which was re-seeded. A deploy could tell a customer their
+ * Smart Treasury was empty.
+ *
+ * Keyed by ORG and nothing narrower: keyed by account, tenants shared a
+ * treasury — which is exactly the bug that made every dashboard show the same
+ * balance.
+ */
+export const treasuryLedgers = pgTable('treasury_ledgers', {
+  orgId: text('org_id').primaryKey().references(() => organizations.id),
+  /** Micro-USD. Integers, never floats — see lib/server/json.ts for the wire
+   *  boundary these cross. */
+  availableMicro: bigint('available_micro', { mode: 'bigint' }).notNull().default(0n),
+  treasuryPrincipalMicro: bigint('treasury_principal_micro', { mode: 'bigint' }).notNull().default(0n),
+  treasuryYieldMicro: bigint('treasury_yield_micro', { mode: 'bigint' }).notNull().default(0n),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * A promise that funds land back in Available on a stated date.
+ *
+ * These lived in a module-level array, and losing one loses an obligation: the
+ * settlement cron reads this list, so a restart between request and settlement
+ * dropped the withdrawal silently and the customer's money stayed in treasury
+ * with nothing scheduled to release it.
+ */
+export const withdrawalNotices = pgTable('withdrawal_notices', {
+  id: text('id').primaryKey(),
+  orgId: text('org_id').notNull().references(() => organizations.id),
+  amountMicro: bigint('amount_micro', { mode: 'bigint' }).notNull(),
+  requestedAt: timestamp('requested_at', { withTimezone: true }).notNull().defaultNow(),
+  /** When the funds land back in Available (T+1..T+3). */
+  availableAt: timestamp('available_at', { withTimezone: true }).notNull(),
+  /** PENDING | SWAPPING | SETTLED | CANCELLED. */
+  state: text('state').notNull().default('PENDING'),
+}, (table) => [
+  index('withdrawal_notices_org_idx').on(table.orgId),
+  /** The settlement cron sweeps by due date and state, across every tenant. */
+  index('withdrawal_notices_due_idx').on(table.state, table.availableAt),
+]);
+
+/**
+ * The yield accrual baseline.
+ *
+ * Yield is a price DELTA, so accrual needs the previous observation. It was a
+ * module-level `let`, so every deploy reset it to null — and a null baseline
+ * correctly records nothing, which means a restart silently skipped a day of
+ * yield for every customer. One row: there is one USDY price, not one per org.
+ */
+export const treasuryAccrualState = pgTable('treasury_accrual_state', {
+  id: text('id').primaryKey(),
+  lastAccruedPriceMicros: bigint('last_accrued_price_micros', { mode: 'bigint' }),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
