@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { readJsonBody } from '@/lib/server/http';
-import { findInvoiceBySlug, recordAnalyticsEvent, updateInvoice } from '@/lib/server/operations';
+import { recordAnalyticsEvent } from '@/lib/server/operations';
+import { findInvoiceBySlug, patchInvoiceForStaff } from '@/lib/server/invoices-store';
 import { findIssuerForPayLink, upsertRecipientFromInvoice } from '@/lib/server/recipients-store';
 
 export const BANK_TRANSFER_INSTRUCTIONS = {
@@ -19,9 +20,11 @@ const paidSchema = z.object({
 });
 
 async function publicInvoice(slug: string) {
-  const invoice = findInvoiceBySlug(slug);
+  // Unscoped by design: the slug IS the capability. It is unguessable, it was
+  // handed to a payer who has no account, and it resolves to one invoice.
+  const invoice = await findInvoiceBySlug(slug);
   if (!invoice) return null;
-  const issuer = await findIssuerForPayLink(invoice.issuerOrg);
+  const issuer = await findIssuerForPayLink(invoice.orgId, invoice.issuerOrg);
   return {
     id: invoice.id,
     issuerOrg: invoice.issuerOrg,
@@ -46,34 +49,27 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
 
 export async function POST(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const invoice = findInvoiceBySlug(slug);
+  const invoice = await findInvoiceBySlug(slug);
   if (!invoice) return NextResponse.json({ error: 'Payment request not found' }, { status: 404 });
   const parsed = paidSchema.safeParse(await readJsonBody(request));
   if (!parsed.success) return NextResponse.json({ error: 'Valid payer details are required' }, { status: 400 });
 
-  // The payer becomes a beneficiary of the ISSUING org, so the issuer's org is
-  // what this record must belong to. `InvoiceRecord` has no org id yet, so it
-  // is recovered from the issuer — and when it cannot be, no beneficiary is
-  // created rather than an ownerless one that every tenant could read.
-  const issuer = await findIssuerForPayLink(invoice.issuerOrg);
-  const recipient = issuer
-    ? await upsertRecipientFromInvoice({
-        orgId: issuer.orgId,
-        name: parsed.data.payerOrgName,
-        orgEmail: parsed.data.payerOrgEmail,
-      })
-    : null;
-  updateInvoice(invoice.id, {
+  // The payer becomes a beneficiary of the ISSUING org, which the invoice now
+  // names directly rather than by looking its issuer up by name.
+  const recipient = await upsertRecipientFromInvoice({
+    orgId: invoice.orgId,
+    name: parsed.data.payerOrgName,
+    orgEmail: parsed.data.payerOrgEmail,
+  });
+  // By id, not by session: the payer has no account. The slug already
+  // established which invoice this is.
+  await patchInvoiceForStaff(invoice.id, {
     payerOrgName: parsed.data.payerOrgName,
     payerOrgEmail: parsed.data.payerOrgEmail,
     paymentReference: parsed.data.paymentReference,
     status: 'paid',
   });
   const counterpartyPull = recordAnalyticsEvent('counterparty_pull');
-  if (recipient) {
-    console.info('[kyb-invite] prepared', { recipientId: recipient.id, email: recipient.orgEmail });
-  }
-  // The payment is recorded either way — a missing issuer record must not lose
-  // the payer's declaration that they have paid.
-  return NextResponse.json({ ok: true, recipientId: recipient?.id ?? null, counterpartyPull });
+  console.info('[kyb-invite] prepared', { recipientId: recipient.id, email: recipient.orgEmail });
+  return NextResponse.json({ ok: true, recipientId: recipient.id, counterpartyPull });
 }

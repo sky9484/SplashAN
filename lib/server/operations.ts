@@ -142,6 +142,11 @@ export type RecipientRecord = {
 export type InvoiceStatusV2 = 'draft' | 'sent' | 'viewed' | 'paid' | 'settled' | 'overdue';
 export type InvoiceRecord = {
   id: string;
+  /** The org this invoice belongs to.
+   *
+   *  Absent until now, which is why `listInvoices()` returned every tenant's
+   *  and `updateInvoice(id, …)` could MODIFY any of them. Required. */
+  orgId: string;
   issuerOrg: string;
   payerOrgName?: string;
   payerOrgEmail?: string;
@@ -510,7 +515,11 @@ export function buildRecipient(input: {
 // where every read takes an orgId, the delete is scoped, and cross-tenant reach
 // is spelled `readRecipientForStaff`.
 
-export function createInvoice(input: Omit<InvoiceRecord, 'id' | 'payLinkSlug' | 'createdAt' | 'updatedAt'> & { id?: string; payLinkSlug?: string }) {
+/**
+ * Build an invoice record. Does NOT decide where it lives — the caller persists
+ * it through `lib/server/invoices-store.ts`.
+ */
+export function buildInvoice(input: Omit<InvoiceRecord, 'id' | 'payLinkSlug' | 'createdAt' | 'updatedAt'> & { id?: string; payLinkSlug?: string }) {
   const now = new Date().toISOString();
   const record: InvoiceRecord = {
     ...input,
@@ -519,28 +528,19 @@ export function createInvoice(input: Omit<InvoiceRecord, 'id' | 'payLinkSlug' | 
     createdAt: now,
     updatedAt: now,
   };
-  operations.invoices.set(record.id, record);
   return record;
 }
 
-export function listInvoices() {
-  return [...operations.invoices.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-}
-
-export function readInvoice(invoiceId: string) {
-  return operations.invoices.get(invoiceId) ?? null;
-}
-
-export function findInvoiceBySlug(slug: string) {
-  return listInvoices().find((invoice) => invoice.payLinkSlug === slug) ?? null;
-}
-
-export function updateInvoice(invoiceId: string, patch: Partial<InvoiceRecord>) {
-  const record = operations.invoices.get(invoiceId);
-  if (!record) return null;
-  Object.assign(record, patch, { updatedAt: new Date().toISOString() });
-  return record;
-}
+// `listInvoices`, `readInvoice`, `findInvoiceBySlug` and `updateInvoice` used to
+// live here over a process-global map with no org id on the record.
+// `listInvoices()` returned every tenant's, `readInvoice(id)` read any of them,
+// and `updateInvoice(id, patch)` MODIFIED any of them — a write across the
+// tenant boundary, not merely a read.
+//
+// They are gone rather than deprecated. Use `lib/server/invoices-store.ts`,
+// where every read takes an orgId, the patch is scoped, and the two deliberate
+// exceptions — the pay-link slug and the audit view — are named for what they
+// are.
 
 export function createLedgerEntry(input: Omit<LedgerEntry, 'id' | 'balanceAfterMicro' | 'createdAt'>) {
   const balanceBefore = getLedgerBalance(input.accountId);
@@ -728,7 +728,16 @@ function seedDemoData() {
 
   const due = new Date(Date.now() + 16 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const oldDue = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  const invoice = createInvoice({
+  // Same as the beneficiaries above: built here, kept in this process, owned
+  // by DEMO_ORG_ID so it can never be listed alongside a real tenant's.
+  const seedInvoice = (input: Parameters<typeof buildInvoice>[0]) => {
+    const record = buildInvoice(input);
+    operations.invoices.set(record.id, record);
+    return record;
+  };
+
+  const invoice = seedInvoice({
+    orgId: DEMO_ORG_ID,
     id: 'inv_demo_acme_5000',
     payLinkSlug: 'acme-ph-5000',
     issuerOrg: 'Splash Workspace',
@@ -744,8 +753,8 @@ function seedDemoData() {
     documentSha256: 'demo'.padEnd(64, '0'),
     demo: true,
   });
-  createInvoice({ issuerOrg: 'Splash Workspace', payerOrgName: 'Acme Manufacturing PH', amountUsd: '3200.00', targetCurrency: 'PHP', dueDate: due, memo: 'Freight invoice', status: 'sent', demo: true });
-  createInvoice({ issuerOrg: 'Splash Workspace', payerOrgName: 'Manila Textiles', amountUsd: '1800.00', targetCurrency: 'PHP', dueDate: oldDue, memo: 'Overdue textile invoice', status: 'overdue', demo: true });
+  seedInvoice({ orgId: DEMO_ORG_ID, issuerOrg: 'Splash Workspace', payerOrgName: 'Acme Manufacturing PH', amountUsd: '3200.00', targetCurrency: 'PHP', dueDate: due, memo: 'Freight invoice', status: 'sent', demo: true });
+  seedInvoice({ orgId: DEMO_ORG_ID, issuerOrg: 'Splash Workspace', payerOrgName: 'Manila Textiles', amountUsd: '1800.00', targetCurrency: 'PHP', dueDate: oldDue, memo: 'Overdue textile invoice', status: 'overdue', demo: true });
 
   const transfer = createTransferIntent({
     // The seeded demo data belongs to a named demo org, so it can never be
@@ -791,7 +800,7 @@ function seedDemoData() {
     sweepJobId: job.id,
     demo: true,
   });
-  updateInvoice(invoice.id, { transferIntentId: transfer.id });
+  Object.assign(invoice, { transferIntentId: transfer.id });
   createLedgerEntry({ accountId: cebu.id, direction: 'CREDIT', amountUsdcMicro: 5_000_000_000n, refType: 'SEED', refId: 'demo_seed', demo: true });
   createRateHold({ corridorCurrency: 'PHP', rate: '56.5', feeBps: 80, demo: true });
 }

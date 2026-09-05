@@ -202,24 +202,9 @@ export async function findRecipientByEmailOrName(
   return hit ?? null;
 }
 
-/**
- * Match a beneficiary by name across every org.
- *
- * Only the public pay link uses this, because `invoices` has no org id yet and
- * the issuer's name is the only key there is. It is a seam, and it is named
- * like one — see `findIssuerForPayLink` in the store.
- */
-export async function findByNameAcrossOrgs(
-  db: DrizzleDb,
-  name: string,
-): Promise<RecipientRow | null> {
-  const rows = await db
-    .select()
-    .from(suppliers)
-    .where(eq(suppliers.name, name))
-    .orderBy(desc(suppliers.createdAt))
-    .limit(1);
-  return rows.length > 0 ? toRow(rows[0]) : null;
-}
+// `findByNameAcrossOrgs` lived here for one release, for the public pay link,
+// because `invoices` had no org id and the issuer's name was the only key
+// there was. Invoices carry an `orgId` now, so the match happens inside one
+// tenant and a cross-org name lookup has no remaining caller.
 
 export const __testing = { toColumnKyb, fromColumnKyb };

@@ -71,6 +71,13 @@
       "when": 1788627965869,
       "tag": "0009_recipient_persistence",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1788628625081,
+      "tag": "0010_invoice_persistence",
+      "breakpoints": true
     }
   ]
 }

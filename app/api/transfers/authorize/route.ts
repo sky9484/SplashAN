@@ -7,10 +7,10 @@ import { executeComposedPayment } from '@/lib/server/composed-payment';
 import {
   buildRecipient,
   createTransferIntent,
-  updateInvoice,
 } from '@/lib/server/operations';
 import { accountBalance, listMovementsSince, recordMovement } from '@/lib/server/ledger-store';
 import { persistRecipient } from '@/lib/server/recipients-store';
+import { patchInvoice } from '@/lib/server/invoices-store';
 import { patchAuditReceipt, patchTransfer, persistTransfer } from '@/lib/server/transfers-store';
 import { pythAdapter } from '@/lib/server/pyth';
 import { calculateQuote } from '@/lib/server/quote';
@@ -342,7 +342,9 @@ export async function POST(request: Request) {
     approvedBy: 'dashboard-operator',
     approvedAt: new Date().toISOString(),
   });
-  if (body.invoiceId) updateInvoice(body.invoiceId, { transferIntentId: intent.id });
+  // Scoped: binding an invoice to a transfer is a write, and it used to accept
+  // any invoice id from the request body regardless of who owned it.
+  if (body.invoiceId) await patchInvoice(orgId, body.invoiceId, { transferIntentId: intent.id });
 
   if (conversion?.success && conversion.labuanSettlementId) {
     createIntercompanyTransfer({ transferIntentId: intent.id, amountUsd: conversion.usdAmount, usdToUsdcRate: conversion.usdToUsdcRate });

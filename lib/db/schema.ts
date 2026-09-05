@@ -371,9 +371,20 @@ export const invoices = pgTable('invoices', {
   walrusBlobId: text('walrus_blob_id'),
   sealPolicyId: text('seal_policy_id'),
   payLinkSlug: text('pay_link_slug'),
+  /** The reference a payer quotes on the wire, so a bank credit can be matched
+   *  back to the invoice it settles. */
+  paymentReference: text('payment_reference'),
+  /** Hash of the uploaded document. `walrusBlobId` says where it is; this says
+   *  what it was, so tampering is detectable without fetching it. */
+  documentSha256: text('document_sha256'),
+  /** The transfer that settles this invoice. The reverse link already exists on
+   *  `payment_intents.invoice_id`; without this one, "was this paid" is a scan. */
+  transferIntentId: text('transfer_intent_id'),
+  demo: boolean('demo').notNull().default(false),
   ...timestamps,
 }, (table) => [
   index('invoices_org_idx').on(table.orgId),
+  index('invoices_org_created_idx').on(table.orgId, table.createdAt),
   index('invoices_supplier_idx').on(table.supplierId),
   uniqueIndex('invoices_pay_link_unique').on(table.payLinkSlug),
 ]);

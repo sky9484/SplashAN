@@ -3,7 +3,8 @@ import { NextResponse } from 'next/server';
 
 import { verifyStoredSettlementEvidence } from '@/lib/evidence/settlement';
 import { requireCustomerRequest } from '@/lib/server/customer-auth';
-import { readInvoice, readSweepJob } from '@/lib/server/operations';
+import { readSweepJob } from '@/lib/server/operations';
+import { readInvoiceForStaff } from '@/lib/server/invoices-store';
 import { requireSessionAccount } from '@/lib/server/session-account';
 import { readAuditReceipt, readTransfer } from '@/lib/server/transfers-store';
 import { readSealPolicy, sealAdapter } from '@/lib/server/seal';
@@ -16,7 +17,10 @@ async function auditView(orgId: string, intentId: string) {
   // digest on the payment by construction rather than by agreement.
   const receipt = await readAuditReceipt(orgId, intentId);
   if (!transfer || !receipt) return null;
-  const invoice = receipt.invoiceId ? readInvoice(receipt.invoiceId) : null;
+  // The transfer above was already scoped to this org, and the invoice is the
+  // one it names — so this read is reached only through an ownership check
+  // that has already passed.
+  const invoice = receipt.invoiceId ? await readInvoiceForStaff(receipt.invoiceId) : null;
   const sweepJob = receipt.sweepJobId ? readSweepJob(receipt.sweepJobId) : null;
   const policy = receipt.sealPolicyId ? readSealPolicy(receipt.sealPolicyId) : null;
   return { transfer, receipt, invoice, sweepJob, policy };

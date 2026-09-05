@@ -128,28 +128,29 @@ export async function removeRecipient(orgId: string, recipientId: string): Promi
 }
 
 /**
- * The issuer behind a public pay link, matched by the name on the invoice.
+ * The issuer behind a public pay link.
  *
- * Cross-tenant by necessity, not by choice: `InvoiceRecord` still carries no
- * org id, so the issuer's name is the only key there is. That makes it a
- * global name match — two tenants both called "Acme Trading" resolve to
- * whichever sorts first, and the page would show one org's KYB status for the
- * other's invoice.
- *
- * It is named for what it is so the next person sees the seam. It closes when
- * invoices are persisted with an `orgId` of their own, which is the next store
- * in this sequence; then this becomes `readRecipient(invoice.orgId, …)`.
+ * Scoped to the invoice's own org. This was briefly a global name match,
+ * because `InvoiceRecord` had no org id and the issuer's name was the only
+ * key there was — two tenants both called "Acme Trading" resolved to
+ * whichever sorted first, and the page could show one org's KYB status
+ * against the other's invoice. The invoice carries an `orgId` now, so the
+ * match happens inside it.
  */
-export async function findIssuerForPayLink(issuerName: string): Promise<RecipientRecord | null> {
+export async function findIssuerForPayLink(
+  orgId: string,
+  issuerName: string,
+): Promise<RecipientRecord | null> {
   const wanted = issuerName.trim().toLowerCase();
   if (!usingPostgres()) {
     return (
-      [...operations.recipients.values()].find((r) => r.name.trim().toLowerCase() === wanted) ?? null
+      [...operations.recipients.values()].find(
+        (r) => r.orgId === orgId && r.name.trim().toLowerCase() === wanted,
+      ) ?? null
     );
   }
-  const { getDb } = await import('../db/client.ts');
-  const rows = await repo.findByNameAcrossOrgs(getDb() as never, issuerName);
-  return rows ? toRecord(rows) : null;
+  const row = await repo.findRecipientByEmailOrName(await db(), orgId, { name: issuerName });
+  return row ? toRecord(row) : null;
 }
 
 /**

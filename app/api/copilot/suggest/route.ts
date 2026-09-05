@@ -8,7 +8,8 @@ import { NextResponse } from 'next/server';
 
 import { requireCustomerRequest } from '@/lib/server/customer-auth';
 import { getCopilotSuggestions } from '@/lib/server/copilot';
-import { listInvoices } from '@/lib/server/operations';
+import { listInvoicesFor } from '@/lib/server/invoices-store';
+import { requireSessionAccount } from '@/lib/server/session-account';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -17,9 +18,16 @@ export async function GET(request: Request) {
   const auth = await requireCustomerRequest(request);
   if (auth.response) return auth.response;
 
+  // Suggestions are drawn from the caller's OWN invoices. Unscoped, a batch
+  // suggestion would have named another tenant's invoice ids in
+  // `suggestedAction` — and the card links to a screen that acts on them.
+  const accountCheck = await requireSessionAccount(auth.session);
+  if (accountCheck.response) return accountCheck.response;
+
   const user = new URL(request.url).searchParams.get('user') ?? 'patterns';
   const suggestions = await getCopilotSuggestions(user);
-  const openInvoices = listInvoices().filter((invoice) => invoice.status !== 'paid' && invoice.status !== 'settled');
+  const openInvoices = (await listInvoicesFor(accountCheck.account.orgId))
+    .filter((invoice) => invoice.status !== 'paid' && invoice.status !== 'settled');
   const invoicesByCurrency = openInvoices.reduce<Record<string, typeof openInvoices>>((groups, invoice) => {
     (groups[invoice.targetCurrency] ??= []).push(invoice);
     return groups;
