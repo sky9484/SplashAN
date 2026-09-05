@@ -1,5 +1,6 @@
 'use client';
 
+import ZkLoginButton from '@/components/auth/ZkLoginButton';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
@@ -121,6 +122,8 @@ export default function LoginPage() {
           {!isSubmitting ? <ArrowRight aria-hidden="true" /> : null}
         </button>
       </form>
+
+      <ZkLoginButton onError={setError} />
 
       <p className="iso-auth-switch">
         New to Splash? <Link href="/signup">Create a business account</Link>

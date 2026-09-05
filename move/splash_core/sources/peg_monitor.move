@@ -19,7 +19,8 @@ module splash_core::peg_monitor;
 // aborting the whole test build before our modules are reached. Moving it out
 // unblocked the entire splash_core test suite.
 
-use splash_core::business_account::{AdminCap, AttestationCap};
+use splash_core::business_account::{Self, AdminCap, AnchorCap};
+use splash_core::cap_registry::CapRegistry;
 use splash_core::compliance_config::{Self, ComplianceConfig};
 use sui::clock::{Self, Clock};
 use sui::event;
@@ -73,7 +74,7 @@ public fun init_peg_state(_admin: &AdminCap, clock: &Clock, ctx: &mut TxContext)
     transfer::share_object(state);
 }
 
-/// Operator pushes a fresh Hermes-derived peg reading. AttestationCap-gated
+/// Operator pushes a fresh Hermes-derived peg reading. AnchorCap-gated
 /// (cap split S-10): a peg reading is an attestation about the outside world,
 /// not a movement of value, so the hot operator key can push it while money
 /// authority stays offline in the cold multisig.
@@ -83,12 +84,16 @@ public fun init_peg_state(_admin: &AdminCap, clock: &Clock, ctx: &mut TxContext)
 /// against clock regression bugs or replay-style races.
 public fun update_peg(
     state: &mut PegState,
-    _cap: &AttestationCap,
+    cap: &AnchorCap,
+    registry: &CapRegistry,
     usdc_deviation_ppm: u64,
     usdt_deviation_ppm: u64,
     clock: &Clock,
     _ctx: &mut TxContext,
 ) {
+    // The hottest path in the package — roughly 2,880 signatures a day from an
+    // internet-facing host, which is precisely why the cap must be revocable.
+    business_account::assert_anchor_cap(registry, cap);
     let now = clock::timestamp_ms(clock);
     // First update from genesis (update_count == 0) is allowed to equal
     // the init timestamp; subsequent updates must strictly advance.

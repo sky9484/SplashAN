@@ -4,6 +4,12 @@
 **Governing constraint:** Splash **cannot hold client funds** — self-imposed, enforced by the type system and by CI, and a precondition for operating before an e-money licence exists. No licence is held today.
 E-money tier (RM 1.5M, Labuan money broking paras 6.1 + 6.2) is Phase 1.
 
+**Build phases 0–7** (env contract, claims, money arithmetic, real users,
+zkLogin, passkeys, Move authority, break-glass) are tracked separately in
+[`docs/PHASE-STATUS.md`](docs/PHASE-STATUS.md) — including what is still
+outstanding and the deploy-order items that will cause an outage if done
+singly.
+
 ---
 
 ## The design thesis
@@ -81,6 +87,18 @@ Do not publish `splash_core` until every line is checked.
       1_000_000_000` matching `DEEPBOOK_PRICE_SCALING`, the three view
       signatures byte-identical, and no `published-at`.
       **Minimum CLI for this repo is now 1.61.1.**
+      **2026-09-05: re-verified.** The dev machine had drifted to 1.75.1, on
+      which `splash_custody` fails 0/16 with `MISSING_DEPENDENCY` in
+      `0x2::object` — a whole-package linkage failure, not a code failure
+      (`splash_core` and `splash_meter` have no dependencies and stayed
+      green). 1.77.2 was reinstalled and all three suites re-run: **14 + 22 +
+      16 = 52, no failures.** The checkboxes above hold, on 1.77.2 and not
+      below it.
+      Note the committed `Move.lock` still records `compiler-version =
+      "1.59.1"` and pins framework `494fa6ed`. Any `sui move build` rewrites
+      it to lock format 4 with that CLI's own framework rev (1.75.1 →
+      `b9149cbf`, 1.77.2 → `06734f6f`); those rewrites have been reverted, so
+      the pin on record is not the framework these tests ran against.
 - [x] No value-bearing field in `splash_core` — `scripts/check-core-no-balance.mjs`,
       run by `.github/workflows/core-invariant.yml` on every push and PR, and by
       `npm run lint` locally. The checker parses struct BODIES out of

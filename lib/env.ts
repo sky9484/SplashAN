@@ -67,6 +67,17 @@ const num = (def: number) => withDefault(z.coerce.number(), def);
 /** The code tests `=== 'true'`; anything else is false. */
 /** A key that moved into config/seal.<env>.json. Unset is the only valid
  *  state; a value means a stale .env.local or host panel, and boot names it. */
+/** A key whose feature was removed. Unset is the only valid state. */
+const removedFromEnv = z.preprocess(
+  blankToUndefined,
+  z.undefined({ error: 'no longer used — accounts are rows in `users`; remove it from .env.local and from the host' }),
+);
+
+const renamedAnchorCap = z.preprocess(
+  blankToUndefined,
+  z.undefined({ error: 'renamed to SPLASH_ANCHOR_CAP_ID with the Phase 6 cap split — set that instead, and remove this from .env.local and from the host' }),
+);
+
 const movedToSealFile = z.preprocess(
   blankToUndefined,
   z.undefined({ error: 'moved to config/seal.<env>.json — remove it from .env.local and from the host' }),
@@ -92,7 +103,22 @@ export const envSchema = z.object({
   SPLASH_PAYOUT_DELEGATION_ID: objectId,
   SPLASH_TREASURY_ID: objectId,
   SPLASH_ADMIN_CAP_ID: objectId,
-  SPLASH_ATTESTATION_CAP_ID: objectId,
+  /** Phase 6 split the money authority out of `AdminCap`. This is the cap that
+   *  can take value out of a custodial object, and the ONLY one — it belongs on
+   *  the cold 2-of-3 and must never be online. */
+  SPLASH_TREASURY_CAP_ID: objectId,
+  SPLASH_ANCHOR_CAP_ID: objectId,
+  /** Phase 7 break-glass. The shared CapRegistry holding the live generation
+   *  for each revocable capability. Every call that USES an AnchorCap or a
+   *  ComplianceCap passes it, so a revoked capability stops working on chain
+   *  rather than being rejected by convention off it. */
+  SPLASH_CAP_REGISTRY_ID: objectId,
+  /** Renamed with the Phase 6 cap split (`AttestationCap` -> `AnchorCap`).
+   *  Declared must-be-unset rather than silently ignored: a stale object id
+   *  under the old name would point at a capability type that no longer
+   *  exists, and a key that governs nothing but still reads like a control
+   *  is worse than no key. */
+  SPLASH_ATTESTATION_CAP_ID: renamedAnchorCap,
   SPLASH_PEG_STATE_ID: objectId,
   SPLASH_COMPLIANCE_CONFIG_ID: objectId,
   SPLASH_COMPLIANCE_CAP_ID: objectId,
@@ -169,8 +195,13 @@ export const envSchema = z.object({
   /* Sessions and staff auth. lib/server/customer-auth.ts, admin-auth.ts.
      The demo values are refused in production below. */
   CUSTOMER_SESSION_SECRET: optional,
-  CUSTOMER_EMAIL: opt(str.email().or(str.regex(/^[^\s@]+@[^\s@]+$/))),
-  CUSTOMER_PASSWORD: optional,
+  /* Removed with the single-credential login. Accounts are rows in `users`
+     with a scrypt hash, so these two governed nothing after that — and a
+     password sitting in an environment file that no longer decides anything
+     is worse than none, because it reads as a control. Declared so a stale
+     value fails boot by name. */
+  CUSTOMER_EMAIL: removedFromEnv,
+  CUSTOMER_PASSWORD: removedFromEnv,
   CUSTOMER_ORGANIZATION: optional,
   CUSTOMER_SELF_SIGNUP_ENABLED: flag('false'),
   CUSTOMER_RECOVERY_EMAIL: opt(str.email()),
@@ -191,6 +222,18 @@ export const envSchema = z.object({
   ZKLOGIN_GOOGLE_CLIENT_ID: optional,
   ZKLOGIN_MICROSOFT_CLIENT_ID: optional,
   ZKLOGIN_USER_SALT: optional,
+
+  /**
+   * WebAuthn relying-party id. A credential is bound to it and the browser
+   * will not offer it on any other host, so a passkey enrolled on localhost
+   * cannot be used on v1.splashz.xyz. Decided once per environment; changing
+   * it after anyone has enrolled orphans every existing credential.
+   *
+   * Deliberately configuration rather than derived from the request Host —
+   * an attacker who could influence that header could otherwise enrol a
+   * credential under an rpId they control.
+   */
+  PASSKEY_RP_ID: optional,
 
   /* KYB and compliance. lib/compliance/*. */
   FEATURE_KYB_GATE: flag('false'),
@@ -305,8 +348,6 @@ export const ENV_KEY_PREFIXES: readonly string[] = ['SPLASH_TOTP_SECRET_', 'OXWA
 
 /** The values .env.example ships for local demo. Never acceptable in prod. */
 const DEMO_VALUES: Partial<Record<keyof Env, string[]>> = {
-  CUSTOMER_EMAIL: ['splash@demo'],
-  CUSTOMER_PASSWORD: ['splash@123'],
   ADMIN_PASSWORD: ['splash-admin-demo'],
 };
 
@@ -330,8 +371,6 @@ function productionIssues(env: Env): Issue[] {
   need('CRON_SECRET', 'every /api/cron route would accept any caller');
   need('DATABASE_URL', 'authority and persistence require Postgres');
   need('SPLASH_PACKAGE_ID', 'nothing can be composed against 0x0');
-  notDemo('CUSTOMER_EMAIL');
-  notDemo('CUSTOMER_PASSWORD');
   notDemo('ADMIN_PASSWORD');
   if (!env.NEXT_PUBLIC_APP_URL.startsWith('https://')) {
     issues.push({ key: 'NEXT_PUBLIC_APP_URL', message: 'must be https in production' });

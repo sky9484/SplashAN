@@ -1,3 +1,4 @@
+import { USD_DECIMALS, formatMinor, parseMinor } from '../money.ts';
 /**
  * 0xWal — layered copilot intelligence.
  *
@@ -27,9 +28,40 @@ const SUPPORTED = ['PHP', 'MYR', 'IDR', 'VND', 'THB', 'SGD', 'EUR', 'GBP'];
 
 // ─── Invoice parsing (Claude when available, heuristic otherwise) ───────────────
 
+/**
+ * A candidate amount from a model or a regex, as exact minor units and the
+ * decimal string that produced them. Thousands separators and a currency
+ * symbol are stripped; anything still unparseable is zero, because a
+ * guessed figure on an approval screen is worse than an obvious one.
+ *
+ * Invoices are quoted to the cent, so extra fraction digits are rounded
+ * half-up rather than refused — an OCR artefact should not fail the whole
+ * extraction.
+ */
+function normaliseAmount(raw: string): { amount: string; amountMinor: bigint } {
+  const cleaned = raw.replace(/[,\s]/g, '').replace(/^[^\d.+-]+/, '');
+  try {
+    const minor = parseMinor(cleaned, USD_DECIMALS, 'half-up');
+    return { amount: formatMinor(minor, USD_DECIMALS), amountMinor: minor };
+  } catch {
+    return { amount: '0.00', amountMinor: 0n };
+  }
+}
+
 export async function parseInvoice(
   invoiceText: string,
-): Promise<{ amount: number; currency: string; recipient: string; confidence: number }> {
+/**
+ * Extract the payable amount, currency and vendor from invoice text.
+ *
+ * The amount is an exact decimal string, and the minor units beside it.
+ * It used to be a `number`, which meant the figure a human is asked to
+ * approve — and which is stored verbatim in the audit receipt — had been
+ * through a double on its way out of a regex or a JSON body. The model is
+ * asked for a string for the same reason: a JSON number is parsed as a
+ * double before this code ever sees it, so asking for one throws away the
+ * precision before there is anything to preserve.
+ */
+): Promise<{ amount: string; amountMinor: bigint; currency: string; recipient: string; confidence: number }> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (apiKey) {
     try {
@@ -40,16 +72,20 @@ export async function parseInvoice(
         max_tokens: 300,
         system:
           'Extract the payable amount, ISO-4217 currency, and recipient/vendor name from this invoice. ' +
-          'Respond ONLY with compact JSON: {"amount":number,"currency":"XXX","recipient":"..."}. No prose.',
+          'Respond ONLY with compact JSON: {"amount":"0.00","currency":"XXX","recipient":"..."}. The amount is a decimal STRING, digits and one dot only, no separators or symbol. No prose.',
         messages: [{ role: 'user', content: invoiceText.slice(0, 6000) }],
       });
       const text = resp.content.filter((b) => b.type === 'text').map((b) => (b as { text: string }).text).join('');
       const json = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1)) as {
-        amount: number; currency: string; recipient: string;
+        amount: string | number; currency: string; recipient: string;
       };
       // Remember the behavioral pattern (vendor + currency), never the raw doc.
       void analyzeAndRemember(`Invoice vendor ${json.recipient} settles in ${json.currency}`);
-      return { amount: Number(json.amount) || 0, currency: String(json.currency || 'USD').toUpperCase(), recipient: String(json.recipient || ''), confidence: 0.9 };
+      // A model can still answer with a bare number despite the instruction;
+      // normalise, then parse exactly. An unparseable answer is zero rather
+      // than a guess, and the low confidence downstream reflects that.
+      const amount = normaliseAmount(String(json.amount ?? ''));
+      return { ...amount, currency: String(json.currency || 'USD').toUpperCase(), recipient: String(json.recipient || ''), confidence: 0.9 };
     } catch {
       // fall through to heuristic
     }
@@ -58,11 +94,11 @@ export async function parseInvoice(
   const amountMatch = invoiceText.match(/(?:total|amount due|balance)\D{0,12}([\d,]+\.?\d{0,2})/i) ?? invoiceText.match(/([\d,]+\.\d{2})/);
   const currencyMatch = invoiceText.match(/\b(USD|PHP|MYR|IDR|VND|THB|SGD|EUR|GBP)\b/i);
   const recipientMatch = invoiceText.match(/(?:bill to|vendor|from|pay to)\s*:?\s*([A-Z][\w .,&-]{2,40})/i);
-  const amount = amountMatch ? Number(amountMatch[1].replace(/,/g, '')) : 0;
+  const amount = normaliseAmount(amountMatch?.[1] ?? '');
   const currency = (currencyMatch?.[1] ?? 'USD').toUpperCase();
   const recipient = recipientMatch?.[1]?.trim() ?? '';
   if (recipient) void analyzeAndRemember(`Invoice vendor ${recipient} settles in ${currency}`);
-  return { amount, currency, recipient, confidence: amount > 0 ? 0.55 : 0.2 };
+  return { ...amount, currency, recipient, confidence: amount.amountMinor > 0n ? 0.55 : 0.2 };
 }
 
 // ─── FX forecast (grounded in the live corridor rate) ───────────────────────────

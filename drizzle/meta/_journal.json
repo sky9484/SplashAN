@@ -29,6 +29,20 @@
       "when": 1786302897534,
       "tag": "0003_wallet_identities",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788595230497,
+      "tag": "0004_real_users",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1788597534393,
+      "tag": "0005_passkey_credentials",
+      "breakpoints": true
     }
   ]
 }

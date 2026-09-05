@@ -86,6 +86,13 @@ const allowedHexes = new Set([
   '#d9fff6', '#e0b05a', '#e7eef0', '#eaf6f1', '#eaf7f8', '#ede8e4', '#eef4f5',
   '#efc46f', '#f4efe4', '#f4f8fa', '#f8fcfd', '#ffd9c9', '#ffe6a4', '#fffaf6',
   '#fffdf9',
+  // Google's brand mark, in components/auth/ZkLoginButton.tsx. These four are
+  // fixed by Google's identity guidelines and are not Splash palette: they
+  // cannot become tokens, because a token implies we may change them. Inline
+  // rather than an <img> so the sign-in button needs no network request to
+  // render, and listed here rather than exempting the file, so any OTHER
+  // arbitrary hex added to it still fails.
+  '#4285f4', '#34a853', '#fbbc05', '#ea4335',
 ]);
 const hexPattern = /#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{4}|[0-9a-fA-F]{3})(?![0-9a-fA-F])/g;
 function hexViolations(text) {
@@ -189,31 +196,50 @@ for (const root of roots) {
   }
 }
 
-// ── Soft warnings (non-fatal) ──────────────────────────────────────────────
-// W2 pre-work: float math on money is the debt mainnet cannot carry. Until
-// the W2 sweep lands (bigint minor units via lib/money/), WARN on every
-// parseFloat/Number(...) touching an amount-named identifier in the money
-// paths so no NEW debt lands unnoticed. W2 flips this to a hard failure.
-const moneyFloatWarnings = [];
+// ── W2: no float math on money ─────────────────────────────────────────────
+//
+// A hard failure. `parseFloat('0.10')` is not 0.10, it is the nearest double,
+// and a hundred of them sum to 9.999999999999998 — so a batch of a hundred
+// ten-cent payouts reconciles a cent short against a ledger that used
+// integers, silently and differently depending on row order. lib/money.ts is
+// the exact path: parseMinor, formatMinor, applyRate, applyBps, divRound.
+//
+// Two refinements over the warning this replaces, both found by its own false
+// positives once the migration started:
+//
+//   \b before the callee, because `Number(` matched inside `rateToNumber(`
+//   and every other identifier ending in "Number".
+//
+//   comments skipped, because a comment explaining what the old float code
+//   did is documentation, not arithmetic. Only // and /* */ opening lines are
+//   skipped; a line of code with a trailing comment is still checked.
+const moneyFloatViolations = [];
 {
   const moneyRoots = ['lib/server', 'lib/fx'];
-  const moneyFloatPattern = /(?:parseFloat|Number)\s*\(\s*[^)]*(?:amount|Amount|price|Price|fee|Fee|balance|Balance)/;
+  const moneyFloatPattern =
+    /\b(?:parseFloat|Number)\s*\(\s*[^)]*(?:amount|Amount|price|Price|fee|Fee|balance|Balance)/;
   for (const root of moneyRoots) {
     for (const file of await filesUnder(root)) {
       const text = await readFile(file, 'utf8');
       let line = 0;
+      let inBlockComment = false;
       for (const raw of text.split('\n')) {
         line += 1;
+        const trimmed = raw.trim();
+        if (inBlockComment) { if (trimmed.includes('*/')) inBlockComment = false; continue; }
+        if (trimmed.startsWith('/*')) { if (!trimmed.includes('*/')) inBlockComment = true; continue; }
+        if (trimmed.startsWith('//') || trimmed.startsWith('*')) continue;
         if (moneyFloatPattern.test(raw)) {
-          moneyFloatWarnings.push(`${relative('.', file)}:${line} float math on a money identifier — migrate to bigint minor units (W2)`);
+          moneyFloatViolations.push(
+            `${relative('.', file)}:${line} float math on money — use lib/money.ts (bigint minor units)`,
+          );
         }
       }
     }
   }
 }
-if (moneyFloatWarnings.length > 0) {
-  console.warn(`⚠ W2 debt (non-fatal, ${moneyFloatWarnings.length} site(s)):\n` + moneyFloatWarnings.join('\n') + '\n');
-}
+violations.push(...moneyFloatViolations);
+
 
 // USD-first stance: "stablecoin" is fine as a settlement mechanism but must
 // never be the headline value in customer-facing components. Flag drift so

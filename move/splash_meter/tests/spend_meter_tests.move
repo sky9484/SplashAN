@@ -168,6 +168,41 @@ fun buckets_age_out_one_at_a_time() {
 }
 
 #[test]
+/// `remaining_at` must agree with what `charge` will actually allow.
+///
+/// It did not. The virtual roll counted buckets FORWARDS from the head, which
+/// wraps onto the buckets a real roll is about to zero and skips the same
+/// number of live ones. The error is invisible whenever the skipped bucket is
+/// empty, which is why every existing test passed: they spend in the head
+/// bucket or let the whole window turn over.
+///
+/// This case puts spend in the bucket immediately behind the head and then
+/// queries one hour ahead. Before the fix it reported the full window free
+/// while 40% of it was committed — an over-report, so the off-chain batcher
+/// would size a payroll run the chain then refuses.
+fun remaining_at_agrees_with_what_charge_allows() {
+    let mut scenario = test_scenario::begin(OPERATOR);
+    let (mut meter, mut c, id) = fresh(scenario.ctx());
+
+    spend_meter::charge(&mut meter, id, 20_000_000_000, &c);   // hour 0
+    c.set_for_testing(1_000 * DAY + HOUR);
+    spend_meter::charge(&mut meter, id, 1, &c);                // hour 1, head here
+
+    // One hour on. Nothing has aged out — the window is 24 hours — so both
+    // charges still count and exactly WINDOW - 20_000_000_001 is free.
+    let quoted = spend_meter::remaining_at(&meter, 1_000 * DAY + 2 * HOUR);
+    assert_eq!(quoted, WINDOW - 20_000_000_001);
+
+    // And the quote is honest: charging exactly what it offered succeeds.
+    c.set_for_testing(1_000 * DAY + 2 * HOUR);
+    spend_meter::charge(&mut meter, id, quoted, &c);
+    assert_eq!(spend_meter::remaining_at(&meter, 1_000 * DAY + 2 * HOUR), 0);
+
+    cleanup(meter, c);
+    scenario.end();
+}
+
+#[test]
 /// A meter untouched for a month must not carry stale spend, and must not cost
 /// unbounded gas to roll forward.
 fun a_long_dormant_meter_resets_wholly() {

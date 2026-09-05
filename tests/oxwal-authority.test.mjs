@@ -8,7 +8,7 @@ import { eq } from 'drizzle-orm';
 
 import * as schema from '../lib/db/schema.ts';
 import {
-  provisionOperatorMembership,
+  grantMembership,
   resolveAuthorityFromDb,
   UnauthorizedError,
 } from '../lib/auth/authority.ts';
@@ -167,14 +167,14 @@ test('14.12 session authority — role is provably DB-derived and re-read on eve
   // No membership row → unauthorized, not a permissive default.
   await assert.rejects(() => resolveAuthorityFromDb(db, email), UnauthorizedError);
 
-  await provisionOperatorMembership(db, email, 'maker');
+  await grantMembership(db, { email, orgId: 'demo-business', role: 'maker' });
   const asMaker = await resolveAuthorityFromDb(db, email);
   assert.equal(asMaker.role, 'MAKER');
   assert.equal(asMaker.orgId, 'demo-business');
   assert.ok(asMaker.policy.tier1ThresholdUsd > BigInt(0));
 
   // Same request replayed after a DB role change resolves the NEW role.
-  await db.update(schema.users).set({ role: 'checker' }).where(eq(schema.users.email, email));
+  await db.update(schema.memberships).set({ role: 'checker' }).where(eq(schema.memberships.userId, asMaker.userId));
   const asChecker = await resolveAuthorityFromDb(db, email);
   assert.equal(asChecker.role, 'APPROVER');
   assert.equal(asChecker.userId, asMaker.userId);
@@ -184,7 +184,7 @@ test('14.12 session authority — role is provably DB-derived and re-read on eve
 
 test('14.12 session authority — the org policy record round-trips through the database', async () => {
   const { client, db } = await migratedDb();
-  await provisionOperatorMembership(db, 'ops@splash.finance', 'checker');
+  await grantMembership(db, { email: 'ops@splash.finance', orgId: 'demo-business', role: 'checker' });
   const first = await resolveAuthorityFromDb(db, 'ops@splash.finance');
   const again = await resolveAuthorityFromDb(db, 'ops@splash.finance');
   assert.equal(first.policy.dualApprovalThresholdUsd, again.policy.dualApprovalThresholdUsd);

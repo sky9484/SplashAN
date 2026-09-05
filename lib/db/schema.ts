@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import {
   bigint,
   boolean,
@@ -61,16 +62,150 @@ export const organizations = pgTable('organizations', {
   ...timestamps,
 });
 
+/**
+ * A person. Identity only.
+ *
+ * This table used to carry `org_id` and `role` directly, which made every row
+ * simultaneously an identity and a membership — so a user could not exist
+ * without belonging to an organisation with a role. That is what made the auth
+ * bypass structural rather than a slip: signup needed a row, a row needed a
+ * role, and the role it got was one that can approve payments.
+ *
+ * Membership is its own table now. A user with no membership row is exactly
+ * what signup produces: able to log in, able to see an empty workspace, and
+ * able to authorise nothing.
+ */
 export const users = pgTable('users', {
   id: text('id').primaryKey(),
-  orgId: text('org_id').notNull().references(() => organizations.id),
   email: text('email').notNull(),
   name: text('name').notNull(),
-  role: userRole('role').notNull().default('viewer'),
+  /**
+   * scrypt, formatted by lib/auth/password.ts. Nullable because an identity
+   * can exist without one — an invited user before they set a password, or a
+   * zkLogin identity that never has one at all.
+   */
+  passwordHash: text('password_hash'),
+  /** Null until the address is proven. Not a boolean: when it happened is the
+   *  auditable fact, and `true` cannot answer that. */
+  emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
   ...timestamps,
 }, (table) => [
   uniqueIndex('users_email_unique').on(table.email),
-  index('users_org_idx').on(table.orgId),
+]);
+
+/**
+ * Who belongs to which organisation, and as what.
+ *
+ * There is deliberately no default role. Drizzle would accept
+ * `.default('viewer')` and the previous schema did exactly that, which means
+ * an insert that forgets the role still produces a member. Every membership
+ * here states its role, or the insert fails.
+ *
+ * A row in this table is a grant. Nothing creates one implicitly: not signup,
+ * not login, and not a failed authority lookup.
+ */
+export const memberships = pgTable('memberships', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  orgId: text('org_id').notNull().references(() => organizations.id),
+  role: userRole('role').notNull(),
+  /** Who granted it. Null for the first membership in a new organisation,
+   *  which has no prior member to do the granting. */
+  grantedBy: text('granted_by'),
+  ...timestamps,
+}, (table) => [
+  uniqueIndex('memberships_user_org_unique').on(table.userId, table.orgId),
+  index('memberships_org_idx').on(table.orgId),
+  index('memberships_user_idx').on(table.userId),
+]);
+
+/**
+ * Failed login attempts, for the rate limit.
+ *
+ * Postgres rather than Redis: Redis is cache-only here by rule, and a lockout
+ * that evaporates when the cache restarts is not a lockout. Rows are pruned by
+ * the limiter as it reads them, so the table stays small without a separate
+ * job.
+ */
+export const loginAttempts = pgTable('login_attempts', {
+  id: text('id').primaryKey(),
+  /** Lowercased email as submitted. Scopes the per-email limit; it is a login
+   *  identifier, not proof anyone owns the address. */
+  email: text('email').notNull(),
+  ip: text('ip').notNull(),
+  attemptedAt: timestamp('attempted_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index('login_attempts_email_idx').on(table.email, table.attemptedAt),
+  index('login_attempts_ip_idx').on(table.ip, table.attemptedAt),
+]);
+
+/**
+ * Enrolled passkey credentials — SIP-9 secp256r1 signers.
+ *
+ * The public key column is the reason this table exists, and it is the single
+ * most important detail in the passkey design.
+ *
+ * WebAuthn returns a credential's public key exactly once, in the attestation
+ * at creation. A later assertion — an actual signature — returns the signature
+ * and the credential id, and no key. So a server that did not store the key at
+ * enrolment cannot identify which Sui address just signed. The SDK's own
+ * workaround for that situation is `PasskeyKeypair.signAndRecover` plus
+ * `findCommonPublicKey`: sign two different messages, recover the candidate
+ * keys from each, and intersect them. That is two extra user gestures and a
+ * guess, on the approval path, to recover something we were handed for free
+ * once and threw away.
+ *
+ * So: persist it at enrolment, and never need recovery.
+ *
+ * `sui_address` is derived from the public key at enrolment and stored beside
+ * it. It is not a cache — it is what an approval is checked against, and
+ * recomputing it per request would mean the check depends on the derivation
+ * being stable forever rather than on a value we committed to.
+ *
+ * One credential per origin per user. A person may hold a passkey for
+ * localhost and another for the production host — those are different
+ * credentials at the WebAuthn level and cannot be interchanged — but not two
+ * for the same origin, because then "which key approved this" has more than
+ * one answer.
+ */
+export const passkeyCredentials = pgTable('passkey_credentials', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  /** WebAuthn credential id, base64url. Returned on every assertion, so it is
+   *  how an incoming signature is matched to a stored key. */
+  credentialId: text('credential_id').notNull(),
+  /** 33-byte compressed secp256r1 point, base64. Captured at creation because
+   *  the authenticator will never send it again. */
+  publicKey: text('public_key').notNull(),
+  /** Derived from the public key at enrolment, with the SIP-9 0x06 flag. The
+   *  address an approval's sender must equal. */
+  suiAddress: text('sui_address').notNull(),
+  /**
+   * The WebAuthn relying-party id this credential is bound to.
+   *
+   * A credential enrolled on `localhost` cannot be used on `v1.splashz.xyz`:
+   * the browser scopes it to the rpId and simply will not offer it elsewhere.
+   * Storing it makes that visible — a credential that cannot be used on the
+   * current host is a row we can explain rather than a silent absence.
+   */
+  rpId: text('rp_id').notNull(),
+  /** Set when the credential is retired. Revocation is a tombstone, not a
+   *  delete: an approval already anchored on chain names this credential, and
+   *  removing the row would orphan that evidence. */
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+  ...timestamps,
+}, (table) => [
+  uniqueIndex('passkey_credentials_credential_unique').on(table.credentialId),
+  /* One ACTIVE credential per origin, not one row ever. An unconditional
+     unique index would let a revoked row occupy the origin permanently, so
+     revoking would lock the user out of re-enrolling — the opposite of what a
+     tombstone is for. Postgres partial index: the constraint applies only
+     where revoked_at IS NULL. */
+  uniqueIndex('passkey_credentials_active_user_rp_unique')
+    .on(table.userId, table.rpId)
+    .where(sql`${table.revokedAt} is null`),
+  index('passkey_credentials_address_idx').on(table.suiAddress),
 ]);
 
 /**

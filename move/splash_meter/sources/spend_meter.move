@@ -293,13 +293,22 @@ public fun remaining_at(meter: &SpendMeter, now_ms: u64): u64 {
     if (now_start > meter.head_start_ms) {
         let elapsed = (now_start - meter.head_start_ms) / BUCKET_MS;
         if (elapsed >= BUCKETS) return effective_window_cap(meter, now_ms);
-        // Buckets that survive are those NOT overwritten by the roll.
+        // Buckets that survive are those NOT overwritten by the roll: the
+        // newest `BUCKETS - elapsed`, counted BACKWARDS from the head.
+        //
+        // Counting FORWARDS from the head — which this did until the Phase 6
+        // review — wraps onto the `elapsed` oldest buckets, exactly the ones
+        // the roll is about to zero, and skips the same number of live ones.
+        // The error hides whenever the skipped bucket is empty, and shows as
+        // an OVER-report of free capacity when it is not, so the off-chain
+        // batcher sizes a run the chain then refuses. `charge` was never
+        // affected: it calls the real `roll_forward` and sums all 24.
         let mut total = 0;
-        let mut offset = elapsed;
-        while (offset < BUCKETS) {
-            let idx = (meter.head + offset + BUCKETS - elapsed) % BUCKETS;
+        let mut j = 0;
+        while (j < BUCKETS - elapsed) {
+            let idx = (meter.head + BUCKETS - j) % BUCKETS;
             total = total + *meter.buckets.borrow(idx);
-            offset = offset + 1;
+            j = j + 1;
         };
         let cap = effective_window_cap(meter, now_ms);
         return if (total >= cap) 0 else cap - total

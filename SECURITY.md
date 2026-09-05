@@ -78,7 +78,7 @@ testnet SUI/DBUSDC pool `0x1c19362c…`.
 
 | ID | Sev | Finding | Status |
 |----|-----|---------|--------|
-| S-10 | Medium | Every routine attestation (`peg_monitor::update_peg`, `audit_anchor::anchor_audit_hash`, `receipt_v2::create_receipt`, `smart_treasury::emit_rebalance`) required `&AdminCap` — the same cap that authorizes withdrawals. Because the peg daemon must sign every ~30s, `AdminCap` could never move to the cold 2-of-3 multisig, so a compromised operator host held full money authority. **Fixed**: new `AttestationCap` (`key` only, no `store` — non-transferable, minted/destroyed by `AdminCap`) gates the four non-financial writes; `AdminCap` keeps withdraw/allocate/redeem/config only. | Fixed |
+| S-10 | Medium | Every routine attestation (`peg_monitor::update_peg`, `audit_anchor::anchor_audit_hash`, `receipt_v2::create_receipt`, `smart_treasury::emit_rebalance`) required `&AdminCap` — the same cap that authorizes withdrawals. Because the peg daemon must sign every ~30s, `AdminCap` could never move to the cold 2-of-3 multisig, so a compromised operator host held full money authority. **Fixed**: new `AnchorCap` (`key` only, no `store` — non-transferable, minted/destroyed by `AdminCap`) gates the four non-financial writes; `AdminCap` keeps withdraw/allocate/redeem/config only. | Fixed |
 | S-11 | High | `peg_monitor::assert_deepbook_liquidity` rejected **100% of batches regardless of liquidity**, via two independent bugs: (a) it required `remaining_base == 0`, unsatisfiable on a lot-quantized book whose input-fee quote path also deducts the taker fee from the input — measured remainder was ~0.098 SUI at every size from 1.1 to 5.0; (b) slippage was priced against the *requested* quantity, charging the unfilled dust as if it executed at zero, turning a real 56 bps into a reported 809 bps and tripping `E_SLIPPAGE_EXCEEDED` on a healthy pool. **Fixed**: require `filled/requested >= MIN_FILL_BPS` (9,000) and price the filled base. Arithmetic pinned in `tests/deepbook-liquidity-guard.test.mjs`. | Fixed (needs republish) |
 | S-12 | Medium | `settle_batch` calls `assert_deepbook_liquidity` against pooled funds — exactly the repurposing **S-09** warns against. The pool argument is operator-supplied and DeepBook pools are permissionlessly creatable, so a compromised operator could stand up a pool, seed it with their own liquidity, and satisfy the depth and slippage asserts trivially while draining the shared `SettlementPool`. **Fixed**: `ComplianceConfig.allowed_deepbook_pools: VecSet<ID>` (non-empty, capped at `MAX_ALLOWED_POOLS = 8`, mutated only through `allow_pool` / `disallow_pool`, each emitting its own event); `assert_deepbook_liquidity` now calls `assert_pool_allowed(config, object::id(pool))` **before reading a single field off the pool** (abort 353). Off-chain preflight in `lib/server/sui-settlement.ts::assertDeepbookPoolWhitelisted` blocks a mismatched `DEEPBOOK_POOL_ID` before the PTB is built; encoding semantics pinned in `tests/deepbook-pool-whitelist.test.mjs`. | Fixed (needs republish) |
 
@@ -237,15 +237,34 @@ one PTB.
 
 | Address | Holds | A compromise yields |
 |---|---|---|
-| **M** cold 2-of-3 multisig | `AdminCap` | Everything *metered* — bounded per window, only to fixed recipients; raising a ceiling costs 48h of public notice. Cannot drain the pool: `settle_batch_delegated` needs a delegation M does not hold. |
-| **H** hot operator server | `AttestationCap`, gas key, tenants' delegations | False peg readings and forged anchors — an integrity problem, not a solvency one. Payouts only to addresses a tenant already named, bounded by two meters. |
+| **M** cold 2-of-3 multisig | `TreasuryCap` | Everything *metered* — bounded per window, only to fixed recipients; raising a ceiling costs 48h of public notice. Cannot drain the pool: `settle_batch_delegated` needs a delegation M does not hold. |
+| **A** governance multisig | `AdminCap` | KYB verification and its withdrawal, compliance-side account freezing, per-account ceilings, limit and allowlist changes, guardian minting, anchor-cap rotation. **Moves no value at all** — `scripts/check-treasury-cap.mjs` fails the build if an `AdminCap` function learns to split a balance. |
+| **H** hot operator server | `AnchorCap`, gas key, tenants' delegations | False peg readings and forged anchors — an integrity problem, not a solvency one. Payouts only to addresses a tenant already named, bounded by two meters. |
 | **G** guardian host, separate machine | `GuardianCap` | Denial of service. Zero coins, by construction. |
-| **C** compliance custodian | `ComplianceCap` | Pause, or a widened DeepBook whitelist. Moves no funds. |
+| **C** compliance custodian | `ComplianceCap` | Pause, a tightening, or removing a venue. **Cannot loosen anything** — subtractive by type, enforced by `scripts/check-compliance-subtractive.mjs`. Moves no funds. |
 
-**May `AdminCap` and `AttestationCap` share an address? No — never.**
-`AttestationCap` exists *because* `update_peg` fires every ~30s, roughly 2,880
-signatures a day from an internet-facing host. Co-locating the money authority
-there is precisely the condition A-12 records.
+Phase 6 split **M** in two. `AdminCap` used to be both the money key and the
+governance key, so a governance action needed the money ceremony and the
+answer to "who can move funds?" was thirty-odd functions. `TreasuryCap` is now
+the only capability through which value leaves a custodial object; `AdminCap`
+governs and cannot spend.
+
+**Every revocable capability can now be killed (Phase 7).** `AnchorCap` and
+`ComplianceCap` carry a generation checked against a shared `CapRegistry` on
+every use, and `AdminCap` can bump it — which mints one replacement and kills
+every outstanding cap of that kind in the same transaction. That closes the two
+holes Phase 6 created and named: a LOST anchor cap no longer bricks anchoring
+in an immutable package, and a STOLEN cap no longer relies on "off-chain
+rejection of the retired id", which was a hope rather than a control. There is
+no timelock and `cap_registry`'s module comment argues why at length.
+`AdminCap` and `TreasuryCap` have no generation — they are multisig-held, and
+`AdminCap` is the key that arms every break-glass, so it cannot be the subject
+of one.
+
+**May `AdminCap` and `AnchorCap` share an address? No — never.**
+`AnchorCap` exists *because* `update_peg` fires every ~30s, roughly 2,880
+signatures a day from an internet-facing host. Co-locating money or governance
+authority there is precisely the condition A-12 records.
 
 **They currently do.** `attestationCapObjectId()` fell back to `adminCapId`, and
 `.env.example` shipped `SPLASH_ATTESTATION_CAP_ID` empty. **Fixed in this
@@ -361,8 +380,8 @@ what follows survived.
 | A-08 | Medium | `perTransferLimitUsd` / `dailyLimitUsd` / `approvalThresholdUsd` / `requireDualApproval` were persisted, cross-checked and rendered — and enforced nowhere. **Fixed**: enforced in both routes; daily volume summed from the ledger. | Fixed |
 | A-09 | Medium | `settle_batch` looped an unbounded caller vector (one event + one created Coin per row) under a flat 10,000,000 MIST budget. Above ~1,023 rows Sui's 1,024-event / 1,024-command ceilings make it unexecutable at any budget. **Fixed**: `MAX_BATCH_ROWS = 256` (abort 108), gas scales with row count. | Fixed |
 | A-10 | High | `ComplianceConfig.paused` gates `settle_payment`/`settle_batch`, but the live customer path is `payment_intent::confirm_payment_intent`, which imports neither `compliance_config` nor `peg_monitor` — pausing halted batches while transfers kept executing. **Mitigated off-chain** (both routes check `paused`); the chain-side guard needs the republish. | Mitigated |
-| A-11 | High | **Nothing bounds an `AdminCap` call.** `withdraw_fees`, `smart_treasury::withdraw`, `allocate` (whose `operating_minimum` is a caller-supplied `u64` — pass `0`) and `settle_batch` have no amount cap, velocity limit, cooldown or timelock. One PTB signed with the operator key drains the pool, the fees and the treasury. This is the Step Finance shape exactly. | **Open** |
-| A-12 | High | The S-10 cap split is **not in effect at runtime**: `attestationCapObjectId()` falls back to `adminCapId`, `.env.example` ships `SPLASH_ATTESTATION_CAP_ID=` empty, and `recordBatchSettlementOnSui` passes `SPLASH_ADMIN_CAP_ID` directly. The hot key is still the money authority until the ceremony runs. | **Open** |
+| A-11 | High | **Nothing bounds an `AdminCap` call.** `withdraw_fees`, `smart_treasury::withdraw`, `allocate` (whose `operating_minimum` is a caller-supplied `u64` — pass `0`) and `settle_batch` have no amount cap, velocity limit, cooldown or timelock. One PTB signed with the operator key drains the pool, the fees and the treasury. This is the Step Finance shape exactly. | **Mitigated** — `splash_meter` bounds pooled outflow per window with asymmetric limit changes; Phase 6 moved every value-out function off `AdminCap` onto `TreasuryCap` (five functions, enforced by `scripts/check-treasury-cap.mjs`) and gave each business account a 24h ceiling. Not closed: the ceilings are still parameters someone with the right cap can raise, and `allocate`'s caller-supplied floor is unchanged. |
+| A-12 | High | The S-10 cap split is **not in effect at runtime**: `anchorCapObjectId()` fell back to `adminCapId`, `.env.example` shipped the key empty, and `recordBatchSettlementOnSui` passed `SPLASH_ADMIN_CAP_ID` directly. The hot key is still the money authority until the ceremony runs. | **Open** — the fallback is gone (an unset `SPLASH_ANCHOR_CAP_ID` now stops the peg refresh rather than borrowing the money key), and Phase 6 removed the reason it mattered most by moving value out of `AdminCap` entirely. Still open until the republish and the ceremony actually run. |
 | A-13 | High | Seal enforces no per-tenant policy: one global allowlist object, and the operator key decrypts every blob ever sealed. Seal also falls open to a hardcoded AES key while Walrus publishes for real. `/api/audit/[intentId]` has no ownership check. | **Open** |
 | A-14 | Medium | Batch rows are USD micro-units passed as SUI MIST on a `SettlementPool<SUI>`. $100 becomes 100,000,000 MIST = 0.1 SUI. Recipients are underpaid and the on-chain minimum is effectively disabled on that path. Correct for 6-decimal USDC; wrong for the 9-decimal SUI pool. Needs a product decision on what the SUI pool represents. | **Open** |
 | A-15 | Medium | No beneficiary screening on either payout path — Elliptic is referenced but is a stub, and the compliance engine is wired only to the 0xWal proposal route. Batch pays unscreened, caller-supplied raw Sui addresses. | **Open** |
@@ -635,12 +654,12 @@ There is no `paused: bool` field gated by AdminCap that would let operators halt
 
 ### L-04 · `business_account::submit_application` uses `#[allow(lint(self_transfer))]`
 **Severity**: Low
-**Status**: Open (design choice)
-**Location**: `move/sources/business_account.move:38-58`
+**Status**: **Fixed** (Phase 6)
+**Location**: `move/splash_core/sources/business_account.move`
 
-`BusinessAccount` is created and transferred to the caller as an owned object. Owned objects are harder to query in dashboards (need to iterate by address) and don't compose with other shared-object flows.
+`BusinessAccount` was created and transferred to the caller as an owned object. Owned objects are harder to query in dashboards (need to iterate by address) and don't compose with other shared-object flows.
 
-**Recommendation**: Consider making `BusinessAccount` a shared object with an `owner` field. Easier to query, easier to reference in `settle_payment` without ownership transfer juggling.
+**Fixed**: it is a shared object, and for a stronger reason than queryability. Phase 6 gave it plural `owners` and `approvers`, and an object several people must all touch cannot be owned by one of them. Because a shared object is nameable by anyone, no function infers authority from possession — every mutator checks the caller against the sets.
 
 ---
 

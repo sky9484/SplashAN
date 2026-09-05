@@ -17,7 +17,7 @@
  */
 
 import { deriveYieldMicros, spreadOnGain } from '@/lib/policy/yield-accrual';
-import { getTreasuryRate, getUsdyRedemptionPrice, navIsDecidable, quoteSwap } from './usdy';
+import { getUsdyRedemptionPrice, navIsDecidable, navPriceUsd, quoteSwap } from './usdy';
 
 export type UserTreasuryLedger = {
   userId: string;
@@ -42,7 +42,8 @@ export type WithdrawalNotice = {
 export type YieldSnapshot = {
   date: string;
   /** `null` when NAV was UNAVAILABLE — never a substituted default. */
-  redemptionPriceUsd: number | null;
+  /** Exact decimal string, or null when the NAV is unavailable. */
+  redemptionPriceUsd: string | null;
   /** Provenance for the price the accrual used, so a reader can age it. */
   navStatus: 'LIVE' | 'STALE' | 'UNAVAILABLE';
   navAsOf: string | null;
@@ -278,7 +279,7 @@ export async function accrueDailyYield(): Promise<YieldSnapshot> {
   if (previous === null) {
     return {
       date: new Date().toISOString().slice(0, 10),
-      redemptionPriceUsd: Number(nav.priceMicros) / 1_000_000,
+      redemptionPriceUsd: navPriceUsd(nav.priceMicros),
       navStatus: nav.status,
       navAsOf: nav.asOf,
       navSource: nav.source,
@@ -310,7 +311,7 @@ export async function accrueDailyYield(): Promise<YieldSnapshot> {
   const total = listLedgers().reduce((sum, l) => sum + l.treasuryPrincipalMicro, 0);
   return {
     date: new Date().toISOString().slice(0, 10),
-    redemptionPriceUsd: Number(nav.priceMicros) / 1_000_000,
+    redemptionPriceUsd: navPriceUsd(nav.priceMicros),
     navStatus: nav.status,
     navAsOf: nav.asOf,
     navSource: nav.source,

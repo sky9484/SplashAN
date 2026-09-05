@@ -24,9 +24,9 @@ const env = (k) => (process.env[k] ?? '').trim();
 const PACKAGE = env('SPLASH_PACKAGE_ID');
 const ADMIN_CAP = env('SPLASH_ADMIN_CAP_ID');
 /** Cap split (spec §5): attestations (peg push, audit anchor, receipts) run on
- *  the hot AttestationCap once it exists; before the fresh publish the deployed
+ *  the hot AnchorCap once it exists; before the fresh publish the deployed
  *  package still expects the AdminCap in that argument slot, so fall back. */
-const ATTESTATION_CAP = env('SPLASH_ATTESTATION_CAP_ID') || ADMIN_CAP;
+const ANCHOR_CAP = env('SPLASH_ANCHOR_CAP_ID') || ADMIN_CAP;
 const PEG_STATE = env('SPLASH_PEG_STATE_ID');
 const BUSINESS = env('SPLASH_BUSINESS_ACCOUNT_ID');
 const SMART_TREASURY = env('SPLASH_SMART_TREASURY_SUI_ID');
@@ -72,7 +72,7 @@ async function testPeg() {
   tx.setGasBudget('10000000');
   tx.moveCall({
     target: `${PACKAGE}::peg_monitor::update_peg`,
-    arguments: [tx.object(PEG_STATE), tx.object(ATTESTATION_CAP), tx.pure.u64(0), tx.pure.u64(0), tx.object(CLOCK)],
+    arguments: [tx.object(PEG_STATE), tx.object(ANCHOR_CAP), tx.pure.u64(0), tx.pure.u64(0), tx.object(CLOCK)],
   });
   const { digest } = await exec('peg refresh', tx);
   return { flow: 'Peg refresh', ok: true, digest };
@@ -137,7 +137,7 @@ async function testComposedConfirm(intentId) {
   tx.moveCall({
     target: `${PACKAGE}::audit_anchor::anchor_audit_hash`,
     arguments: [
-      tx.object(ATTESTATION_CAP),
+      tx.object(ANCHOR_CAP),
       tx.pure.string(auditHash),
       tx.pure.string(anchorId),
       tx.pure.string(blobId),
@@ -172,7 +172,7 @@ async function testBatch() {
   tx.setGasBudget('30000000');
   tx.moveCall({
     target: `${PACKAGE}::peg_monitor::update_peg`,
-    arguments: [tx.object(PEG_STATE), tx.object(ATTESTATION_CAP), tx.pure.u64(0), tx.pure.u64(0), tx.object(CLOCK)],
+    arguments: [tx.object(PEG_STATE), tx.object(ANCHOR_CAP), tx.pure.u64(0), tx.pure.u64(0), tx.object(CLOCK)],
   });
   const payments = rows.map((r) =>
     tx.moveCall({

@@ -75,27 +75,32 @@ fun grant_for(scenario: &mut test_scenario::Scenario, tenant: address, ttl_ms: u
     scenario.next_tx(tenant);
     {
         let ctx = scenario.ctx();
-        business_account::submit_application(b"SSM-1".to_string(), b"cid".to_string(), ctx);
+        let c = clock::create_for_testing(ctx);
+        business_account::submit_application(b"SSM-1".to_string(), b"cid".to_string(), &c, ctx);
+        c.destroy_for_testing();
     };
     scenario.next_tx(tenant);
     {
-        let mut account = scenario.take_from_sender<business_account::BusinessAccount>();
+        // Phase 6 made BusinessAccount a SHARED object — owners and approvers
+        // are plural now, and an object several people must touch cannot be
+        // owned by one of them.
+        let mut account = scenario.take_shared<business_account::BusinessAccount>();
         let ctx = scenario.ctx();
         let admin = business_account::admin_cap_for_testing(ctx);
         business_account::verify_business(&admin, &mut account, 10);
-        sui::test_utils::destroy(admin);
-        scenario.return_to_sender(account);
+        business_account::destroy_admin_cap_for_testing(admin);
+        test_scenario::return_shared(account);
     };
     scenario.next_tx(tenant);
     {
         let pool = scenario.take_shared<settlement::SettlementPool<SUI>>();
-        let account = scenario.take_from_sender<business_account::BusinessAccount>();
+        let account = scenario.take_shared<business_account::BusinessAccount>();
         let ctx = scenario.ctx();
         let mut c = clock::create_for_testing(ctx);
         c.set_for_testing(1_000 * DAY);
         settlement::grant_delegation(&pool, &account, OPERATOR, ttl_ms, PER_TX, WINDOW, &c, ctx);
         c.destroy_for_testing();
-        scenario.return_to_sender(account);
+        test_scenario::return_shared(account);
         test_scenario::return_shared(pool);
     };
 }
