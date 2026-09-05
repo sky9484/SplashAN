@@ -17,6 +17,14 @@ import { assertCleanBody, ProvenanceViolationError, provenanceViolationResponse 
 import { requireActiveOrg } from '@/lib/server/kyb-gate';
 import { readJsonBody } from '@/lib/server/http';
 import { requireSessionAccount } from '@/lib/server/session-account';
+import { readOrgSettings } from '@/lib/server/org-settings';
+import { verifyPayoutTotp } from '@/lib/auth/totp';
+import { readComplianceControls } from '@/lib/server/sui-settlement';
+import { checkAuthorizationLimits, startOfUtcDay } from '@/lib/policy/authorization-limits';
+import { listMovementsSince } from '@/lib/server/ledger-store';
+import { proposeForApproval } from '@/lib/server/dual-approval';
+import { resolveApprovalClaim } from '@/lib/server/approved-proposal';
+import { resolveAuthorityForSession } from '@/lib/auth/authority';
 import {
   cancelTreasuryWithdrawal,
   getLedger,
@@ -33,8 +41,10 @@ export const dynamic = 'force-dynamic';
 
 const toUsd = (micro: number) => Math.round(micro / 10_000) / 100;
 
-function snapshot(accountId: string) {
-  const ledger = getLedger(accountId);
+/** Keyed by ORG. Keyed by accountId, every tenant read the same demo ledger.
+ *  See lib/server/treasury.ts for why that fell through. */
+function snapshot(orgId: string) {
+  const ledger = getLedger(orgId);
   const rate = getTreasuryRate();
   return {
     available: toUsd(ledger.availableMicro),
@@ -61,8 +71,7 @@ export async function GET(request: Request) {
 
   const accountCheck = await requireSessionAccount(auth.session);
   if (accountCheck.response) return accountCheck.response;
-  const { accountId } = accountCheck.account;
-  return NextResponse.json(snapshot(accountId));
+  return NextResponse.json(snapshot(accountCheck.account.orgId));
 }
 
 export async function POST(request: Request) {
@@ -89,8 +98,11 @@ export async function POST(request: Request) {
   // single shared demo ledger, so every tenant read and mutated the same object.
   const accountCheck = await requireSessionAccount(auth.session);
   if (accountCheck.response) return accountCheck.response;
-  const { accountId } = accountCheck.account;
-  const ledger = getLedger(accountId);
+  const { accountId, orgId } = accountCheck.account;
+  // The ledger belongs to the ORG. Keyed by accountId it fell through to a
+  // single shared demo ledger for every tenant — see lib/server/treasury.ts.
+  const ledger = getLedger(orgId);
+  const settings = await readOrgSettings(orgId);
 
   // Cancel a still-pending withdrawal — returns reserved funds to Treasury.
   if (body.action === 'cancel') {
@@ -101,7 +113,7 @@ export async function POST(request: Request) {
     } catch (error) {
       return NextResponse.json({ error: (error as Error).message }, { status: 400 });
     }
-    return NextResponse.json(snapshot(accountId));
+    return NextResponse.json(snapshot(orgId));
   }
 
   const amountUsd = Number(body.amountUsd);
@@ -109,6 +121,96 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'amountUsd must be a positive number' }, { status: 400 });
   }
   const amountMicro = Math.round(amountUsd * 1_000_000);
+
+  // Everything below this line was missing.
+  //
+  // This route moved value with NO payout controls at all: no second factor,
+  // no per-transfer or daily ceiling, no compliance pause, no approval. Any
+  // authenticated member could move or withdraw any amount, and the ceilings
+  // an operator had configured in Settings simply did not apply here. Moving
+  // principal into and out of a yield-bearing treasury is a money movement;
+  // it was the only one on the product that nothing governed.
+
+  const totpVerdict = verifyPayoutTotp({
+    code: String(body.totp ?? ''),
+    accountId,
+    requireTotp: settings.requireTotp,
+  });
+  if (!totpVerdict.ok) {
+    return NextResponse.json(
+      { error: totpVerdict.message, code: `totp_${totpVerdict.code}` },
+      { status: 400 },
+    );
+  }
+
+  // The chain-side pause governs settlement; a treasury allocation that
+  // moves customer principal while compliance has stopped the desk should
+  // stop with it.
+  const controls = await readComplianceControls();
+  if (controls.paused) {
+    return NextResponse.json(
+      { error: 'Settlement is paused by the compliance operator.', code: 'settlement_paused' },
+      { status: 503 },
+    );
+  }
+
+  // The same ceilings and the same durable ledger the payment paths use, so
+  // a daily cap cannot be walked around by routing the money through the
+  // treasury instead.
+  const todaysMovements = await listMovementsSince(orgId, startOfUtcDay(Date.now()));
+  const limits = checkAuthorizationLimits({
+    amountUsd,
+    settings,
+    ledger: todaysMovements.map((line) => ({
+      direction: line.direction,
+      amountUsdcMicro: Number(line.amountMinor),
+      createdAt: line.createdAt,
+    })),
+  });
+  if (!limits.ok) {
+    return NextResponse.json(
+      { error: limits.message, code: limits.code, limitUsd: limits.limitUsd },
+      { status: 400 },
+    );
+  }
+
+  const approvalClaim = await resolveApprovalClaim(request, orgId);
+  if (limits.requiresSecondApproval && !approvalClaim.approved) {
+    const maker = await resolveAuthorityForSession(auth.session);
+    const proposal = await proposeForApproval({
+      orgId,
+      createdBy: maker.userId,
+      kind: 'PAYMENT',
+      amountUsd: amountUsd.toFixed(2),
+      targetCurrency: 'USD',
+      recommendation:
+        `${body.action === 'withdraw' ? 'Withdraw' : 'Allocate'} ${amountUsd.toFixed(2)} USD ` +
+        `${body.action === 'withdraw' ? 'from' : 'to'} Smart Treasury. Above the ` +
+        `${settings.approvalThresholdUsd} USD dual-approval threshold.`,
+      passedChecks: [
+        { source: 'COMPLIANCE', ref: 'KYB org state is ACTIVE, settlement not paused' },
+        { source: 'BALANCE', ref: `Ceilings, ${limits.spentTodayUsd} USD spent today` },
+        { source: 'TREASURY', ref: `Smart Treasury ${String(body.action)}` },
+      ],
+      payload: { action: body.action, amountUsd: body.amountUsd, totp: body.totp },
+      idempotencyKey: `treasury:${orgId}:${String(body.action)}:${amountUsd.toFixed(2)}`,
+      approvalThresholdUsd: settings.approvalThresholdUsd,
+    });
+    return NextResponse.json(
+      {
+        error:
+          `${amountUsd.toFixed(2)} USD is at or above the ${settings.approvalThresholdUsd} approval ` +
+          (proposal
+            ? 'threshold. It is now in the approval queue and needs a second approver.'
+            : 'threshold. The approval queue could not be reached — try again.'),
+        code: 'requires_second_approval',
+        approvalThresholdUsd: settings.approvalThresholdUsd,
+        proposalId: proposal?.id ?? null,
+        queueUrl: proposal ? '/queue' : null,
+      },
+      { status: 409 },
+    );
+  }
 
   try {
     if (body.action === 'move') {
@@ -122,5 +224,5 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: (error as Error).message }, { status: 400 });
   }
 
-  return NextResponse.json(snapshot(accountId));
+  return NextResponse.json(snapshot(orgId));
 }

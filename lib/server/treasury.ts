@@ -85,8 +85,34 @@ function seedDemo(): UserTreasuryLedger {
   return seeded;
 }
 
+/**
+ * One org's treasury ledger.
+ *
+ * This used to be `ledgers.get(userId) ?? seedDemo()`, and `seedDemo()` only
+ * ever writes the `demo-business` key. So EVERY org that was not the demo
+ * one fell through to the demo ledger — and every mutation then ran against
+ * `ledger.userId`, which was `'demo-business'`. One shared treasury: any
+ * tenant could move or withdraw another tenant's principal, and the balance
+ * on every dashboard was the same balance.
+ *
+ * An unknown org now gets a ledger OF ITS OWN, starting at zero. Zero is the
+ * honest opening balance for a treasury nobody has funded; the alternative
+ * was showing them somebody else's money.
+ */
 export function getLedger(userId: string = DEMO_USER): UserTreasuryLedger {
-  return ledgers.get(userId) ?? seedDemo();
+  const existing = ledgers.get(userId);
+  if (existing) return existing;
+  if (userId === DEMO_USER) return seedDemo();
+
+  const fresh: UserTreasuryLedger = {
+    userId,
+    availableMicro: 0,
+    treasuryPrincipalMicro: 0,
+    treasuryYieldMicro: 0,
+    updatedAt: new Date().toISOString(),
+  };
+  ledgers.set(userId, fresh);
+  return fresh;
 }
 
 export function listLedgers(): UserTreasuryLedger[] {
