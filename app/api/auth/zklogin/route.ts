@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { ensureWorkspaceForEmail } from '@/lib/auth/signup-org';
 import { z } from 'zod';
 
 import { isKilledEntityEmail } from '@/lib/auth/killed-entities';
@@ -10,7 +11,6 @@ import {
   zkLoginEnabled,
   deriveZkLoginAddress,
 } from '@/lib/auth/zklogin';
-import { DEFAULT_ORG_ID } from '@/lib/auth/authority';
 import { ensureUserForIdentity, upsertWalletIdentity } from '@/lib/db/wallet-identities';
 import { createCustomerSessionFromIdentity } from '@/lib/auth/customer-session';
 import { setCustomerSessionCookie } from '@/lib/server/customer-auth';
@@ -88,10 +88,21 @@ export async function POST(request: Request) {
         const { getDb } = await import('@/lib/db/client');
         const db = getDb() as never;
         const userId = `op_${email}`;
-        await ensureUserForIdentity(db, { userId, orgId: DEFAULT_ORG_ID, email });
+        // Their OWN workspace, in REGISTERED.
+        //
+        // This used to be DEFAULT_ORG_ID — the literal 'demo-business' — so
+        // every person who signed in with Google was filed under one shared
+        // organisation. The damage was bounded by an accident rather than a
+        // decision: zkLogin grants no membership and authority is read from the
+        // membership row, so a new signer could authorise nothing. But their
+        // identity and their Sui address sat in the demo org's namespace, and
+        // the moment anyone granted them a role they would have landed inside
+        // it.
+        const workspace = await ensureWorkspaceForEmail(email);
+        await ensureUserForIdentity(db, { userId, orgId: workspace.orgId, email });
         await upsertWalletIdentity(db, {
           userId,
-          orgId: DEFAULT_ORG_ID,
+          orgId: workspace.orgId,
           suiAddress,
           oauthIss: claims.iss,
           oauthSub: claims.sub,
@@ -109,10 +120,15 @@ export async function POST(request: Request) {
       }
     }
 
+    // The session's org is the signer's own workspace, resolved the same way
+    // the identity row was. The cookie is display-only by contract — authority
+    // is re-read from the membership table per request — but a cookie naming
+    // the demo org would still show the wrong workspace name on every screen.
+    const sessionWorkspace = await ensureWorkspaceForEmail(email);
     const session = createCustomerSessionFromIdentity({
       email,
       suiAddress,
-      orgId: DEFAULT_ORG_ID,
+      orgId: sessionWorkspace.orgId,
       fallbackOrganization: process.env.CUSTOMER_ORGANIZATION,
     });
     const refreshed = await setCustomerSessionCookie(session, { remember });
