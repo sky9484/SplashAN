@@ -659,7 +659,9 @@ function corePackageIdOrThrow(): string {
 /**
  * Resolve the CUSTODY package, or explain why it does not exist.
  *
- * Under the Labuan MFCA licence Splash cannot hold client funds, so
+ * Splash cannot hold client funds — enforced structurally rather than by a
+ * licence condition, and a precondition for operating before an e-money
+ * licence exists. So
  * splash_custody — every struct that holds a `Balance<T>` — is NOT PUBLISHED.
  * This is not a feature flag: the bytecode is absent, so there is nothing to
  * flip and nothing to bypass. The error names the licence rather than reporting

@@ -4,8 +4,10 @@ Splash Finance is a B2B cross-border settlement prototype for SEA exporters, mar
 
 ## Architecture
 
-Splash operates under Labuan MFCA and **cannot hold client funds**. That is not a
-runtime flag — it is a property of the type system. `splash_core`, the package
+Splash holds no financial-services licence today; a Labuan FSA money-broking
+application is in preparation with counsel. Splash **cannot hold client funds** —
+a constraint that is self-imposed rather than licence-derived, and not a runtime
+flag either: it is a property of the type system. `splash_core`, the package
 that publishes to mainnet, contains no struct that can hold a `Balance`. Every
 struct that can lives in `splash_custody`, which is **not published** until the
 e-money licence is granted.

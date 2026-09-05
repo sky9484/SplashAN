@@ -104,7 +104,7 @@ sui client publish --gas-budget 500000000
 ```
 
 **Do NOT publish `splash_custody`.** It holds every `Balance<T>` in the system, and the
-Labuan MFCA licence does not permit holding client funds. Leaving it unpublished is the
+Splash holds no licence permitting it to hold client funds. Leaving it unpublished is the
 control: there is no flag to flip, because the bytecode does not exist on chain. It
 publishes when the e-money licence is granted — see `STATUS.md`.
 

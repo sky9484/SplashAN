@@ -1,7 +1,7 @@
 # Splash — mainnet cutover status
 
 **Target:** Sui mainnet, week 2 September 2026
-**Governing constraint:** Labuan MFCA — Splash **cannot hold client funds**.
+**Governing constraint:** Splash **cannot hold client funds** — self-imposed, enforced by the type system and by CI, and a precondition for operating before an e-money licence exists. No licence is held today.
 E-money tier (RM 1.5M, Labuan money broking paras 6.1 + 6.2) is Phase 1.
 
 ---
