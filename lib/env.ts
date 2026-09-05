@@ -343,6 +343,12 @@ export const envSchema = z.object({
    *  given, which behind a proxy is not the URL the request arrives at — so
    *  signature verification uses this when set, and the request URL when not. */
   TWILIO_WEBHOOK_URL: optional,
+
+  /** Signs Sumsub's inbound webhooks. Without it the KYB verdict endpoint
+   *  refuses every request, which is the correct direction: an unverified
+   *  webhook could launder an unchecked business into the state a human
+   *  signs off on the basis that a provider already checked it. */
+  SUMSUB_WEBHOOK_SECRET: optional,
   MEMWAL_PRIVATE_KEY: optional,
   MEMWAL_ACCOUNT_ID: objectId,
   MEMWAL_SERVER_URL: url,

@@ -1,6 +1,8 @@
 import { createHash, randomBytes } from 'crypto';
 import { NextResponse } from 'next/server';
 
+import { resolveAuthorityForSession, UnauthorizedError } from '@/lib/auth/authority';
+import { setOrgKybState } from '@/lib/compliance/org-kyb';
 import { requireCustomerRequest } from '@/lib/server/customer-auth';
 import { recordKybSubmission, type KybDocumentRecord } from '@/lib/server/kyb';
 
@@ -58,9 +60,34 @@ export async function POST(request: Request) {
   );
   const kybCase = recordKybSubmission({ caseId: kybCaseId, businessName: legalName, registrationNumber, documents });
 
+  // Advance the ORG, not just the case.
+  //
+  // Nothing anywhere called `setOrgKybState` with KYB_SUBMITTED, so the
+  // lifecycle could never leave REGISTERED however many documents were
+  // uploaded. An onboarding flow whose first step does not change the state
+  // it exists to change is a form that files paperwork into a drawer.
+  //
+  // SYSTEM is the only actor permitted to make this transition: a provider
+  // cannot declare a business submitted, and an admin signing it off is a
+  // later, separate step. That separation is the point of the machine.
+  let lifecycle: string | null = null;
+  try {
+    const ctx = await resolveAuthorityForSession(auth.session);
+    const moved = await setOrgKybState(ctx.orgId, 'KYB_SUBMITTED', 'SYSTEM');
+    lifecycle = moved.to;
+  } catch (error) {
+    // A membership-less session can still upload — it is the state a brand-new
+    // sign-up is in, and refusing their documents would make onboarding
+    // impossible. The documents are recorded; the org transition waits.
+    if (!(error instanceof UnauthorizedError)) {
+      console.error('[kyb] documents recorded but the org state did not advance', error);
+    }
+  }
+
   return NextResponse.json({
     kybCaseId,
     state: kybCase.state,
+    lifecycle,
     documents,
   });
 }
