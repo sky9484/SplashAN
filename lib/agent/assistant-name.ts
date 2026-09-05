@@ -84,6 +84,11 @@ export async function rememberAssistantName(input: unknown): Promise<{
  * that returns nothing usable simply means the default name.
  */
 export async function recallAssistantName(orgId: string): Promise<string> {
+  // Without an org there is nothing to anchor recall to, and an empty id would
+  // turn the `org ${orgId}` filter below into a substring that matches every
+  // org's memory — one workspace's chosen name answering in another's chat.
+  if (!orgId.trim()) return DEFAULT_ASSISTANT_NAME;
+
   try {
     const { recallMemories } = await import('@/lib/server/memwal');
     const memories = await recallMemories(`${MARKER} for org ${orgId}`, 5);

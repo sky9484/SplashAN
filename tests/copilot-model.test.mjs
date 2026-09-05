@@ -31,7 +31,6 @@ test('no file names a model id of its own', async () => {
   for (const file of [
     '../lib/agent/oxwal.ts',
     '../lib/server/copilot.ts',
-    '../app/api/copilot/chat/route.ts',
     '../lib/env.ts',
   ]) {
     const text = await readFile(new URL(file, import.meta.url), 'utf8');
@@ -44,15 +43,27 @@ test('no file names a model id of its own', async () => {
 });
 
 test('the stream reports who answered, not who we hoped would', async () => {
-  const route = await readFile(
-    new URL('../app/api/copilot/chat/route.ts', import.meta.url),
-    'utf8',
-  );
-  // The meta frame said `source: 'claude'` whenever a key was present — before
-  // the call was made, and with a broken model id that claim was always false.
-  assert.match(route, /attempting: apiKey \? 'claude' : 'grounded'/);
-  assert.match(route, /send\(\{ type: 'done', source: answeredBy \}\)/);
-  // Both fallback paths must correct it.
-  const fallbacks = route.match(/answeredBy = 'grounded'/g) ?? [];
-  assert.ok(fallbacks.length >= 2, 'every fallback path must record that it fell back');
+  // This property used to live in /api/copilot/chat, the second, tool-free
+  // agent. That route is gone and its surfaces now run the real one — so the
+  // property moved here rather than being deleted with the file. The bug it
+  // guards is not specific to a route: any stream that announces its backend
+  // before producing a token is announcing a hope.
+  const agent = await readFile(new URL('../lib/agent/oxwal.ts', import.meta.url), 'utf8');
+
+  // `meta` is emitted before a single token exists, so it may only say what is
+  // being TRIED. Naming the field `source` there is what let a claim about the
+  // past be made about the future.
+  assert.match(agent, /attempting: useLocal \? 'local' : 'claude'/);
+  assert.doesNotMatch(agent, /type: 'meta',\s+source:/);
+
+  // The outcome is stated after the turn, on every exit path.
+  const dones = agent.match(/yield \{ type: 'done', source: answeredBy \}/g) ?? [];
+  assert.ok(dones.length >= 2, 'every exit path must report who answered');
+
+  // And the fallback path must correct it, which is the case that was wrong:
+  // the model call threw, the planner answered, and the stream still said
+  // 'claude'.
+  assert.match(agent, /answeredBy = 'local';/);
+  // A scripted reply is neither.
+  assert.match(agent, /answeredBy = 'scripted';/);
 });

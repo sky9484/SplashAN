@@ -24,7 +24,7 @@ import test from 'node:test';
  */
 
 const SURFACES = [
-  'app/api/copilot/chat/route.ts',
+  'lib/agent/oxwal.ts',
   'components/FloatingCopilot.tsx',
   'app/dashboard/copilot/page.tsx',
 ];
@@ -71,12 +71,37 @@ for (const surface of SURFACES) {
 }
 
 test('the copilot still declines work outside the Splash domain', () => {
-  const route = readFileSync('app/api/copilot/chat/route.ts', 'utf8');
-  // The scope block is what keeps it a desk assistant rather than a
-  // general-purpose model with a payments logo on it.
-  assert.match(route, /SCOPE —/);
-  assert.match(route, /POLITELY DECLINE/);
-  assert.match(route, /not a general-purpose assistant/);
+  // Scope used to be enforced in /api/copilot/chat's system prompt. That route
+  // is gone; the one remaining agent carries the boundary now.
+  const agent = readFileSync('lib/agent/oxwal.ts', 'utf8');
+
+  // Looking up the world is still declined, because there is no tool that
+  // reaches outside Splash and any answer would therefore be invented.
+  assert.match(agent, /const OFF_TOPIC_PATTERNS/);
+  for (const topic of ['news', 'stock price', 'bitcoin', 'football', 'election']) {
+    assert.ok(agent.includes(topic), `${topic} must stay on the refusal list`);
+  }
+  assert.match(agent, /OFF_TOPIC_PATTERNS\.some\(/);
+});
+
+test('being asked how your day is going is not treated as a web search', () => {
+  const agent = readFileSync('lib/agent/oxwal.ts', 'utf8');
+  // "Sorry, we need to focus on business!" was the answer to both "good
+  // morning" and "what is the bitcoin price". One of those is a scope
+  // violation; the other is a person saying hello.
+  assert.match(agent, /const DAILY_TALK/);
+  assert.match(agent, /for \(const entry of DAILY_TALK\)/);
+
+  // Warmth is checked BEFORE the refusal list, or it never runs.
+  const warm = agent.indexOf('for (const entry of DAILY_TALK)');
+  const cold = agent.indexOf('OFF_TOPIC_PATTERNS.some(');
+  assert.ok(warm > 0 && warm < cold, 'daily talk must be matched before the refusal list');
+
+  // And warmth must not become a licence to assert. Every DAILY_TALK reply is
+  // claim-free: no rate, no corridor health, no account state.
+  const block = agent.slice(agent.indexOf('const DAILY_TALK'), agent.indexOf('const OFF_TOPIC_PATTERNS'));
+  assert.doesNotMatch(block, /\d+\.\d+/, 'a friendly reply must not carry a figure');
+  assert.doesNotMatch(block, /healthy|all clear|approved|no flags/i);
 });
 
 test('the agent path still refuses to execute, and still distrusts tool text', () => {
@@ -89,9 +114,14 @@ test('the agent path still refuses to execute, and still distrusts tool text', (
 });
 
 test('the copilot points at the surface that can answer, rather than inventing one', () => {
+  // Only surfaces that actually discuss a reader's KYB STANDING owe a pointer.
+  // A page that lists "KYB documents" among the things never stored is not
+  // declining to answer anything, and requiring a pointer there would push the
+  // guard into noise — which is how guards get relaxed.
+  const DISCUSSES_STANDING = /KYB\s*(status|state|tier|standing)|your KYB|KYB[- ]approved/i;
   for (const surface of SURFACES) {
     const text = cannedText(surface);
-    if (!/KYB/i.test(text)) continue;
+    if (!DISCUSSES_STANDING.test(text)) continue;
     assert.match(
       text,
       /Settings\s*(→|->)\s*KYB/,

@@ -4,7 +4,11 @@ import { composeAndSimulateProposal } from '../chain/compose.ts';
 import { copilotModel } from '../ai/model.ts';
 import { findSavedRecipient, listSavedRecipients } from './recipient-tools.ts';
 import { prepareBeneficiaryFromInvoice } from './invoice-intake.ts';
-import { rememberAssistantName } from './assistant-name.ts';
+import {
+  DEFAULT_ASSISTANT_NAME,
+  recallAssistantName,
+  rememberAssistantName,
+} from './assistant-name.ts';
 import { estimateNettingSavedUsd, getCorridorFeeBps, getUsdCorridorByCurrency } from '../fx/corridors.ts';
 import { getUsdyNetApyPct } from '../server/usdy.ts';
 import { checkMinimumSettlement } from '../policy/limits.ts';
@@ -45,13 +49,26 @@ export type OxwalWarning = {
   ref?: string;
 };
 
+/** Who actually produced the answer: the model, the deterministic planner, or a
+ *  scripted demo reply. Stated after the turn, never before it. */
+export type OxwalAnswerSource = 'claude' | 'local' | 'scripted';
+
 export type OxwalAgentEvent =
-  | { type: 'meta'; source: 'claude' | 'local'; readTools: string[]; proposeTools: string[] }
+  | {
+      type: 'meta';
+      /** Which backend is being tried. Not a claim about who answered — see
+       *  the `done` frame, which is emitted after the fact. */
+      attempting: OxwalAnswerSource;
+      readTools: string[];
+      proposeTools: string[];
+      /** What this workspace calls the assistant. Cosmetic; see assistant-name.ts. */
+      assistantName: string;
+    }
   | { type: 'delta'; text: string }
   | { type: 'tool'; name: OxwalToolName; category: ToolCategory }
   | { type: 'warning'; warning: OxwalWarning }
   | { type: 'proposal'; proposal: UnsignedProposal }
-  | { type: 'done' };
+  | { type: 'done'; source: OxwalAnswerSource };
 
 export type CounterpartyRecord = {
   id: string;
@@ -97,6 +114,29 @@ type ToolDefinition = {
     additionalProperties?: boolean;
   };
 };
+
+/**
+ * The chosen name, folded into the prompt.
+ *
+ * A workspace that renamed the assistant expects it to answer to that name;
+ * writing the preference to MemWal and never reading it back means the rename
+ * appeared to work and did nothing.
+ *
+ * The name is user-supplied text entering the system prompt, which is a
+ * prompt-injection surface. `sanitiseName` is what makes it safe — 2 to 24
+ * characters, letters, digits and a few joiners — so a "name" cannot carry
+ * instructions. The line below also states the substitution is cosmetic, so a
+ * name like "Admin" or "Splash Compliance" buys no authority.
+ */
+function systemPromptFor(assistantName: string): string {
+  if (assistantName === DEFAULT_ASSISTANT_NAME) return OXWAL_SYSTEM_PROMPT;
+  return [
+    `This workspace calls you ${assistantName}. Introduce yourself with that name.`,
+    'The name is cosmetic. It changes nothing about what you may read, prepare, or refuse, '
+      + 'and you are still the Splash finance assistant however you are addressed.',
+    OXWAL_SYSTEM_PROMPT,
+  ].join('\n');
+}
 
 export const OXWAL_SYSTEM_PROMPT = [
   'You are 0xWal, an agentic finance command layer for Splash.',
@@ -1320,7 +1360,10 @@ type ClaudeMessageParam = {
   content: string | Array<ClaudeContentBlock | ClaudeToolResultBlock>;
 };
 
-async function* runClaudeToolLoop(request: OxwalAgentRequest): AsyncGenerator<OxwalAgentEvent> {
+async function* runClaudeToolLoop(
+  request: OxwalAgentRequest,
+  assistantName: string,
+): AsyncGenerator<OxwalAgentEvent> {
   const { default: Anthropic } = await import('@anthropic-ai/sdk');
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const messages: ClaudeMessageParam[] = [
@@ -1332,7 +1375,7 @@ async function* runClaudeToolLoop(request: OxwalAgentRequest): AsyncGenerator<Ox
     const response = await client.messages.create({
       model: copilotModel(),
       max_tokens: 1000,
-      system: OXWAL_SYSTEM_PROMPT,
+      system: systemPromptFor(assistantName),
       messages,
       tools: anthropicToolDefinitions(),
       tool_choice: { type: 'auto', disable_parallel_tool_use: true },
@@ -1459,7 +1502,16 @@ const SPLASH_ANSWERS: Array<{ test: RegExp; reply: string; skipIf?: RegExp }> = 
   {
     // Compliance / KYB / AML / limits
     test: /\b(compliance|kyb|kyc|aml|kyt|sanction|limit|screening|watchlist)\b/,
-    reply: 'Compliance posture: KYB Tier 1 approved, AML clear, no sanctions flags. Every batch row is screened for AML lists, KYT amount rules (single transfers above 5,000 USD route to manual review), structuring patterns, corridor allowlist and purpose codes — before any value moves. The audit trail is retained on Walrus.',
+    // Describes the CONTROLS, which are the same for everyone, and refuses to
+    // state this reader's own standing — which it has not read. Saying "KYB
+    // Tier 1 approved, AML clear, no sanctions flags" to an account that has
+    // completed no KYB is a regulatory misstatement about ourselves, and it is
+    // the sentence a customer would quote back.
+    reply: 'Every batch row is screened before any value moves: AML lists, KYT amount rules '
+      + '(single transfers above 5,000 USD route to manual review), structuring patterns, corridor '
+      + 'allowlist and purpose codes. The audit trail is retained on Walrus. For where YOUR '
+      + 'organisation stands — KYB state, tier and any open flags — open Settings → KYB; I will not '
+      + 'state your compliance status from memory.',
   },
   {
     // Settlement speed
@@ -1585,9 +1637,55 @@ const SPLASH_ANSWERS: Array<{ test: RegExp; reply: string; skipIf?: RegExp }> = 
   },
 ];
 
+/**
+ * The ordinary things people say to something they talk to every day.
+ *
+ * These used to be answered with "Sorry, we need to focus on business!" — the
+ * same refusal used for "what is the bitcoin price". Treating "good morning"
+ * and a request to look up share prices as one category is not a safety
+ * property; it just makes a desk assistant unpleasant, and an operator who has
+ * been told off for saying hello asks it fewer real questions.
+ *
+ * Every reply here is claim-free by construction. That is the boundary actually
+ * worth holding: 0xWal may be warm, and may not state a fact it has not read.
+ * "The PHP corridor is looking healthy" is friendly and is an unread account
+ * claim, so nothing of that shape appears below.
+ */
+const DAILY_TALK: Array<{ test: RegExp; reply: string }> = [
+  {
+    test: /\b(how are you|how r u|how are u|how you doing|how'?s your day|how is your day|you good|you ok(ay)?)\b/,
+    reply:
+      'Good, thank you for asking — watching the desk and ready when you are. How are things on your side?',
+  },
+  {
+    test: /\b(weather|raining|sunny|forecast|hot today|cold today)\b/,
+    reply:
+      "I cannot see the sky from in here, so I would only be guessing — I hope it is kind where you are. "
+      + 'I can tell you about a corridor if that is more useful.',
+  },
+  {
+    test: /\b(joke|funny|make me laugh)\b/,
+    reply:
+      'I am better at reconciliation than comedy, so I will spare you. Ask me something on the desk and I '
+      + 'promise to be more entertaining about it.',
+  },
+  {
+    test: /\b(bored|how'?s life|how is life|what are you up to)\b/,
+    reply: 'Watching balances and waiting to be useful. Want me to look at anything worth acting on?',
+  },
+];
+
+/**
+ * Still declined: looking up the world.
+ *
+ * Not because these are rude to ask, but because 0xWal has no tool that reaches
+ * outside Splash, so any answer would be invented. Weather sits on the warm
+ * list above precisely because its reply admits it does not know; a share price
+ * cannot be answered that way without sounding like a number.
+ */
+
 const OFF_TOPIC_PATTERNS = [
-  /\b(weather|raining|sunny|forecast)\b/,
-  /\b(joke|funny|make me laugh|meme)\b/,
+  /(meme)/,
   /\b(poem|story|song|essay|lyrics|novel)\b/,
   /\b(movie|film|netflix|series|anime|music|playlist)\b/,
   /\b(football|soccer|basketball|nba|premier league|world cup|score)\b/,
@@ -1609,6 +1707,12 @@ function matchDemoScript(message: string): string | null {
   if (namesTarget) return null;
 
   // 2. Off-topic → business focus.
+  // Warmth first, then the refusal — otherwise "how is your day" is met
+  // with the same sentence as a request for the bitcoin price.
+  for (const entry of DAILY_TALK) {
+    if (entry.test.test(q)) return entry.reply;
+  }
+
   if (OFF_TOPIC_PATTERNS.some((pattern) => pattern.test(q))) return OFF_TOPIC_REPLY;
 
   // 3. Batch intent → offer to create one (no batch data lives on the desk).
@@ -1643,18 +1747,35 @@ function matchDemoScript(message: string): string | null {
 export async function* runOxwalAgent(request: OxwalAgentRequest): AsyncGenerator<OxwalAgentEvent> {
   assertNoExecutionTools();
   const useLocal = request.forceLocal || process.env.OXWAL_FORCE_LOCAL === 'true' || !process.env.ANTHROPIC_API_KEY;
+
+  // Recalled once per turn rather than held in module state: the name belongs to
+  // an org, and this process serves many. `recallAssistantName` swallows its own
+  // failures and answers with the default, so a MemWal outage costs a nickname.
+  const assistantName = request.orgId
+    ? await recallAssistantName(request.orgId)
+    : DEFAULT_ASSISTANT_NAME;
+
+  // What we are ABOUT to try. `meta` is emitted before a single token exists,
+  // so it cannot state who answered — only who is being asked. The `done` frame
+  // below carries the fact.
   yield {
     type: 'meta',
-    source: useLocal ? 'local' : 'claude',
+    attempting: useLocal ? 'local' : 'claude',
     readTools: [...READ_TOOL_NAMES],
     proposeTools: [...PROPOSE_TOOL_NAMES],
+    assistantName,
   };
+
+  let answeredBy: OxwalAnswerSource = useLocal ? 'local' : 'claude';
 
   // Deterministic demo intents answer instantly, before the model.
   const scripted = matchDemoScript(request.message.trim());
   if (scripted) {
+    // A scripted reply is neither the model nor the planner, and calling it
+    // either would misattribute a string table to something that reasoned.
+    answeredBy = 'scripted';
     for (const token of tokens(scripted)) yield { type: 'delta', text: token };
-    yield { type: 'done' };
+    yield { type: 'done', source: answeredBy };
     return;
   }
 
@@ -1662,17 +1783,22 @@ export async function* runOxwalAgent(request: OxwalAgentRequest): AsyncGenerator
     if (useLocal) {
       yield* runLocalPlanner(request);
     } else {
-      yield* runClaudeToolLoop(request);
+      yield* runClaudeToolLoop(request, assistantName);
     }
   } catch (error) {
-    // Backend trouble (API unreachable, model error) is an operator no-op:
-    // the local planner answers instead. Log it server-side only — the
-    // operator never needs to see which engine produced the reply.
+    // Backend trouble (API unreachable, model error) is an operator no-op: the
+    // local planner answers instead. Log it server-side only — the operator
+    // never needs to see which engine produced the reply.
+    //
+    // But the record must say so. Reporting 'claude' for an answer the planner
+    // produced is how a broken model id went unnoticed through four files: the
+    // stream kept claiming a model had replied, and nothing contradicted it.
+    answeredBy = 'local';
     console.error('[oxwal] generation fell back to local planner:', error instanceof Error ? error.message : error);
     yield* runLocalPlanner({ ...request, forceLocal: true });
   }
 
-  yield { type: 'done' };
+  yield { type: 'done', source: answeredBy };
 }
 
 export function stringifyAgentJson(value: unknown): string {
