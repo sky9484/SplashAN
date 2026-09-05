@@ -38,6 +38,28 @@ export const intentState = pgEnum('intent_state', [
   'AUTHORIZED', 'DEPOSIT_CONFIRMED', 'EXCHANGING', 'EXCHANGED', 'QUEUED', 'SETTLING', 'SETTLED',
   'SWEEPING', 'DISBURSED', 'CREDITED', 'FAILED', 'REFUNDING', 'REFUNDED', 'OPS_HOLD', 'COMPLIANCE_HOLD',
 ]);
+/** Individual or business. FATF R.16 requires different identifying data for each. */
+export const beneficiaryType = pgEnum('beneficiary_type', ['INDIVIDUAL', 'BUSINESS']);
+
+/**
+ * The identifier a corridor's banking system actually routes on.
+ *
+ * Not cosmetic: PH clears on a bank code through PESONet/InstaPay, the EU and
+ * UK on IBAN, GB domestic on sort code, and most of ASEAN on SWIFT plus a
+ * local account number. A beneficiary row that stores only "account number"
+ * cannot be paid in most of these corridors, which is the state this replaces.
+ */
+export const bankIdScheme = pgEnum('bank_id_scheme', [
+  'SWIFT_BIC',
+  'IBAN',
+  'LOCAL_BANK_CODE',
+  'GB_SORT_CODE',
+  'US_ROUTING_ABA',
+  'AU_BSB',
+  'IN_IFSC',
+  'PROXY_ID',
+]);
+
 export const screeningVerdict = pgEnum('screening_verdict', ['CLEAR', 'REVIEW', 'BLOCK', 'ERROR']);
 export const webhookStatus = pgEnum('webhook_status', ['RECEIVED', 'PROCESSED', 'FAILED', 'SKIPPED']);
 
@@ -240,6 +262,29 @@ export const walletIdentities = pgTable('wallet_identities', {
 ]);
 
 /** Suppliers — the relationship-first noun (today's "recipients"). */
+/**
+ * A beneficiary — the party who receives money.
+ *
+ * Until now this held a name, a country, a bank name, an optional SWIFT and an
+ * account reference. That is enough to display a row and not enough to pay
+ * anyone: a regulated cross-border payout needs the beneficiary's legal
+ * identity and address, the bank's routing identifier for that specific
+ * corridor, and — at the point of payment — a stated purpose and source of
+ * funds. Partners ask for all of it during onboarding, and FATF
+ * Recommendation 16 (the travel rule) requires the originator and beneficiary
+ * data to travel WITH the transfer, not sit in a file somewhere.
+ *
+ * The split is deliberate: identity and bank routing are properties of the
+ * BENEFICIARY and live here; purpose of payment, source of funds and the
+ * relationship are properties of a PAYMENT and live on `payment_intents`,
+ * because the same supplier can be paid for different reasons.
+ *
+ * Columns are nullable because an existing row predates them and because the
+ * required set differs by corridor. What is required is enforced in
+ * `lib/compliance/travel-rule.ts` per destination country, at the point the
+ * payment is authorized — not by the column definition, which cannot know the
+ * corridor.
+ */
 export const suppliers = pgTable('suppliers', {
   id: text('id').primaryKey(),
   orgId: text('org_id').notNull().references(() => organizations.id),
@@ -251,8 +296,53 @@ export const suppliers = pgTable('suppliers', {
   kybStatus: kybStatus('kyb_status').notNull().default('none'),
   /** Set when the counterparty claims a Splash account ("On Splash"). */
   claimedAt: timestamp('claimed_at', { withTimezone: true }),
+
+  // ── Legal identity (FATF R.16 beneficiary data) ──────────────────────────
+  /** INDIVIDUAL or BUSINESS. Decides which identity fields are required. */
+  beneficiaryType: beneficiaryType('beneficiary_type'),
+  /** Registered legal name, when it differs from the trading name in `name`. */
+  legalName: text('legal_name'),
+  /** Company registration number (BUSINESS) — SSM, UEN, DTI, NPWP and so on. */
+  registrationNumber: text('registration_number'),
+  /** Date of birth, ISO date (INDIVIDUAL). One of the R.16 identifiers. */
+  dateOfBirth: text('date_of_birth'),
+  /** National identity document number (INDIVIDUAL), where the corridor asks. */
+  nationalIdNumber: text('national_id_number'),
+
+  // ── Address. R.16 accepts an address as the originator identifier and most
+  //    SEA partners require the beneficiary's too. ISO 3166-1 alpha-2 country.
+  addressLine1: text('address_line1'),
+  addressLine2: text('address_line2'),
+  addressCity: text('address_city'),
+  addressState: text('address_state'),
+  addressPostalCode: text('address_postal_code'),
+  addressCountry: text('address_country'),
+
+  // ── Bank routing ─────────────────────────────────────────────────────────
+  /** Which identifier the destination banking system routes on. */
+  bankIdScheme: bankIdScheme('bank_id_scheme'),
+  /** The value for `bankIdScheme` — a BIC, an IBAN, a local bank code, a sort code. */
+  bankIdValue: text('bank_id_value'),
+  /** Branch code, where the corridor separates it from the bank code (SG, TH). */
+  bankBranchCode: text('bank_branch_code'),
+  /** ISO 3166-1 alpha-2 of the BANK, which is not always the beneficiary's. */
+  bankCountry: text('bank_country'),
+  /** Local account number, when the scheme is not itself the account (IBAN is). */
+  bankAccountNumber: text('bank_account_number'),
+  /** Account holder name exactly as the bank has it, for name-matching checks. */
+  bankAccountName: text('bank_account_name'),
+
+  // ── KYT / screening, the last result for this beneficiary ────────────────
+  screeningVerdict: screeningVerdict('screening_verdict'),
+  screenedAt: timestamp('screened_at', { withTimezone: true }),
+  /** Provider's reference, so a verdict can be re-fetched and audited. */
+  screeningReference: text('screening_reference'),
+
   ...timestamps,
-}, (table) => [index('suppliers_org_idx').on(table.orgId)]);
+}, (table) => [
+  index('suppliers_org_idx').on(table.orgId),
+  index('suppliers_screening_idx').on(table.screeningVerdict),
+]);
 
 export const invoices = pgTable('invoices', {
   id: text('id').primaryKey(),
@@ -303,6 +393,24 @@ export const paymentIntents = pgTable('payment_intents', {
   failedAtState: text('failed_at_state'),
   demo: boolean('demo').notNull().default(false),
   idempotencyKey: text('idempotency_key'),
+
+  // ── Travel-rule context that belongs to the PAYMENT, not the beneficiary ──
+  /** Purpose-of-payment code. BNM, BSP and BI all require one on inbound wires. */
+  purposeCode: text('purpose_code'),
+  /** Free-text purpose, shown to the partner alongside the code. */
+  purposeDescription: text('purpose_description'),
+  /** Where the money came from — required above threshold in most corridors. */
+  sourceOfFunds: text('source_of_funds'),
+  /** Payer's relationship to the beneficiary (supplier, employee, intragroup). */
+  beneficiaryRelationship: text('beneficiary_relationship'),
+  /**
+   * The originator and beneficiary data as transmitted, frozen at authorization.
+   *
+   * A snapshot, not a join: R.16 is about what travelled WITH the payment, and
+   * a beneficiary edited next week must not change what this payment carried.
+   */
+  travelRuleSnapshot: jsonb('travel_rule_snapshot'),
+
   ...timestamps,
 }, (table) => [
   index('intents_org_idx').on(table.orgId),
