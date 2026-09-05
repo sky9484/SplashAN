@@ -8,12 +8,13 @@ import { checkMinimumSettlement } from '@/lib/policy/limits';
 import { MAX_BATCH_ROWS } from '@/lib/policy/batch-limits';
 import { checkAuthorizationLimits, startOfUtcDay } from '@/lib/policy/authorization-limits';
 import { verifyPayoutTotp } from '@/lib/auth/totp';
-import { readOperatingSettings } from '@/lib/server/operating-settings';
+import { readOrgSettings } from '@/lib/server/org-settings';
 import { requireCustomerRequest } from '@/lib/server/customer-auth';
 import { readJsonBody } from '@/lib/server/http';
 import { buildBatch } from '@/lib/server/operations';
 import { claimBatch, patchBatch } from '@/lib/server/batches-store';
 import { proposeForApproval } from '@/lib/server/dual-approval';
+import { resolveApprovalClaim } from '@/lib/server/approved-proposal';
 import { resolveAuthorityForSession } from '@/lib/auth/authority';
 import { listMovementsSince } from '@/lib/server/ledger-store';
 import { readComplianceControls, recordBatchSettlementOnSui } from '@/lib/server/sui-settlement';
@@ -72,7 +73,7 @@ export async function POST(request: Request) {
   const accountCheck = await requireSessionAccount(auth.session);
   if (accountCheck.response) return accountCheck.response;
   const { accountId, orgId } = accountCheck.account;
-  const settings = readOperatingSettings();
+  const settings = await readOrgSettings(orgId);
 
   // Real second factor. This was `/^\d{6}$/` — `000000` authorized a payroll run
   // out of the shared SettlementPool.
@@ -123,7 +124,12 @@ export async function POST(request: Request) {
   if (!limits.ok) {
     return NextResponse.json({ error: limits.message, code: limits.code, limitUsd: limits.limitUsd }, { status: 400 });
   }
-  if (limits.requiresSecondApproval) {
+  // An approval already collected for THIS payment lifts the second-approver
+  // requirement and nothing else. Verified against the proposal store, never
+  // taken from the header: a client that could assert its own approval would
+  // be a considerably worse hole than the one dual approval closes.
+  const approvalClaim = await resolveApprovalClaim(request, orgId);
+  if (limits.requiresSecondApproval && !approvalClaim.approved) {
     // Same dead end as the single-transfer path, and it matters more here:
     // a batch is many payouts under one authorization, so an operator with
     // nowhere to submit it splits the file instead.

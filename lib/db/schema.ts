@@ -503,6 +503,61 @@ export const orgPolicies = pgTable('org_policies', {
   ...timestamps,
 });
 
+/**
+ * The operating dials, PER ORG.
+ *
+ * These lived in one JSON file with no org id, and `PUT /api/settings` was
+ * guarded by `requireCustomerRequest` alone — no role check. So any signed-in
+ * user of any tenant could set `requireDualApproval` to false for everybody.
+ * The maker-checker control, the per-transfer ceiling and the daily ceiling all
+ * read that file. A control a payer can switch off is not a control.
+ */
+export const orgSettings = pgTable('org_settings', {
+  orgId: text('org_id').primaryKey().references(() => organizations.id),
+  /** Whole USD — policy dials a human types, not amounts that get multiplied. */
+  perTransferLimitUsd: integer('per_transfer_limit_usd').notNull().default(50_000),
+  dailyLimitUsd: integer('daily_limit_usd').notNull().default(250_000),
+  approvalThresholdUsd: integer('approval_threshold_usd').notNull().default(10_000),
+  autoAllocateTreasuryPct: integer('auto_allocate_treasury_pct').notNull().default(1),
+  requireTotp: boolean('require_totp').notNull().default(true),
+  requireDualApproval: boolean('require_dual_approval').notNull().default(true),
+  blockHighRiskCorridors: boolean('block_high_risk_corridors').notNull().default(true),
+  notifyOnSettlement: boolean('notify_on_settlement').notNull().default(true),
+  /** 'code' — a one-time code typed back into Splash, so approving needs the
+   *  phone AND a live authenticated session. 'reply' — APPROVE/REJECT in the
+   *  chat, which authenticates a handset rather than a person. */
+  approvalChannel: text('approval_channel').notNull().default('code'),
+  whatsappEnabled: boolean('whatsapp_enabled').notNull().default(false),
+  /** A limit that moved without a name attached is a limit nobody can ask about. */
+  updatedBy: text('updated_by'),
+  ...timestamps,
+});
+
+/**
+ * An approver's WhatsApp number, bound to a user identity.
+ *
+ * A phone number is not an identity. WhatsApp authenticates a handset, and a
+ * reply proves possession of a device rather than the intent of a person. So a
+ * reply is accepted only when its number resolves to a row here, and the
+ * approval is recorded against that USER — never against the number.
+ */
+export const approverChannels = pgTable('approver_channels', {
+  id: text('id').primaryKey(),
+  orgId: text('org_id').notNull().references(() => organizations.id),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  /** E.164, normalised on write. */
+  whatsappE164: text('whatsapp_e164'),
+  /** Proven by a round trip before it may approve anything — an unverified
+   *  number is a number somebody typed, and typos route approvals to strangers. */
+  verifiedAt: timestamp('verified_at', { withTimezone: true }),
+  ...timestamps,
+}, (table) => [
+  uniqueIndex('approver_channels_user_org_unique').on(table.orgId, table.userId),
+  /** One number, one person. Two approvers sharing a handset would make "two
+   *  approvers agreed" mean one person pressed a button twice. */
+  uniqueIndex('approver_channels_number_unique').on(table.whatsappE164),
+]);
+
 export const proposals = pgTable('proposals', {
   id: text('id').primaryKey(),
   orgId: text('org_id').notNull().references(() => organizations.id),
@@ -524,6 +579,17 @@ export const proposals = pgTable('proposals', {
   version: bigint('version', { mode: 'number' }).notNull().default(1),
   approvalHash: text('approval_hash'),
   expiresAt: timestamp('expires_at', { withTimezone: true }),
+  /** The payment this rebuilds into once approved. On the row, not in a
+   *  process map: an approval that survives a restart must still be
+   *  executable, and the thing approved and the thing executed must be one
+   *  record rather than two that can drift. */
+  executionPayload: jsonb('execution_payload'),
+  /** The attempt, including a failure — so an approval that could not be
+   *  carried out is visible rather than silent. Distinct from `settlement`,
+   *  which holds the chain result. */
+  executionState: text('execution_state'),
+  executionError: text('execution_error'),
+  executedAt: timestamp('executed_at', { withTimezone: true }),
   ...timestamps,
 }, (table) => [
   index('proposals_org_idx').on(table.orgId),

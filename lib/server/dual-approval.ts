@@ -155,6 +155,10 @@ export async function proposeForApproval(
       expiresAt: new Date(Date.parse(createdAt) + APPROVAL_WINDOW_MS).toISOString(),
       approvals: [],
       settlement: undefined,
+      // On the proposal, so an approval that outlives this process can still
+      // be carried out, and so the thing approved and the thing executed are
+      // one record rather than two that can drift.
+      executionPayload: input.payload,
     };
 
     const stored = store.create(proposal);

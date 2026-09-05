@@ -15,6 +15,7 @@ import { readOriginator } from '@/lib/server/originator';
 import { patchInvoice } from '@/lib/server/invoices-store';
 import { patchAuditReceipt, patchTransfer, persistTransfer } from '@/lib/server/transfers-store';
 import { proposeForApproval } from '@/lib/server/dual-approval';
+import { resolveApprovalClaim } from '@/lib/server/approved-proposal';
 import { resolveAuthorityForSession } from '@/lib/auth/authority';
 import { pythAdapter } from '@/lib/server/pyth';
 import { calculateQuote } from '@/lib/server/quote';
@@ -33,7 +34,7 @@ import { requireActiveOrg } from '@/lib/server/kyb-gate';
 import { checkMinimumSettlement } from '@/lib/policy/limits';
 import { checkAuthorizationLimits, startOfUtcDay } from '@/lib/policy/authorization-limits';
 import { verifyPayoutTotp } from '@/lib/auth/totp';
-import { readOperatingSettings } from '@/lib/server/operating-settings';
+import { readOrgSettings } from '@/lib/server/org-settings';
 import { readComplianceControls } from '@/lib/server/sui-settlement';
 import { isForeignAccountId, requireSessionAccount } from '@/lib/server/session-account';
 import { readJsonBody } from '@/lib/server/http';
@@ -113,7 +114,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'businessAccountId does not belong to this organization' }, { status: 403 });
   }
 
-  const settings = readOperatingSettings();
+  // This org's dials, not a global file. The file version had no org id and
+  // its route had no role check, so any signed-in user could switch dual
+  // approval off for every tenant and then send whatever they liked.
+  const settings = await readOrgSettings(orgId);
 
   // Second factor. This used to be `/^\d{6}$/` and nothing else — any six
   // digits authorized a payout. `requireTotp` is now load-bearing: when it is
@@ -216,7 +220,12 @@ export async function POST(request: Request) {
   if (!limits.ok) {
     return NextResponse.json({ error: limits.message, code: limits.code, limitUsd: limits.limitUsd }, { status: 400 });
   }
-  if (limits.requiresSecondApproval) {
+  // An approval already collected for THIS payment lifts the second-approver
+  // requirement and nothing else. Verified against the proposal store, never
+  // taken from the header: a client that could assert its own approval would
+  // be a considerably worse hole than the one dual approval closes.
+  const approvalClaim = await resolveApprovalClaim(request, orgId);
+  if (limits.requiresSecondApproval && !approvalClaim.approved) {
     // This used to answer 409 telling the operator to "submit it through the
     // approval queue", and put nothing in the approval queue. A control that
     // stops work without offering the sanctioned path is one people route
