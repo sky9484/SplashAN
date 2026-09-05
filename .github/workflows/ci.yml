@@ -57,6 +57,9 @@ jobs:
       - name: test — batch parser
         run: npm run test:batch
 
+      - name: test — environment contract
+        run: npm run test:env
+
       - name: production build
         env:
           NEXT_TELEMETRY_DISABLED: '1'
