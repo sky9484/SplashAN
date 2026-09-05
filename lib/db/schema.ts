@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import {
   bigint,
   boolean,
@@ -136,6 +137,75 @@ export const loginAttempts = pgTable('login_attempts', {
 }, (table) => [
   index('login_attempts_email_idx').on(table.email, table.attemptedAt),
   index('login_attempts_ip_idx').on(table.ip, table.attemptedAt),
+]);
+
+/**
+ * Enrolled passkey credentials — SIP-9 secp256r1 signers.
+ *
+ * The public key column is the reason this table exists, and it is the single
+ * most important detail in the passkey design.
+ *
+ * WebAuthn returns a credential's public key exactly once, in the attestation
+ * at creation. A later assertion — an actual signature — returns the signature
+ * and the credential id, and no key. So a server that did not store the key at
+ * enrolment cannot identify which Sui address just signed. The SDK's own
+ * workaround for that situation is `PasskeyKeypair.signAndRecover` plus
+ * `findCommonPublicKey`: sign two different messages, recover the candidate
+ * keys from each, and intersect them. That is two extra user gestures and a
+ * guess, on the approval path, to recover something we were handed for free
+ * once and threw away.
+ *
+ * So: persist it at enrolment, and never need recovery.
+ *
+ * `sui_address` is derived from the public key at enrolment and stored beside
+ * it. It is not a cache — it is what an approval is checked against, and
+ * recomputing it per request would mean the check depends on the derivation
+ * being stable forever rather than on a value we committed to.
+ *
+ * One credential per origin per user. A person may hold a passkey for
+ * localhost and another for the production host — those are different
+ * credentials at the WebAuthn level and cannot be interchanged — but not two
+ * for the same origin, because then "which key approved this" has more than
+ * one answer.
+ */
+export const passkeyCredentials = pgTable('passkey_credentials', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  /** WebAuthn credential id, base64url. Returned on every assertion, so it is
+   *  how an incoming signature is matched to a stored key. */
+  credentialId: text('credential_id').notNull(),
+  /** 33-byte compressed secp256r1 point, base64. Captured at creation because
+   *  the authenticator will never send it again. */
+  publicKey: text('public_key').notNull(),
+  /** Derived from the public key at enrolment, with the SIP-9 0x06 flag. The
+   *  address an approval's sender must equal. */
+  suiAddress: text('sui_address').notNull(),
+  /**
+   * The WebAuthn relying-party id this credential is bound to.
+   *
+   * A credential enrolled on `localhost` cannot be used on `v1.splashz.xyz`:
+   * the browser scopes it to the rpId and simply will not offer it elsewhere.
+   * Storing it makes that visible — a credential that cannot be used on the
+   * current host is a row we can explain rather than a silent absence.
+   */
+  rpId: text('rp_id').notNull(),
+  /** Set when the credential is retired. Revocation is a tombstone, not a
+   *  delete: an approval already anchored on chain names this credential, and
+   *  removing the row would orphan that evidence. */
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+  ...timestamps,
+}, (table) => [
+  uniqueIndex('passkey_credentials_credential_unique').on(table.credentialId),
+  /* One ACTIVE credential per origin, not one row ever. An unconditional
+     unique index would let a revoked row occupy the origin permanently, so
+     revoking would lock the user out of re-enrolling — the opposite of what a
+     tombstone is for. Postgres partial index: the constraint applies only
+     where revoked_at IS NULL. */
+  uniqueIndex('passkey_credentials_active_user_rp_unique')
+    .on(table.userId, table.rpId)
+    .where(sql`${table.revokedAt} is null`),
+  index('passkey_credentials_address_idx').on(table.suiAddress),
 ]);
 
 /**

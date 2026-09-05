@@ -203,6 +203,18 @@ export const envSchema = z.object({
   ZKLOGIN_MICROSOFT_CLIENT_ID: optional,
   ZKLOGIN_USER_SALT: optional,
 
+  /**
+   * WebAuthn relying-party id. A credential is bound to it and the browser
+   * will not offer it on any other host, so a passkey enrolled on localhost
+   * cannot be used on v1.splashz.xyz. Decided once per environment; changing
+   * it after anyone has enrolled orphans every existing credential.
+   *
+   * Deliberately configuration rather than derived from the request Host —
+   * an attacker who could influence that header could otherwise enrol a
+   * credential under an rpId they control.
+   */
+  PASSKEY_RP_ID: optional,
+
   /* KYB and compliance. lib/compliance/*. */
   FEATURE_KYB_GATE: flag('false'),
   SUMSUB_APP_TOKEN: optional,

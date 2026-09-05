@@ -8144,3 +8144,105 @@ button.iso-product-row {
   padding: 40px 24px;
   text-align: center;
 }
+
+/* ─── Security settings: the approval signer ──────────────────────────────
+   Enrolment only. There is no approve control here and there should not be
+   one until the Move entry point exists. */
+.iso-settings {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 48px 24px 80px;
+}
+
+.iso-settings-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--iso-teal);
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+.iso-settings-back svg { width: 16px; height: 16px; }
+
+.iso-settings-head { margin: 26px 0 30px; }
+
+.iso-settings-head h1 {
+  margin: 10px 0 14px;
+  color: var(--iso-ink);
+  font-size: clamp(28px, 3.2vw, 38px);
+  font-weight: 900;
+  letter-spacing: -.03em;
+  line-height: 1.05;
+}
+
+.iso-settings-head > p {
+  max-width: 60ch;
+  color: var(--iso-text-secondary);
+  font-size: 15px;
+  line-height: 1.65;
+}
+
+.iso-settings-block {
+  border: 1px solid var(--iso-line);
+  border-radius: 14px;
+  padding: 26px;
+  background: #fffdf9;
+  box-shadow: var(--iso-lift-1);
+}
+
+.iso-passkey { display: grid; gap: 12px; }
+
+.iso-passkey-status {
+  color: var(--iso-ink);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+/* The derived Sui address. Mono and tabular so it can be compared character by
+   character against what an explorer shows. */
+.iso-passkey-address {
+  overflow-wrap: anywhere;
+  color: var(--iso-teal);
+  font-family: var(--font-mono), monospace;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums slashed-zero;
+}
+
+.iso-passkey-note {
+  max-width: 62ch;
+  color: var(--iso-text-muted);
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+
+.iso-passkey-enrol,
+.iso-passkey-revoke {
+  justify-self: start;
+  border-radius: 10px;
+  padding: 12px 20px;
+  font-size: 14.5px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.iso-passkey-enrol {
+  border: 1px solid #8d6428;
+  color: var(--iso-teal-dark);
+  background: var(--iso-gold);
+}
+
+.iso-passkey-revoke {
+  border: 1px solid rgba(12, 62, 72, .28);
+  color: var(--iso-ink);
+  background: transparent;
+}
+
+.iso-passkey-enrol:disabled,
+.iso-passkey-revoke:disabled { opacity: .6; cursor: default; }
+
+.iso-passkey-error {
+  color: var(--error);
+  font-size: 13.5px;
+  font-weight: 650;
+}
