@@ -1,5 +1,5 @@
-import { createPayLinkSlug, readAuditReceipt, type AuditReceipt, type TransferIntentRecord } from './operations';
-import { readTransferForStaff } from './transfers-store';
+import { createPayLinkSlug, type AuditReceipt, type TransferIntentRecord } from './operations';
+import { readAuditReceiptForStaff, readTransferForStaff } from './transfers-store';
 
 /**
  * W9.2 — tokenized read-only receipt links ("Share with supplier").
@@ -60,5 +60,9 @@ export async function findReceiptShare(token: string): Promise<{
   if (!record) return null;
   const intent = await readTransferForStaff(record.transferIntentId);
   if (!intent) return null;
-  return { intent, audit: readAuditReceipt(record.transferIntentId), display: record.display };
+  return {
+    intent,
+    audit: await readAuditReceiptForStaff(record.transferIntentId),
+    display: record.display,
+  };
 }

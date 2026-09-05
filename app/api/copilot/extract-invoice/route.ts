@@ -4,7 +4,8 @@ import { z } from 'zod';
 import { parseInvoice, type CopilotSuggestion } from '@/lib/server/copilot';
 import { requireCustomerRequest } from '@/lib/server/customer-auth';
 import { readJsonBody } from '@/lib/server/http';
-import { readInvoice, updateAuditReceipt } from '@/lib/server/operations';
+import { readInvoice } from '@/lib/server/operations';
+import { patchAuditReceipt } from '@/lib/server/transfers-store';
 import { sealAdapter } from '@/lib/server/seal';
 import { retrieveBlob } from '@/lib/server/walrus';
 
@@ -40,6 +41,6 @@ export async function POST(request: Request) {
     requiresAuth: true,
     suggestedAction: `deliveryTier:${deliveryTier}`,
   };
-  if (invoice.transferIntentId) updateAuditReceipt(invoice.transferIntentId, { extractionSnapshot: extraction });
+  if (invoice.transferIntentId) await patchAuditReceipt(invoice.transferIntentId, { extractionSnapshot: extraction });
   return NextResponse.json({ extraction, suggestion });
 }

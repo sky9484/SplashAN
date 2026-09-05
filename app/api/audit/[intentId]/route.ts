@@ -3,16 +3,18 @@ import { NextResponse } from 'next/server';
 
 import { verifyStoredSettlementEvidence } from '@/lib/evidence/settlement';
 import { requireCustomerRequest } from '@/lib/server/customer-auth';
-import { readAuditReceipt, readInvoice, readSweepJob } from '@/lib/server/operations';
+import { readInvoice, readSweepJob } from '@/lib/server/operations';
 import { requireSessionAccount } from '@/lib/server/session-account';
-import { readTransfer } from '@/lib/server/transfers-store';
+import { readAuditReceipt, readTransfer } from '@/lib/server/transfers-store';
 import { readSealPolicy, sealAdapter } from '@/lib/server/seal';
 import { retrieveBlob } from '@/lib/server/walrus';
 
 /** Scoped to the caller's org: an audit trail is as sensitive as the payment. */
 async function auditView(orgId: string, intentId: string) {
   const transfer = await readTransfer(orgId, intentId);
-  const receipt = readAuditReceipt(intentId);
+  // Composed from that same transfer, so the digest on the trail is the
+  // digest on the payment by construction rather than by agreement.
+  const receipt = await readAuditReceipt(orgId, intentId);
   if (!transfer || !receipt) return null;
   const invoice = receipt.invoiceId ? readInvoice(receipt.invoiceId) : null;
   const sweepJob = receipt.sweepJobId ? readSweepJob(receipt.sweepJobId) : null;

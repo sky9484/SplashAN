@@ -9,10 +9,9 @@ import {
   createRecipient,
   createTransferIntent,
   getLedgerBalance,
-  updateAuditReceipt,
   updateInvoice,
 } from '@/lib/server/operations';
-import { patchTransfer, persistTransfer } from '@/lib/server/transfers-store';
+import { patchAuditReceipt, patchTransfer, persistTransfer } from '@/lib/server/transfers-store';
 import { pythAdapter } from '@/lib/server/pyth';
 import { calculateQuote } from '@/lib/server/quote';
 import { completeDeliveryForTransfer } from '@/lib/server/sweep';
@@ -321,7 +320,7 @@ export async function POST(request: Request) {
     );
   }
   recordLastUsedFundingSource(businessAccountId, fundingSelection.source);
-  updateAuditReceipt(intent.id, {
+  await patchAuditReceipt(intent.id, {
     approvedBy: 'dashboard-operator',
     approvedAt: new Date().toISOString(),
   });
@@ -356,22 +355,16 @@ export async function POST(request: Request) {
           effectiveSlippageBps: intent.fundingEffectiveSlippageBps,
         },
       });
+      // This was two writes into two stores — the settlement fields into the
+      // transfer, then eleven of the same fields again into the audit receipt.
+      // Two records holding one fact, free to disagree the moment one write
+      // landed and the other did not. The receipt is now composed from this
+      // row, so there is one write and nothing to reconcile.
       await patchTransfer(intent.id, {
         state: 'SETTLED',
         suiTxDigest: result.digest,
         verificationReference: result.digest,
         receiptObjectId: result.auditAnchorObjectId ?? undefined,
-        paymentIntentId: result.intentId,
-        intentCreateDigest: result.intentCreateDigest,
-        walrusBlobId: result.walrus.blobId,
-        sealPolicyId: result.sealPolicy.policyId,
-        auditHash: result.auditHash,
-        auditAnchorId: result.auditAnchorObjectId ?? undefined,
-        smartTreasuryId: result.smartTreasuryId ?? undefined,
-        composedActions: result.composedActions,
-      });
-      updateAuditReceipt(intent.id, {
-        suiTxDigest: result.digest,
         paymentIntentId: result.intentId,
         intentCreateDigest: result.intentCreateDigest,
         walrusBlobId: result.walrus.blobId,

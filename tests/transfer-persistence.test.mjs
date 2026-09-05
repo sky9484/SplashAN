@@ -233,16 +233,59 @@ test('the repository carries an orgId on every read, not an optional filter', as
   assert.doesNotMatch(source, /orgId\?: string/, 'an optional orgId is an unscoped read');
 });
 
+// ── The audit receipt is a view, not a second record ──────────────────
+
+test('the reconstructed history is the history that used to be appended', async () => {
+  const { client, db } = await migratedDb();
+  await insertTransfer(db, transfer());
+
+  await patchTransfer(db, 'ti_1', { state: 'QUEUED' });
+  await patchTransfer(db, 'ti_1', { state: 'SETTLING' });
+  await patchTransfer(db, 'ti_1', { state: 'SETTLED', suiTxDigest: '0xabc' });
+
+  const { __testing: store } = await import('../lib/server/transfers-store.ts');
+  const row = await getTransfer(db, 'acme', 'ti_1');
+  const history = store.statusHistoryFrom(row, await listTransitions(db, 'ti_1'));
+
+  // `intent_transitions` records CHANGES, so it holds no row for the state a
+  // transfer was created in. The opening entry comes back from the transfer's
+  // own createdAt and the first transition's fromState — which is exactly what
+  // the appended version wrote.
+  assert.deepEqual(
+    history.map((entry) => entry.state),
+    ['AUTHORIZED', 'QUEUED', 'SETTLING', 'SETTLED'],
+  );
+  assert.equal(history[0].at, row.createdAt, 'the opening entry is dated by the transfer itself');
+  assert.ok(
+    history.every((entry) => typeof entry.at === 'string' && !Number.isNaN(Date.parse(entry.at))),
+    'every entry carries a real timestamp — the tracker renders these',
+  );
+  await client.close();
+});
+
+test('a transfer that has not moved yet still has an opening entry', async () => {
+  const { client, db } = await migratedDb();
+  await insertTransfer(db, transfer());
+
+  const { __testing: store } = await import('../lib/server/transfers-store.ts');
+  const row = await getTransfer(db, 'acme', 'ti_1');
+  const history = store.statusHistoryFrom(row, await listTransitions(db, 'ti_1'));
+
+  // No transitions at all: the opening state is the state it is in.
+  assert.deepEqual(history, [{ state: 'AUTHORIZED', at: row.createdAt }]);
+  await client.close();
+});
+
 // ── What the customer sees while the payment moves ──────────────────────────
 
 test('a state change advances the customer tracker, not only the database', async () => {
   // The in-process path: no DATABASE_URL, so the store writes to the map and
   // the mirror is the only thing keeping the receipt in step.
   delete process.env.DATABASE_URL;
-  const { createTransferIntent, readAuditReceipt } = await import(
-    '../lib/server/operations.ts'
+  const { createTransferIntent } = await import('../lib/server/operations.ts');
+  const { patchTransfer, persistTransfer, readAuditReceipt } = await import(
+    '../lib/server/transfers-store.ts'
   );
-  const { patchTransfer, persistTransfer } = await import('../lib/server/transfers-store.ts');
 
   const record = await persistTransfer(
     createTransferIntent({
@@ -258,7 +301,7 @@ test('a state change advances the customer tracker, not only the database', asyn
   await patchTransfer(record.id, { state: 'SETTLED' }); // a retried write
   await patchTransfer(record.id, { state: 'DISBURSED', suiTxDigest: '0xabc' });
 
-  const receipt = readAuditReceipt(record.id);
+  const receipt = await readAuditReceipt('acme', record.id);
   assert.deepEqual(
     receipt.statusHistory.map((entry) => entry.state),
     ['AUTHORIZED', 'SETTLED', 'DISBURSED'],
@@ -270,9 +313,77 @@ test('a state change advances the customer tracker, not only the database', asyn
 
 test('a patch against an id nobody has leaves no history behind', async () => {
   delete process.env.DATABASE_URL;
-  const { readAuditReceipt } = await import('../lib/server/operations.ts');
-  const { patchTransfer } = await import('../lib/server/transfers-store.ts');
+  const { patchTransfer, readAuditReceipt } = await import(
+    '../lib/server/transfers-store.ts'
+  );
 
   await patchTransfer('ti_does_not_exist', { state: 'SETTLED' });
-  assert.equal(readAuditReceipt('ti_does_not_exist'), null);
+  assert.equal(await readAuditReceipt('acme', 'ti_does_not_exist'), null);
+});
+
+test('one tenant cannot read another tenant’s audit trail', async () => {
+  delete process.env.DATABASE_URL;
+  const { createTransferIntent } = await import('../lib/server/operations.ts');
+  const { persistTransfer, readAuditReceipt } = await import(
+    '../lib/server/transfers-store.ts'
+  );
+
+  const record = await persistTransfer(
+    createTransferIntent({
+      orgId: 'acme',
+      recipientName: 'Mabuhay Logistics Inc',
+      targetCurrency: 'PHP',
+      targetAmount: '5642.00',
+    }),
+  );
+
+  assert.notEqual(await readAuditReceipt('acme', record.id), null);
+  assert.equal(
+    await readAuditReceipt('northwind', record.id),
+    null,
+    'a trail is as sensitive as the payment it describes',
+  );
+});
+
+test('receipt-only detail lands on the transfer, not in a second store', async () => {
+  const { client, db } = await migratedDb();
+  await insertTransfer(db, transfer());
+
+  // `approvedBy` / `evidence` are the fields the receipt owns alone. They have
+  // no column, so they ride in settlement_metadata alongside the settlement's
+  // own detail — one row, one write, nothing to reconcile.
+  await patchTransfer(db, 'ti_1', {
+    metadata: { approvedBy: 'dashboard-operator', evidence: { walrusBlobId: 'blob_1' } },
+  });
+
+  const read = await getTransfer(db, 'acme', 'ti_1');
+  assert.equal(read.metadata.approvedBy, 'dashboard-operator');
+  assert.deepEqual(read.metadata.evidence, { walrusBlobId: 'blob_1' });
+  assert.deepEqual(
+    read.metadata.sourceStablecoin,
+    'USDC',
+    'and the settlement detail already there survives the merge',
+  );
+  await client.close();
+});
+
+test('the receipt-only fields reach the receipt without a database too', async () => {
+  delete process.env.DATABASE_URL;
+  const { createTransferIntent } = await import('../lib/server/operations.ts');
+  const { patchAuditReceipt, persistTransfer, readAuditReceipt } = await import(
+    '../lib/server/transfers-store.ts'
+  );
+
+  const record = await persistTransfer(
+    createTransferIntent({
+      orgId: 'acme',
+      recipientName: 'Mabuhay Logistics Inc',
+      targetCurrency: 'PHP',
+      targetAmount: '5642.00',
+    }),
+  );
+  await patchAuditReceipt(record.id, { approvedBy: 'dashboard-operator' });
+
+  const receipt = await readAuditReceipt('acme', record.id);
+  assert.equal(receipt.approvedBy, 'dashboard-operator');
 });

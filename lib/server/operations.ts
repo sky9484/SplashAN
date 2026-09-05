@@ -626,19 +626,22 @@ export function readRateHold(holdId: string) {
   return operations.rateHolds.get(holdId) ?? null;
 }
 
-export function readAuditReceipt(intentId: string) {
-  return operations.auditReceipts.get(intentId) ?? null;
-}
+// `readAuditReceipt` and `updateAuditReceipt` are gone from here for the same
+// reason the transfer reads are: they took an intent id and no owner, so an
+// audit trail — which is as sensitive as the payment it describes — came back
+// to anyone who could name one. `lib/server/transfers-store.ts` composes the
+// receipt from the transfer's own row and its `intent_transitions`, scoped, and
+// spells cross-tenant reach `readAuditReceiptForStaff`.
+//
+// `findAuditReceiptByHash` went with them, unmourned: it scanned every tenant's
+// receipts for a hash and nothing had ever called it.
 
-export function updateAuditReceipt(intentId: string, patch: Partial<AuditReceipt>) {
+/** Demo seed only — the in-process map, never a real tenant's receipt. */
+function updateAuditReceipt(intentId: string, patch: Partial<AuditReceipt>) {
   const receipt = operations.auditReceipts.get(intentId) ?? { transferIntentId: intentId, statusHistory: [] };
   Object.assign(receipt, patch);
   operations.auditReceipts.set(intentId, receipt);
   return receipt;
-}
-
-export function findAuditReceiptByHash(auditHash: string) {
-  return [...operations.auditReceipts.values()].find((receipt) => receipt.auditHash === auditHash) ?? null;
 }
 
 export function recordAnalyticsEvent(name: string) {

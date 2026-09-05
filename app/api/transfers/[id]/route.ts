@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 
 import { requireCustomerRequest } from '@/lib/server/customer-auth';
-import { readAuditReceipt, readSweepJob } from '@/lib/server/operations';
+import { readSweepJob } from '@/lib/server/operations';
 import { requireSessionAccount } from '@/lib/server/session-account';
-import { readTransfer } from '@/lib/server/transfers-store';
+import { readAuditReceipt, readTransfer } from '@/lib/server/transfers-store';
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireCustomerRequest(request);
@@ -26,7 +26,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
   // W9.5 — the delivery timeline renders REAL per-stage timestamps from the
   // lifecycle audit trail, never timer-faked progress.
-  const statusHistory = readAuditReceipt(id)?.statusHistory ?? [];
+  // Scoped by the same org as the transfer above: the trail is as sensitive
+  // as the payment, and it is composed from that payment's own transitions.
+  const receipt = await readAuditReceipt(accountCheck.account.orgId, id);
+  const statusHistory = receipt?.statusHistory ?? [];
 
   return NextResponse.json({
     ...intent,

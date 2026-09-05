@@ -26,7 +26,7 @@
  * so granting it is a visible act at the call site rather than an argument
  * somebody forgot to pass.
  */
-import { operations, type TransferIntentRecord } from './operations.ts';
+import { operations, type AuditReceipt, type TransferIntentRecord } from './operations.ts';
 import * as repo from './repository/transfers.ts';
 
 let announced = false;
@@ -172,7 +172,17 @@ export async function listTransfersForStaff(limit = 200): Promise<TransferIntent
 }
 
 /**
- * Keep the audit receipt in step with the transfer.
+ * What one write to a transfer may carry.
+ *
+ * The transfer's own fields, plus the handful that belong to the audit receipt
+ * alone. They are one type because they are one row: the receipt is composed
+ * from the transfer (see below), so a settlement that records a digest and an
+ * evidence blob is a single write, not two into two stores that can disagree.
+ */
+export type TransferPatch = Partial<TransferIntentRecord> & Partial<ReceiptOnly>;
+
+/**
+ * Keep the in-process audit receipt in step with the transfer.
  *
  * `updateTransferIntent` carried this as a side effect, and deleting it froze
  * every transfer's status history at AUTHORIZED — the customer's tracker in
@@ -181,14 +191,14 @@ export async function listTransfersForStaff(limit = 200): Promise<TransferIntent
  * stuck at the first step.
  *
  * The durable record of a transition is the `intent_transitions` row the
- * repository writes. This mirrors it into the receipt store, which has not
- * moved to Postgres yet; when it does, this goes and the history is read back
- * from those rows instead.
+ * repository writes, and on the Postgres path the history is read back from
+ * those rows. This keeps the in-process backend — which has no transitions
+ * table and no jsonb to put the receipt-only fields in — telling the same story.
  *
  * Idempotent by construction: it appends only when the recorded head differs,
  * so a retried patch does not log the same state twice.
  */
-function mirrorToAuditReceipt(intentId: string, patch: Partial<TransferIntentRecord>): void {
+function mirrorToAuditReceipt(intentId: string, patch: TransferPatch): void {
   const receipt = operations.auditReceipts.get(intentId) ?? {
     transferIntentId: intentId,
     statusHistory: [],
@@ -198,12 +208,15 @@ function mirrorToAuditReceipt(intentId: string, patch: Partial<TransferIntentRec
   }
   if (patch.suiTxDigest) receipt.suiTxDigest = patch.suiTxDigest;
   if (patch.sweepJobId) receipt.sweepJobId = patch.sweepJobId;
+  for (const field of RECEIPT_ONLY_FIELDS) {
+    if (patch[field] !== undefined) (receipt as Record<string, unknown>)[field] = patch[field];
+  }
   operations.auditReceipts.set(intentId, receipt);
 }
 
 export async function patchTransfer(
   intentId: string,
-  patch: Partial<TransferIntentRecord>,
+  patch: TransferPatch,
   actor?: string,
 ): Promise<void> {
   if (!usingPostgres()) {
@@ -238,6 +251,150 @@ export async function patchTransfer(
   // must not leave a history entry for a transfer nobody has.
   if (row) mirrorToAuditReceipt(intentId, patch);
 }
+
+/* ─── The audit receipt ───────────────────────────────────────────────────────
+ *
+ * It is not a second record. It is a view of the transfer.
+ *
+ * It has always been keyed by a transfer intent id, one per transfer, and
+ * nearly every field on it is a field the transfer already has: the invoice,
+ * the Walrus blob, the Seal policy, the settlement digest, the audit hash and
+ * anchor, the composed actions, the funding route. The authorize route wrote
+ * `result.digest` into the transfer and then wrote it again into the receipt,
+ * two lines apart — two stores holding the same fact, free to disagree the
+ * moment one write succeeds and the other does not.
+ *
+ * So there is no `audit_receipts` table and there should not be one. A receipt
+ * is composed from the transfer row, the handful of receipt-only fields that
+ * ride in `settlement_metadata`, and `intent_transitions` for the history.
+ * One writer, one source of truth, and an audit trail that cannot drift from
+ * the payment it describes.
+ *
+ * ─── Reconstructing the opening entry ───────────────────────────────────────
+ *
+ * `intent_transitions` records changes, so it has no row for the state a
+ * transfer was created in. The opening entry is recovered from the transfer's
+ * own `createdAt` and the first transition's `fromState` — or, for a transfer
+ * that has not moved yet, its current state. That reproduces exactly what the
+ * appended history used to hold.
+ */
+
+/** The fields that belong to the receipt alone and live in `settlement_metadata`. */
+type ReceiptOnly = Pick<
+  AuditReceipt,
+  'memwalRecordId' | 'extractionSnapshot' | 'approvedBy' | 'approvedAt' | 'auditAnchorDigest' | 'evidence'
+>;
+
+const RECEIPT_ONLY_FIELDS: Array<keyof ReceiptOnly> = [
+  'memwalRecordId',
+  'extractionSnapshot',
+  'approvedBy',
+  'approvedAt',
+  'auditAnchorDigest',
+  'evidence',
+];
+
+type TransitionRow = { fromState: string | null; toState: string; createdAt: Date | string };
+
+function statusHistoryFrom(
+  record: TransferIntentRecord,
+  transitions: TransitionRow[],
+): AuditReceipt['statusHistory'] {
+  const at = (value: Date | string) => (value instanceof Date ? value.toISOString() : value);
+  return [
+    { state: transitions[0]?.fromState ?? record.state, at: record.createdAt },
+    ...transitions.map((t) => ({ state: t.toState, at: at(t.createdAt) })),
+  ];
+}
+
+function toAuditReceipt(record: TransferIntentRecord, transitions: TransitionRow[]): AuditReceipt {
+  // `toRecord` spreads `settlement_metadata` onto the record, so the
+  // receipt-only fields arrive here as loose properties on it.
+  const extra = record as unknown as ReceiptOnly;
+  return {
+    transferIntentId: record.id,
+    invoiceId: record.invoiceId,
+    walrusBlobId: record.walrusBlobId,
+    sealPolicyId: record.sealPolicyId,
+    suiTxDigest: record.suiTxDigest ?? undefined,
+    sweepJobId: record.sweepJobId,
+    auditHash: record.auditHash,
+    auditAnchorId: record.auditAnchorId,
+    paymentIntentId: record.paymentIntentId,
+    intentCreateDigest: record.intentCreateDigest,
+    smartTreasuryId: record.smartTreasuryId,
+    composedActions: record.composedActions,
+    demo: record.demo,
+    funding: {
+      sessionId: record.fundingSessionId,
+      source: record.fundingSource,
+      method: record.fundingMethod,
+      provider: record.fundingProvider,
+      asset: record.fundingAsset,
+      rail: record.fundingRail,
+      sourceChain: record.fundingSourceChain,
+      feeTier: record.fundingFeeTier,
+      kytStatus: record.fundingKytStatus,
+      normalizeVenue: record.fundingNormalizeVenue,
+      effectiveSlippageBps: record.fundingEffectiveSlippageBps,
+    },
+    memwalRecordId: extra.memwalRecordId,
+    extractionSnapshot: extra.extractionSnapshot,
+    approvedBy: extra.approvedBy,
+    approvedAt: extra.approvedAt,
+    auditAnchorDigest: extra.auditAnchorDigest,
+    evidence: extra.evidence,
+    statusHistory: statusHistoryFrom(record, transitions),
+  };
+}
+
+async function auditReceiptFrom(record: TransferIntentRecord | null): Promise<AuditReceipt | null> {
+  if (!record) return null;
+  if (!usingPostgres()) {
+    // No transitions table here, so the history is the one the mirror appended.
+    const mirrored = operations.auditReceipts.get(record.id);
+    return { ...toAuditReceipt(record, []), ...(mirrored ?? {}) };
+  }
+  return toAuditReceipt(record, await repo.listTransitions(await db(), record.id));
+}
+
+/** The audit trail for one transfer, scoped to the org that owns it. */
+export async function readAuditReceipt(
+  orgId: string,
+  intentId: string,
+): Promise<AuditReceipt | null> {
+  return auditReceiptFrom(await readTransfer(orgId, intentId));
+}
+
+/** Cross-tenant. The public receipt-share page and internal jobs only. */
+export async function readAuditReceiptForStaff(intentId: string): Promise<AuditReceipt | null> {
+  return auditReceiptFrom(await readTransferForStaff(intentId));
+}
+
+/**
+ * Record receipt detail against a transfer.
+ *
+ * A thin name over `patchTransfer`, for call sites whose subject is the trail
+ * rather than the payment — an approver, an extraction snapshot. It writes the
+ * same row, which is the point: fields the transfer already owns go to their
+ * own columns and the six that belong to the receipt alone go to
+ * `settlement_metadata`, so the digest on the receipt is the digest on the
+ * payment by construction rather than by agreement.
+ */
+export async function patchAuditReceipt(
+  intentId: string,
+  patch: Partial<AuditReceipt>,
+): Promise<void> {
+  const { funding, statusHistory, transferIntentId, ...rest } = patch;
+  void funding; // flattened onto the transfer as fundingMethod, fundingRail, …
+  void statusHistory; // derived from intent_transitions; never written directly
+  void transferIntentId; // the key, not a field
+  await patchTransfer(intentId, rest);
+}
+
+/** The reconstruction, reachable on its own so a test can hold it to the
+ *  history the appended version produced. */
+export const __testing = { statusHistoryFrom };
 
 export async function findTransferByIdempotencyKey(
   orgId: string,
