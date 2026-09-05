@@ -43,7 +43,6 @@ test('development: an empty environment boots on the documented defaults', () =>
   assert.equal(env.SUI_SETTLEMENT_MODE, 'auto');
   assert.equal(env.NEXT_PUBLIC_APP_URL, 'http://localhost:3000');
   assert.equal(env.QUOTE_TTL_SECONDS, 30);
-  assert.equal(env.SEAL_THRESHOLD, 1);
   // Defaults match what the read sites actually do, not what .env.example
   // suggests: registry.ts enables these rails unless told otherwise.
   assert.equal(env.FUNDING_RAIL_SUI_NATIVE_ENABLED, true);
@@ -53,9 +52,9 @@ test('development: an empty environment boots on the documented defaults', () =>
 });
 
 test('a blank value counts as unset, which is how .env.example ships every key', () => {
-  const env = parseEnv({ NODE_ENV: 'development', SPLASH_PACKAGE_ID: '', SEAL_THRESHOLD: '', SUI_NETWORK: '' });
+  const env = parseEnv({ NODE_ENV: 'development', SPLASH_PACKAGE_ID: '', QUOTE_TTL_SECONDS: '', SUI_NETWORK: '' });
   assert.equal(env.SPLASH_PACKAGE_ID, undefined);
-  assert.equal(env.SEAL_THRESHOLD, 1);
+  assert.equal(env.QUOTE_TTL_SECONDS, 30);
   assert.equal(env.SUI_NETWORK, 'testnet');
 });
 
@@ -101,6 +100,13 @@ test('production: vendor keys are demanded only when mocks and demo mode are bot
 test('production: FEATURE_ZKLOGIN=true requires the client id and the salt', () => {
   const keys = keysOf(() => parseEnv({ ...PROD_OK, FEATURE_ZKLOGIN: 'true' }));
   assert.deepEqual(keys.sort(), ['ZKLOGIN_GOOGLE_CLIENT_ID', 'ZKLOGIN_USER_SALT']);
+});
+
+test('a Seal key that moved into config/ is refused by name if still set, in any mode', () => {
+  const dev = keysOf(() => parseEnv({ NODE_ENV: 'development', SEAL_THRESHOLD: '2', SEAL_KEY_SERVER_ENDPOINTS: '[]' }));
+  assert.deepEqual(dev.sort(), ['SEAL_KEY_SERVER_ENDPOINTS', 'SEAL_THRESHOLD']);
+  // blank is unset, which is how .env.example ships it — not an error
+  assert.doesNotThrow(() => parseEnv({ NODE_ENV: 'development', SEAL_THRESHOLD: '' }));
 });
 
 test('a malformed object id is rejected with the shape it needs, in any mode', () => {

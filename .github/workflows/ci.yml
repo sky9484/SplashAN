@@ -60,6 +60,12 @@ jobs:
       - name: test — environment contract
         run: npm run test:env
 
+      - name: test — seal config loader
+        run: npm run test:seal
+
+      - name: test — health checks
+        run: npm run test:health
+
       - name: production build
         env:
           NEXT_TELEMETRY_DISABLED: '1'

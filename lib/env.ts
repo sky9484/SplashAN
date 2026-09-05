@@ -52,7 +52,7 @@ const str = z.string().trim();
 const optional = str.optional();
 /** Empty string counts as unset, which is how `.env.example` ships blanks. */
 const blankToUndefined = (v: unknown) => (typeof v === 'string' && v.trim() === '' ? undefined : v);
-const opt = (schema: z.ZodTypeAny) => z.preprocess(blankToUndefined, schema.optional());
+const opt = <Out>(schema: z.ZodType<Out, unknown>) => z.preprocess(blankToUndefined, schema.optional());
 const withDefault = <Out extends string | number | boolean>(schema: z.ZodType<Out, unknown>, def: Out) =>
   z.preprocess(blankToUndefined, schema.default(def));
 
@@ -65,6 +65,13 @@ const httpsUrl = opt(str.url().refine((u) => u.startsWith('https://') || u.start
 const int = (def: number, min = 0) => withDefault(z.coerce.number().int().min(min), def);
 const num = (def: number) => withDefault(z.coerce.number(), def);
 /** The code tests `=== 'true'`; anything else is false. */
+/** A key that moved into config/seal.<env>.json. Unset is the only valid
+ *  state; a value means a stale .env.local or host panel, and boot names it. */
+const movedToSealFile = z.preprocess(
+  blankToUndefined,
+  z.undefined({ error: 'moved to config/seal.<env>.json — remove it from .env.local and from the host' }),
+);
+
 const flag = (def: 'true' | 'false' = 'false') =>
   withDefault(z.enum(['true', 'false']), def).transform((v) => v === 'true');
 
@@ -130,18 +137,23 @@ export const envSchema = z.object({
   OXWAL_FORCE_LOCAL: flag('false'),
   OXWAL_OPERATOR_ROLE: withDefault(str, 'APPROVER'),
 
-  /* Seal. Validated in depth by lib/server/seal-config.ts, which
-     validateEnvAtBoot() also runs so its twelve throws happen at boot. The
-     server list moves to config/seal.<env>.json; these are what remain. */
-  SEAL_KEY_SERVER_MODE: withDefault(z.enum(['decentralized', 'independent']), 'decentralized'),
-  SEAL_KEY_SERVER_ENDPOINTS: optional,
-  SEAL_KEY_SERVER_URLS: optional,
-  SEAL_THRESHOLD: int(1, 1),
+  /* Seal. The committee, threshold, package and policy live in a committed
+     file — config/seal.<NODE_ENV>.json — loaded and validated by
+     lib/server/seal-config.ts, which validateEnvAtBoot() runs so its twelve
+     checks happen at boot. The seven keys below MOVED into that file: each
+     is declared here only so that, if one is still set, boot fails and
+     names it. Two sources for one setting is how Seal diverged. */
+  SEAL_CONFIG_FILE: optional,
+  SEAL_KEY_SERVER_ENDPOINTS: movedToSealFile,
+  SEAL_KEY_SERVER_URLS: movedToSealFile,
+  SEAL_KEY_SERVER_MODE: movedToSealFile,
+  SEAL_THRESHOLD: movedToSealFile,
+  SEAL_PACKAGE_ID: movedToSealFile,
+  SEAL_POLICY_OBJECT_ID: movedToSealFile,
+  SEAL_APPROVE_TARGET: movedToSealFile,
+  /* What stays in env: operational and sensitive, not shared config. */
   SEAL_HEALTH_TIMEOUT_MS: int(10_000, 1),
   SEAL_ALERT_WEBHOOK_URL: httpsUrl,
-  SEAL_PACKAGE_ID: objectId,
-  SEAL_POLICY_OBJECT_ID: objectId,
-  SEAL_APPROVE_TARGET: optional,
 
   /* Walrus. lib/server/walrus.ts. Mocked when USE_MOCK_APIS or unset. */
   WALRUS_PUBLISHER_URL: url,
