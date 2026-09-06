@@ -1,16 +1,29 @@
 import { NextResponse } from 'next/server';
 
 import { requireCustomerRequest } from '@/lib/server/customer-auth';
-import { readKybCase } from '@/lib/server/kyb';
+import { readKybCaseForOrg } from '@/lib/server/kyb';
+import { resolveSessionAccount } from '@/lib/server/session-account';
 
 export const dynamic = 'force-dynamic';
 
+/**
+ * GET /api/kyb/cases/[id] — one KYB case, only if the caller's org owns it.
+ *
+ * This used to call the unscoped `readKybCase`, so any signed-in customer who
+ * held or guessed an id received that case in full. The id is unguessable by
+ * construction, but an unguessable identifier is a secret, not an authorisation
+ * check — it leaks by being shared, logged, or pasted into a support ticket.
+ *
+ * Someone else's case answers 404, not 403, so the endpoint cannot be used as
+ * an id oracle: "not yours" and "does not exist" read identically.
+ */
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireCustomerRequest(request);
   if (auth.response) return auth.response;
 
   const { id } = await params;
-  const record = readKybCase(id);
+  const { orgId } = await resolveSessionAccount(auth.session);
+  const record = readKybCaseForOrg(id, orgId);
 
   if (!record) {
     return NextResponse.json({ error: 'KYB case not found' }, { status: 404 });

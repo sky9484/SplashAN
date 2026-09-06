@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
 
 import { requireCustomerRequest } from '@/lib/server/customer-auth';
-import { findLatestKybCase } from '@/lib/server/kyb';
+import { findLatestKybCaseForOrg, type KybCaseRecord } from '@/lib/server/kyb';
+import { resolveSessionAccount } from '@/lib/server/session-account';
 
 export const dynamic = 'force-dynamic';
 
-function toPublicCase(record: NonNullable<ReturnType<typeof findLatestKybCase>>) {
+function toPublicCase(record: KybCaseRecord) {
   return {
     id: record.id,
     businessName: record.businessName,
@@ -30,15 +31,25 @@ function toPublicCase(record: NonNullable<ReturnType<typeof findLatestKybCase>>)
   };
 }
 
+/**
+ * GET /api/kyb/cases/latest — the caller's own latest KYB case.
+ *
+ * Takes NO parameters. It used to read `businessName` and `registrationNumber`
+ * from the query string and match them against every case in the process, so
+ * any signed-in customer could pass a competitor's name and receive their KYB
+ * file: registration number, reviewer notes, decision reason, and the name and
+ * SHA-256 of every uploaded document. A business name is not a secret.
+ *
+ * `requireCustomerRequest` proves WHO is asking and says nothing about whose
+ * data may be returned. The org therefore comes from the membership, resolved
+ * server-side, and never from the request.
+ */
 export async function GET(request: Request) {
   const auth = await requireCustomerRequest(request);
   if (auth.response) return auth.response;
 
-  const { searchParams } = new URL(request.url);
-  const businessName = searchParams.get('businessName') ?? undefined;
-  const registrationNumber = searchParams.get('registrationNumber') ?? undefined;
-
-  const record = findLatestKybCase({ businessName, registrationNumber });
+  const { orgId } = await resolveSessionAccount(auth.session);
+  const record = findLatestKybCaseForOrg(orgId);
 
   if (!record) {
     return NextResponse.json({ case: null });

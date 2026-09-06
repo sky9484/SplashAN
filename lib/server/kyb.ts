@@ -135,26 +135,65 @@ export function listKybCases() {
   return Array.from(kybStore.cases.values()).sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 }
 
-export function findLatestKybCase(input: { businessName?: string; registrationNumber?: string }) {
-  const businessName = input.businessName?.trim().toLowerCase();
-  const registrationNumber = input.registrationNumber?.trim();
-
-  return listKybCases().find((record) => {
-    const matchesRegistration = registrationNumber ? record.registrationNumber === registrationNumber : false;
-    const matchesBusinessName = businessName ? String(record.businessName ?? '').toLowerCase() === businessName : false;
-
-    return matchesRegistration || matchesBusinessName;
-  }) ?? null;
+/**
+ * Staff read. Every case in the process, unscoped — which is correct for the
+ * admin console and wrong for anything a customer can reach.
+ *
+ * The `ForStaff` suffix exists so a customer-facing caller cannot pick this by
+ * accident: the reviewer surfaces are the only legitimate callers.
+ */
+export function listKybCasesForStaff() {
+  return listKybCases();
 }
 
+/**
+ * The customer read: the caller's own latest case, and nothing else.
+ *
+ * This replaces a lookup that took `businessName` / `registrationNumber` from
+ * the QUERY STRING and matched them against every case in the process. A
+ * business name is not a secret — it is on the invoice, the website and the
+ * registry — so that made one signed-in customer able to fetch a competitor's
+ * registration number, reviewer notes, decision reason, and the name and
+ * SHA-256 of every document they uploaded.
+ *
+ * There is no caller-supplied selector any more. The session says who is
+ * asking; the org comes from the membership, server-side.
+ */
+export function findLatestKybCaseForOrg(orgId: string) {
+  const owner = orgId.trim();
+  if (!owner) return null;
+  return listKybCases().find((record) => record.orgId === owner) ?? null;
+}
+
+/**
+ * The customer read by id, scoped to the owning org.
+ *
+ * Returns null — not the record — for another org's case, so the route answers
+ * 404 rather than 403 and the endpoint is not an id oracle: "exists but not
+ * yours" and "does not exist" are indistinguishable to a prober.
+ */
+export function readKybCaseForOrg(caseId: string, orgId: string) {
+  const record = kybStore.cases.get(caseId) ?? null;
+  if (!record) return null;
+  return record.orgId === orgId.trim() ? record : null;
+}
+
+/** Staff read by id. Unscoped by design; reviewers work across orgs. */
 export function readKybCase(caseId: string) {
   return kybStore.cases.get(caseId) ?? null;
 }
 
 export function recordKybSubmission(input: {
   caseId: string;
-  /** Owning org; defaults to the demo workspace when the caller has none. */
-  orgId?: string;
+  /**
+   * Owning org. REQUIRED.
+   *
+   * This used to be optional and fell back to `'demo-business'`, while the
+   * upload route passed nothing — so every real business's KYB case, documents
+   * included, was filed into the shared demo workspace and became readable by
+   * anyone with access to it.
+   */
+  orgId: string;
   businessName: string;
   registrationNumber: string;
   documents: KybDocumentRecord[];
@@ -164,7 +203,7 @@ export function recordKybSubmission(input: {
   const existing = kybStore.cases.get(input.caseId);
   const record: KybCaseRecord = {
     id: input.caseId,
-    orgId: input.orgId ?? 'demo-business',
+    orgId: input.orgId,
     businessName: input.businessName,
     registrationNumber: input.registrationNumber,
     state: 'SUBMITTED',

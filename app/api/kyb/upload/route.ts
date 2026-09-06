@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 
 import { requireCustomerRequest } from '@/lib/server/customer-auth';
 import { recordKybSubmission, type KybDocumentRecord } from '@/lib/server/kyb';
+import { resolveSessionAccount } from '@/lib/server/session-account';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,6 +12,12 @@ const ALLOWED_DOC_KINDS = new Set<KybDocumentRecord['kind']>(['COMPANY_DOCUMENT'
 export async function POST(request: Request) {
   const auth = await requireCustomerRequest(request);
   if (auth.response) return auth.response;
+
+  // The owning org is resolved from the membership, not taken from the form.
+  // `recordKybSubmission` used to default a missing orgId to 'demo-business'
+  // and this route passed none, so every business's KYB case and documents
+  // were filed into the shared demo workspace.
+  const { orgId } = await resolveSessionAccount(auth.session);
 
   const formData = await request.formData();
   const files = formData.getAll('documents').filter((item): item is File => item instanceof File);
@@ -56,7 +63,7 @@ export async function POST(request: Request) {
       };
     }),
   );
-  const kybCase = recordKybSubmission({ caseId: kybCaseId, businessName: legalName, registrationNumber, documents });
+  const kybCase = recordKybSubmission({ caseId: kybCaseId, orgId, businessName: legalName, registrationNumber, documents });
 
   return NextResponse.json({
     kybCaseId,
