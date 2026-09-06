@@ -868,6 +868,9 @@ export const treasuryLedgers = pgTable('treasury_ledgers', {
    *  boundary these cross. */
   availableMicro: bigint('available_micro', { mode: 'bigint' }).notNull().default(0n),
   treasuryPrincipalMicro: bigint('treasury_principal_micro', { mode: 'bigint' }).notNull().default(0n),
+  /** MAY be negative. USDY accrues through price, so a falling redemption
+   *  price is a real loss on the position — see migration 0017, which
+   *  removed the floor 0016 wrongly put here. */
   treasuryYieldMicro: bigint('treasury_yield_micro', { mode: 'bigint' }).notNull().default(0n),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });

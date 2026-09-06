@@ -100,12 +100,36 @@ async function db() {
   return getDb() as never;
 }
 
+/**
+ * The bigint→number boundary, in one place and range-checked.
+ *
+ * Money is `bigint` in the column and `number` micro-USD in this module's
+ * public API, which predates the move to Postgres. That conversion is exact
+ * below 2^53 and silently lossy above it — `Number(9007199254740993n)` is
+ * 9007199254740992, and a balance that quietly loses its last digit is the
+ * exact failure `lib/money.ts` exists to prevent.
+ *
+ * So it throws instead. 2^53 micro-USD is about $9.007 billion in one org's
+ * ledger: not a number this product reaches, and not one to discover by
+ * rounding. A bare `Number(...)` here would have been a silent truncation with
+ * no ceiling at all, which is why `scripts/check-copy.mjs` refuses it.
+ */
+function microToNumber(micro: bigint, field: string): number {
+  if (micro > BigInt(Number.MAX_SAFE_INTEGER) || micro < -BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new Error(
+      `treasury: ${field} = ${micro} micro-USD exceeds the safe integer range and cannot be ` +
+        'represented exactly. The ledger must move to bigint end-to-end before a balance this large.',
+    );
+  }
+  return Number(micro);
+}
+
 function ledgerFromRow(row: repo.LedgerRow): UserTreasuryLedger {
   return {
     userId: row.orgId,
-    availableMicro: Number(row.availableMicro),
-    treasuryPrincipalMicro: Number(row.treasuryPrincipalMicro),
-    treasuryYieldMicro: Number(row.treasuryYieldMicro),
+    availableMicro: microToNumber(row.availableMicro, 'availableMicro'),
+    treasuryPrincipalMicro: microToNumber(row.treasuryPrincipalMicro, 'treasuryPrincipalMicro'),
+    treasuryYieldMicro: microToNumber(row.treasuryYieldMicro, 'treasuryYieldMicro'),
     updatedAt: row.updatedAt.toISOString(),
   };
 }
@@ -114,7 +138,7 @@ function noticeFromRow(row: repo.NoticeRow): WithdrawalNotice {
   return {
     id: row.id,
     userId: row.orgId,
-    amountMicro: Number(row.amountMicro),
+    amountMicro: microToNumber(row.amountMicro, 'amountMicro'),
     requestedAt: row.requestedAt.toISOString(),
     availableAt: row.availableAt.toISOString(),
     state: row.state as WithdrawalNoticeState,

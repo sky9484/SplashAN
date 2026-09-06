@@ -120,6 +120,13 @@
       "when": 1788814828005,
       "tag": "0016_treasury_persistence",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1788901228005,
+      "tag": "0017_treasury_yield_may_be_negative",
+      "breakpoints": true
     }
   ]
 }
