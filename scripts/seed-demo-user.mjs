@@ -109,12 +109,46 @@ const client = new pg.Client({ connectionString: url });
 await client.connect();
 
 try {
+  // The ORIGINATOR half of FATF R.16, which is org-level and established once
+  // at KYB. Without it every payment is refused with
+  // `travel_rule_incomplete → originator.addressLine1` — correctly, but it
+  // makes a seeded workspace unable to send anything, which is not much of a
+  // demo. These are obviously fictional values for an obviously fictional org.
   await client.query(
-    `INSERT INTO organizations (id, name, kyb_lifecycle)
-     VALUES ($1, $2, $3)
-     ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, kyb_lifecycle = EXCLUDED.kyb_lifecycle`,
-    [orgId, orgName, kyb],
+    `INSERT INTO organizations (
+       id, name, kyb_lifecycle, legal_name, registration_number,
+       address_line1, address_city, address_state, address_postal_code, address_country
+     )
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+     ON CONFLICT (id) DO UPDATE SET
+       name = EXCLUDED.name,
+       kyb_lifecycle = EXCLUDED.kyb_lifecycle,
+       legal_name = COALESCE(organizations.legal_name, EXCLUDED.legal_name),
+       registration_number = COALESCE(organizations.registration_number, EXCLUDED.registration_number),
+       address_line1 = COALESCE(organizations.address_line1, EXCLUDED.address_line1),
+       address_city = COALESCE(organizations.address_city, EXCLUDED.address_city),
+       address_state = COALESCE(organizations.address_state, EXCLUDED.address_state),
+       address_postal_code = COALESCE(organizations.address_postal_code, EXCLUDED.address_postal_code),
+       address_country = COALESCE(organizations.address_country, EXCLUDED.address_country)`,
+    [
+      orgId,
+      orgName,
+      kyb,
+      `${orgName} Sdn Bhd`,
+      '202401000001',
+      'Level 8, Menara Demo, Jalan Ampang',
+      'Kuala Lumpur',
+      'Wilayah Persekutuan',
+      '50450',
+      'MY',
+    ],
   );
+
+  // Ids are derived from the EMAIL, not the org. Deriving them from the org
+  // meant the second person seeded into one workspace collided on the users
+  // primary key — which is exactly the case you need for maker-checker, since
+  // a maker and a checker are two people in the same organisation.
+  const slug = email.replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
 
   const hash = await hashPassword(password);
   const inserted = await client.query(
@@ -122,8 +156,10 @@ try {
      VALUES ($1, $2, $3, $4, now())
      ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash
      RETURNING id`,
-    [`usr_seed_${orgId}`, email, 'Demo Operator', hash],
+    [`usr_seed_${slug}`, email, 'Demo Operator', hash],
   );
+  // On conflict the RETURNING id is the EXISTING row's id, which may differ
+  // from the one just proposed. The membership below must use that one.
   const userId = inserted.rows[0].id;
 
   // The row that actually grants access. Without it the account signs in and
@@ -132,7 +168,7 @@ try {
     `INSERT INTO memberships (id, user_id, org_id, role)
      VALUES ($1, $2, $3, $4)
      ON CONFLICT (user_id, org_id) DO UPDATE SET role = EXCLUDED.role`,
-    [`mem_seed_${orgId}`, userId, orgId, role],
+    [`mem_seed_${slug}_${orgId}`, userId, orgId, role],
   );
 
   const gateNote = kyb === 'ACTIVE' ? '' : '  — money movement is gated until this is ACTIVE';
