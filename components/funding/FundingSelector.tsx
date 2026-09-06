@@ -83,7 +83,17 @@ export default function FundingSelector({
     if (businessAccountId) params.set('businessAccountId', businessAccountId);
     void fetch(`/api/funding/options?${params.toString()}`, { signal: controller.signal, cache: 'no-store' })
       .then(async (response) => {
-        if (!response.ok) throw new Error('Funding sources are unavailable');
+        if (!response.ok) {
+          // Read the server's reason before inventing one. A 403 here means the
+          // account has no workspace membership — an access problem the person
+          // can act on — and reporting it as "funding is unavailable" sends
+          // them to debug a payment rail that is working fine.
+          const reason = await response
+            .json()
+            .then((body: { error?: string }) => (typeof body?.error === 'string' ? body.error : null))
+            .catch(() => null);
+          throw new Error(reason ?? 'Funding sources are unavailable');
+        }
         const contentType = response.headers.get('content-type') ?? '';
         if (!contentType.includes('application/json')) throw new Error('Funding sources returned an unexpected response');
         return response.json() as Promise<FundingOptions>;
@@ -109,7 +119,10 @@ export default function FundingSelector({
   if (error) {
     return (
       <Alert variant="destructive">
-        <AlertTitle>Payment sources unavailable</AlertTitle>
+        {/* The heading has to match the cause. An access problem titled
+            "Payment sources unavailable" sends the reader to debug a payment
+            rail that is working. */}
+        <AlertTitle>{/workspace|member|access/i.test(error) ? 'No workspace access' : 'Payment sources unavailable'}</AlertTitle>
         <AlertDescription>{error}</AlertDescription>
       </Alert>
     );

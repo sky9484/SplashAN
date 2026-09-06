@@ -11,6 +11,7 @@ import { requireCustomerRequest } from '@/lib/server/customer-auth';
 import { getLedgerBalance } from '@/lib/server/operations';
 import { readLastUsedFundingSource } from '@/lib/server/funding-sessions';
 import { isForeignAccountId, resolveSessionAccount } from '@/lib/server/session-account';
+import { authorityErrorResponse } from '@/lib/server/authority-response';
 
 export async function GET(request: Request) {
   const auth = await requireCustomerRequest(request);
@@ -22,7 +23,16 @@ export async function GET(request: Request) {
   // Derived from the session, not the query string — this response discloses a
   // spendable balance, so a client-named account is a balance oracle for any
   // org whose account id you can guess.
-  const { accountId: businessAccountId } = await resolveSessionAccount(auth.session);
+  let businessAccountId: string;
+  try {
+    ({ accountId: businessAccountId } = await resolveSessionAccount(auth.session));
+  } catch (error) {
+    // A signed-in person with no membership is a 403 with a reason, not a 500
+    // that the desk renders as "Funding sources are unavailable".
+    const denied = authorityErrorResponse(error);
+    if (denied) return denied;
+    throw error;
+  }
   if (isForeignAccountId(url.searchParams.get('businessAccountId'), businessAccountId)) {
     return NextResponse.json({ error: 'businessAccountId does not belong to this organization' }, { status: 403 });
   }
