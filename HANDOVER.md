@@ -209,6 +209,58 @@ demonstrating a full maker → checker flow needs two distinct identities.
 
 ---
 
+## The 6 September sweep — what it found here
+
+The 6 Sep handover asked whether the "authenticated but not authorised"
+pattern existed in this tree. It did. All three KYB defects it describes were
+present, and this deployment is public with a published OAuth consent screen,
+so any Google account could obtain a session.
+
+`requireCustomerRequest` checks the session cookie and the request origin. It
+proves **who** is asking and says nothing about **whose data** may be returned.
+That is the whole bug class.
+
+Fixed in `f0ee4bd`:
+
+- `GET /api/kyb/cases/latest` took `businessName` from the query string and
+  matched it against every case in the process. Now takes no selector; the org
+  comes from the membership.
+- `GET /api/kyb/cases/[id]` used the unscoped read. Now 404s for another org's
+  case, so it is not an id oracle.
+- `recordKybSubmission` defaulted `orgId` to `'demo-business'` and the upload
+  route passed none. `orgId` is now required.
+
+Fixed in `8d8fa4e`: three surfaces answered compliance questions with a clean
+screening verdict and quoted hard-coded FX rates as live quotes. Because
+`ANTHROPIC_API_KEY` is unset here, those canned responders were not a
+fallback — they were the only path the assistant ever took.
+`scripts/check-copy.mjs` now bans the verdicts.
+
+### The same shape, not yet fixed
+
+These read by id with no ownership check, exactly like the KYB routes did:
+
+| Route | Reads |
+|---|---|
+| `GET /api/invoices/[id]` | `readInvoice(id)` |
+| `GET /api/transfers/[id]` | `readTransferIntent(id)` |
+| `GET /api/support/tickets/[id]` | `readSupportTicket(id)` |
+| `GET /api/batches/[id]` | by id |
+| `GET /api/funding/sessions/[id]` | by id |
+| `GET /api/audit/[intentId]` | by id |
+
+They were left alone deliberately: each needs its own scoped read and its own
+test, and this was done hours before a demo. The exposure today is small
+because these stores are in-memory and near-empty — but that is a property of
+the data, not of the code, and it stops being true the moment the product is
+used. **Do these next.**
+
+`app/dashboard/copilot/page.tsx` also seeds a scripted conversation carrying
+the same invented rates and a claim to have analysed eight weeks of activity.
+It is sample content rather than a live responder, so it was not changed.
+
+---
+
 ## What still needs you
 
 **1. `splash_core/Move.toml` has an empty `[dependencies]` (D3, still open).**
